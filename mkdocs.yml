@@ -1,0 +1,30 @@
+site_name: biocore
+site_description: A unified Python library for structural bioinformatics, MD, and ML.
+repo_url: https://github.com/OWNER/biocore
+repo_name: OWNER/biocore
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Architecture: ../architecture/overview.md
+
+docs_dir: docs/source
+
+plugins:
+  - search
+  # - mkdocstrings:
+  #     handlers:
+  #       python:
+  #         paths: [src]
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.highlight
