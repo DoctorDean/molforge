@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "biocore-example-plugin"
+version = "0.0.1"
+description = "Reference plugin for biocore — registers a no-op example engine."
+requires-python = ">=3.10"
+dependencies = ["biocore"]
+
+[project.entry-points."biocore.plugins"]
+example = "example_plugin:register"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/example_plugin"]
