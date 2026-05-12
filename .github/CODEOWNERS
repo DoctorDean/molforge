@@ -1,0 +1,14 @@
+# Code ownership — automatically requests reviews from listed owners on PRs.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+*       @OWNER
+
+# Per-subpackage owners (adjust as the team grows)
+/src/biocore/core/        @OWNER
+/src/biocore/structure/   @OWNER
+/src/biocore/md/          @OWNER
+/src/biocore/docking/     @OWNER
+/src/biocore/ml/          @OWNER
+/src/biocore/wrappers/    @OWNER
+/.github/                 @OWNER

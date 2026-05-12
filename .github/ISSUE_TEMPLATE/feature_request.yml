@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a new feature or improvement.
+title: "[feat] "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case or pain point.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which subpackage?
+      multiple: true
+      options:
+        - core
+        - sequence
+        - structure
+        - md
+        - docking
+        - ml
+        - io
+        - plugins
+        - metrics
+        - wrappers
+        - docs / build / CI
+        - other
+    validations:
+      required: true
