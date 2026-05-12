@@ -48,7 +48,7 @@ dependencies = [
 [project.optional-dependencies]
 structure = [
     "biopython>=1.83",
-    "biotite>=0.40",
+    "biotite>=1.2.0",
     "scipy>=1.11",
 ]
 sequence = [
@@ -67,7 +67,7 @@ ml = [
 ]
 io = [
     "biopython>=1.83",
-    "biotite>=0.40",
+    "biotite>=1.2.0",
 ]
 all = [
     "biocore[structure,sequence,md,docking,ml,io]",
