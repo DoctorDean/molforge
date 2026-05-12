@@ -1,0 +1,3 @@
+-r base.txt
+biopython>=1.83
+biotite>=0.40

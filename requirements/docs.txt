@@ -1,0 +1,5 @@
+-r base.txt
+mkdocs>=1.5
+mkdocs-material>=9.5
+mkdocstrings[python]>=0.24
+mkdocs-jupyter>=0.24

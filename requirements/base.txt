@@ -1,0 +1,3 @@
+# Core runtime — minimal.
+numpy>=1.24
+typing-extensions>=4.7

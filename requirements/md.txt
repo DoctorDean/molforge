@@ -1,0 +1,3 @@
+-r base.txt
+mdtraj>=1.10
+openmm>=8.1; platform_system != "Windows"

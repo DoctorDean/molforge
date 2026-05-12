@@ -1,0 +1,211 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+# -----------------------------------------------------------------------------
+# Project metadata (PEP 621)
+# -----------------------------------------------------------------------------
+[project]
+name = "biocore"
+dynamic = ["version"]
+description = "A unified Python library for structural bioinformatics, MD, protein engineering, and ML."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "biocore contributors" },
+]
+keywords = [
+    "bioinformatics",
+    "structural-biology",
+    "protein-engineering",
+    "molecular-dynamics",
+    "docking",
+    "machine-learning",
+    "computational-biology",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Typing :: Typed",
+]
+
+# Minimal runtime dependencies — keep this list small.
+# Heavy / optional deps go under [project.optional-dependencies].
+dependencies = [
+    "numpy>=1.24",
+    "typing-extensions>=4.7",
+]
+
+[project.optional-dependencies]
+structure = [
+    "biopython>=1.83",
+    "biotite>=0.40",
+    "scipy>=1.11",
+]
+sequence = [
+    "biopython>=1.83",
+]
+md = [
+    "mdtraj>=1.10",
+    "openmm>=8.1; platform_system != 'Windows'",
+]
+docking = [
+    "rdkit>=2023.9",
+]
+ml = [
+    "torch>=2.1",
+    "transformers>=4.40",
+]
+io = [
+    "biopython>=1.83",
+    "biotite>=0.40",
+]
+all = [
+    "biocore[structure,sequence,md,docking,ml,io]",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "pytest-xdist>=3.5",
+    "hypothesis>=6.92",
+    "ruff>=0.5",
+    "mypy>=1.8",
+    "pre-commit>=3.6",
+    "build>=1.0",
+    "twine>=4.0",
+]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.24",
+    "mkdocs-jupyter>=0.24",
+]
+
+[project.urls]
+Homepage      = "https://github.com/OWNER/biocore"
+Documentation = "https://biocore.readthedocs.io"
+Repository    = "https://github.com/OWNER/biocore"
+Issues        = "https://github.com/OWNER/biocore/issues"
+Changelog     = "https://github.com/OWNER/biocore/blob/main/CHANGELOG.md"
+
+# Entry-point group used by the plugin registry.
+# Third-party packages can register engines, parsers, scoring functions, etc.
+[project.entry-points."biocore.plugins"]
+# example_plugin = "example_plugin:register"
+
+# -----------------------------------------------------------------------------
+# Hatch build / version config
+# -----------------------------------------------------------------------------
+[tool.hatch.version]
+path = "src/biocore/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/biocore"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/biocore",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "pyproject.toml",
+]
+
+# -----------------------------------------------------------------------------
+# Pytest
+# -----------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring external services or large data",
+    "gpu: marks tests requiring a GPU",
+]
+
+# -----------------------------------------------------------------------------
+# Coverage
+# -----------------------------------------------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["biocore"]
+omit = ["*/tests/*", "*/_version.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@overload",
+]
+show_missing = true
+precision = 1
+
+# -----------------------------------------------------------------------------
+# Ruff (linter + formatter)
+# -----------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B011", "N802", "N803", "N806"]
+"__init__.py"   = ["F401"]
+
+# -----------------------------------------------------------------------------
+# Mypy
+# -----------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "Bio.*",
+    "biotite.*",
+    "mdtraj.*",
+    "openmm.*",
+    "rdkit.*",
+]
+ignore_missing_imports = true

@@ -1,0 +1,2 @@
+-r base.txt
+rdkit>=2023.9
