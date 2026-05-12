@@ -62,7 +62,7 @@ docking = [
     "rdkit>=2023.9",
 ]
 ml = [
-    "torch>=2.1",
+    "torch>=2.11.0",
     "transformers>=4.40",
 ]
 io = [
