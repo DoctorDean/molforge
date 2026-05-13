@@ -1,23 +1,64 @@
 """Core data model: hierarchical and linear views of protein structure.
 
-The hierarchy is:
+The :class:`AtomArray` is the *canonical* representation — a flat,
+NumPy-backed array of all atoms. The hierarchical classes
+(:class:`Protein`, :class:`Chain`, :class:`Residue`, :class:`Atom`) are
+lightweight views that read and write through to the array.
 
-    Protein -> Chain -> Residue -> Atom
+Typical usage:
 
-A `Protein` additionally exposes:
-
-- `atom_array`: a flat, NumPy-backed view of every atom (linear view).
-- `sequence`:   the one-letter amino-acid sequence per chain.
-
-Both views are kept consistent; mutating one updates the other.
+    >>> from molforge.core import Protein, AtomArray
+    >>> protein = Protein(atom_array=AtomArray(0), name="example")
+    >>> protein.n_atoms
+    0
 """
 
 from __future__ import annotations
 
-from biocore.core.atom import Atom
-from biocore.core.atom_array import AtomArray
-from biocore.core.chain import Chain
-from biocore.core.protein import Protein
-from biocore.core.residue import Residue
+from molforge.core.atom import Atom
+from molforge.core.atom_array import (
+    ATOM_FIELDS,
+    AtomArray,
+    BoolArray,
+    FloatArray,
+    IntArray,
+    StrArray,
+)
+from molforge.core.chain import Chain
+from molforge.core.constants import (
+    NUCLEOTIDE_TO_ONE,
+    ONE_TO_THREE,
+    PROTEIN_BACKBONE_ATOMS,
+    THREE_TO_ONE,
+    is_ion,
+    is_standard_amino_acid,
+    is_water,
+    three_to_one,
+)
+from molforge.core.protein import Protein
+from molforge.core.residue import Residue
 
-__all__ = ["Atom", "AtomArray", "Chain", "Protein", "Residue"]
+__all__ = [  # noqa: RUF022 — grouped by concept, not alphabetical
+    # Hierarchical
+    "Atom",
+    "Residue",
+    "Chain",
+    "Protein",
+    # Linear
+    "AtomArray",
+    "ATOM_FIELDS",
+    # Type aliases
+    "BoolArray",
+    "FloatArray",
+    "IntArray",
+    "StrArray",
+    # Constants & helpers
+    "THREE_TO_ONE",
+    "ONE_TO_THREE",
+    "NUCLEOTIDE_TO_ONE",
+    "PROTEIN_BACKBONE_ATOMS",
+    "three_to_one",
+    "is_standard_amino_acid",
+    "is_water",
+    "is_ion",
+]
