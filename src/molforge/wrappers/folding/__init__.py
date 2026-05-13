@@ -1,10 +1,38 @@
-"""Folding-engine wrappers."""
+"""Folding-engine wrappers.
+
+Concrete engines:
+    - :class:`ESMFold` — implemented (single-sequence transformer; fast)
+    - :class:`AlphaFold` — stub (MSA-based; most accurate)
+    - :class:`Boltz` — stub
+    - :class:`Rosetta` — stub
+
+Shared:
+    - :class:`FoldingEngine` — abstract base for the engine contract
+    - :class:`FoldingEngineNotInstalledError` — raised when heavy dependencies
+      (torch, transformers) aren't installed.
+
+All engines write per-residue confidence to
+``protein.metadata["confidence_per_residue"]`` so downstream code can
+read confidence uniformly regardless of which engine produced the
+structure.
+"""
 
 from __future__ import annotations
 
+from molforge.wrappers.folding._base import (
+    FoldingEngine,
+    FoldingEngineNotInstalledError,
+)
 from molforge.wrappers.folding.alphafold import AlphaFold
 from molforge.wrappers.folding.boltz import Boltz
 from molforge.wrappers.folding.esmfold import ESMFold
 from molforge.wrappers.folding.rosetta import Rosetta
 
-__all__ = ["AlphaFold", "Boltz", "ESMFold", "Rosetta"]
+__all__ = [  # noqa: RUF022 — grouped: base classes, then engines
+    "FoldingEngine",
+    "FoldingEngineNotInstalledError",
+    "ESMFold",
+    "AlphaFold",
+    "Boltz",
+    "Rosetta",
+]

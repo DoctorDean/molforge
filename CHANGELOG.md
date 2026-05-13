@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **`molforge.wrappers.folding.ESMFold`: first fully-implemented engine wrapper.**
+  - Wraps Meta AI's ``facebook/esmfold_v1`` via HuggingFace
+    ``transformers``. Single-sequence folding (no MSA needed), fast,
+    GPU-friendly.
+  - Lazy import of ``torch`` and ``transformers`` keeps ``import
+    molforge`` cheap; missing-dependency errors point users at the
+    correct ``pip install 'molforge[ml]'`` extra.
+  - Configurable device (``cuda``/``cpu``/``mps``/auto), chunk size for
+    long-sequence memory management, and dtype (``float32``/``float16``).
+  - pLDDT exposed uniformly: per-atom in
+    ``metadata["confidence_per_atom"]``, per-residue in
+    ``metadata["confidence_per_residue"]``, scalar mean in
+    ``metadata["mean_confidence"]``.
+- **`FoldingEngine` ABC**: full contract definition with ``predict`` (abstract),
+  ``predict_many`` (overridable batch), and a uniform per-residue
+  confidence convention so downstream code reads engine output the same
+  way regardless of which engine produced it.
+- **`FoldingEngineNotInstalledError`**: dedicated exception type for missing
+  heavy dependencies, with actionable error messages.
+- 17 unit tests covering construction, lazy loading, sequence
+  validation, missing-dependency error paths, and post-processing
+  (PDB-to-Protein conversion with confidence metadata). The end-to-end
+  fold test is marked ``@pytest.mark.slow`` and skipped unless ``torch``
+  is installed.
+
+### Changed
 - **Project renamed from `biocore` to `molforge`** (PyPI name collision; the
   `biocore` GitHub organization is a separate, established scientific
   Python community). Import path is now `molforge`.
@@ -89,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions workflows for CI (lint, type-check, tests on Python 3.10-3.12),
   documentation build, and release-to-PyPI on tag.
 - Issue templates (bug, feature, question) and PR template.
-- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CODEOWNERS`.
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CODEDoctorDeanS`.
 - Walkthrough notebook stubs for sequences, structures, MD, and docking.
 - Pinned requirements files per extra under `requirements/`.
 

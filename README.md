@@ -110,22 +110,11 @@ molforge/
 │       ├── folding/          # AlphaFold, ESMFold, Boltz, Rosetta
 │       ├── docking/          # AutoDock Vina, DiffDock
 │       └── md/               # OpenMM, GROMACS
-│       ├── folding/          # AlphaFold, ESMFold, Boltz, ...
-│       ├── docking/          # AutoDock Vina, DiffDock, ...
-│       └── md/               # OpenMM, GROMACS, ...
-├── tests/                    # pytest test suite (unit + integration)
-├── docs/                     # MkDocs / Sphinx documentation source
-├── notebooks/                # Walkthrough + example notebooks
-├── plugins/                  # Reference / example external plugins
-├── scripts/                  # Maintenance and release scripts
-├── .github/                  # CI workflows, issue/PR templates, CODEOWNERS
-├── pyproject.toml            # Build config, deps, tool config (PEP 621)
-├── requirements/             # Pinned requirement files per extra
-├── CHANGELOG.md              # Keep-a-Changelog format
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── SECURITY.md
-├── LICENSE
+├── tests/                    # pytest suite (unit + integration)
+├── docs/                     # Architecture docs and reference
+├── notebooks/                # Walkthroughs and worked examples
+├── plugins/                  # Example external plugins
+├── pyproject.toml            # Build config, deps, tool config
 └── ACKNOWLEDGEMENTS.md       # Prior art and intellectual debts
 ```
 
@@ -133,7 +122,13 @@ A deeper architecture walkthrough is in [`docs/architecture/overview.md`](docs/a
 
 ## Status
 
-molforge is **pre-1.0** and under active development. The core data model is implemented and tested; IO, structural analysis, and engine wrappers are landing iteratively. See [`CHANGELOG.md`](CHANGELOG.md) for what's done and what's next.
+molforge is **pre-1.0** and under active development. What's working today:
+
+- **Core data model** — `Protein` / `Chain` / `Residue` / `Atom` over a canonical NumPy-backed `AtomArray`, with first-class heterogeneous content (ligands, water, ions, modified residues).
+- **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
+- **First engine wrapper** — **ESMFold** end-to-end from sequence string to `Protein` (`pip install 'molforge[ml]'`); the wrapper pattern is now proven and the other folding/docking/MD engines can follow the same template.
+
+Coming next: SASA, DSSP, sequence alignment, additional engine wrappers (AlphaFold, Vina, OpenMM). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
 
 ## Acknowledgements
 
