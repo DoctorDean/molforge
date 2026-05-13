@@ -7,8 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added 
+### Changed
+- **Project renamed from `biocore` to `molforge`** (PyPI name collision; the
+  `biocore` GitHub organization is a separate, established scientific
+  Python community). Import path is now `molforge`.
+- README rewritten around the cross-tool workflow thesis: molforge is
+  positioned as connective tissue between docking, MD, folding, design,
+  and experimental tools, rather than primarily as a data-representation
+  library.
 
+### Added
+- **`molforge.io`: file I/O subsystem.**
+  - **PDB reader and writer** (`read_pdb`, `write_pdb`, plus their
+    `*_string` variants). Handles the full wwPDB v3.30 column layout,
+    HEADER/TITLE/EXPDTA/REMARK 2 metadata, NMR multi-model files,
+    alternate locations (with three resolution strategies:
+    `highest_occupancy`, `first`, `all`, or a specific altloc id),
+    insertion codes, gzipped input/output, hydrogen filtering, and
+    automatic entity-type classification (protein / dna / rna / water /
+    ion / ligand) per residue.
+  - **FASTA reader and writer** (`read_fasta`, `write_fasta`, `*_string`
+    variants) with `FastaRecord` dataclass. Tolerant of multi-line
+    sequences, embedded digits, comments, and blank lines.
+  - **AlphaFold helpers** (`load_alphafold`, `is_alphafold_pdb`). Lifts
+    pLDDT out of the B-factor column into `protein.metadata["plddt"]`
+    (per atom), `protein.metadata["plddt_per_residue"]`, and
+    `protein.metadata["mean_plddt"]`. B-factor column preserved for
+    downstream-tool compatibility.
+  - **Top-level `load()`, `save()`, `fetch()`** dispatch by file
+    extension or explicit `format=` keyword. `fetch()` is stubbed
+    pending an HTTP utility.
+  - Format stubs (raising `NotImplementedError` with clear pointers):
+    `mmcif`, `pdbqt`, `pqr`, `sdf`, `mol2`. The API surface is committed
+    so user code targeting these formats won't break when
+    implementations land.
+  - `PDBParseError`, `PDBWriteError` for typed error handling.
+- 73 unit tests covering PDB parsing, writing, round-trip correctness on
+  real fixtures (dipeptide, NMR ensemble, altloc, insertion-coded),
+  FASTA edge cases (multiline, digits, comments, malformed input),
+  AlphaFold detection and pLDDT extraction, and dispatch behavior.
+- `ACKNOWLEDGEMENTS.md` crediting Protkit, Biotite, Biopython,
+  BioPandas, MDAnalysis, OpenMM, RDKit, and the file-format
+  specifications we implement.
 - **`molforge.core`: full implementation of the canonical data model.**
   - `AtomArray`: flat, NumPy-backed source of truth with 15 typed fields
     (coords, element, atom_name, residue_name, residue_id, insertion_code,
