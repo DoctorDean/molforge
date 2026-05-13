@@ -2,13 +2,13 @@
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Default owners for everything in the repo
-*       @OWNER
+*       @DoctorDean
 
-# Per-subpackage owners (adjust as the team grows)
-/src/biocore/core/        @OWNER
-/src/biocore/structure/   @OWNER
-/src/biocore/md/          @OWNER
-/src/biocore/docking/     @OWNER
-/src/biocore/ml/          @OWNER
-/src/biocore/wrappers/    @OWNER
-/.github/                 @OWNER
+# Per-subpackage owners
+/src/biocore/core/        @DoctorDean
+/src/biocore/structure/   @DoctorDean
+/src/biocore/md/          @DoctorDean
+/src/biocore/docking/     @DoctorDean
+/src/biocore/ml/          @DoctorDean
+/src/biocore/wrappers/    @DoctorDean
+/.github/                 @DoctorDean

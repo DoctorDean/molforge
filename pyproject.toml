@@ -13,7 +13,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [
-    { name = "biocore contributors" },
+    { name = "DoctorDean" },
 ]
 keywords = [
     "bioinformatics",
@@ -91,11 +91,11 @@ docs = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/OWNER/biocore"
+Homepage      = "https://github.com/DoctorDean/biocore"
 Documentation = "https://biocore.readthedocs.io"
-Repository    = "https://github.com/OWNER/biocore"
-Issues        = "https://github.com/OWNER/biocore/issues"
-Changelog     = "https://github.com/OWNER/biocore/blob/main/CHANGELOG.md"
+Repository    = "https://github.com/DoctorDean/biocore"
+Issues        = "https://github.com/DoctorDean/biocore/issues"
+Changelog     = "https://github.com/DoctorDean/biocore/blob/main/CHANGELOG.md"
 
 # Entry-point group used by the plugin registry.
 # Third-party packages can register engines, parsers, scoring functions, etc.

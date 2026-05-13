@@ -1,7 +1,7 @@
 site_name: biocore
 site_description: A unified Python library for structural bioinformatics, MD, and ML.
-repo_url: https://github.com/OWNER/biocore
-repo_name: OWNER/biocore
+repo_url: https://github.com/DoctorDean/biocore
+repo_name: DoctorDean/biocore
 
 theme:
   name: material

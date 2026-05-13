@@ -1,6 +1,6 @@
 # biocore
 
-[![CI](https://github.com/OWNER/biocore/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/biocore/actions/workflows/ci.yml)
+[![CI](https://github.com/DoctorDean/biocore/actions/workflows/ci.yml/badge.svg)](https://github.com/DoctorDean/biocore/actions/workflows/ci.yml)
 [![PyPI version](https://img.shields.io/pypi/v/biocore.svg)](https://pypi.org/project/biocore/)
 [![Python versions](https://img.shields.io/pypi/pyversions/biocore.svg)](https://pypi.org/project/biocore/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

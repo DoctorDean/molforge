@@ -32,7 +32,7 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 Requires Python 3.10+.
 
 ```bash
-git clone https://github.com/OWNER/biocore.git
+git clone https://github.com/DoctorDean/biocore.git
 cd biocore
 
 python -m venv .venv
