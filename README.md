@@ -6,33 +6,40 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-> **A unified, composable Python library for structural bioinformatics, molecular dynamics, protein engineering, and machine learning.**
+> **A forge for protein workflows.** One Python script, every tool in your stack: docking, MD, folding, antibody and nanobody engineering, de novo design — without the format-conversion tax.
 
-`molforge` is an open-source library — **not a framework** — designed for researchers and engineers working on proteins. Import only what you need. Compose modules freely. Plug in your favorite folding, docking, or MD engine through a clean wrapper interface.
+`molforge` is an open-source Python library that lets you compose protein workflows across the tools you already use. Bring your structures and sequences in, plug in your engines of choice (Vina, OpenMM, ESMFold, AlphaFold, RFdiffusion, ProteinMPNN, your own model), and walk out with a coherent pipeline instead of five incompatible Python environments and a graveyard of conversion scripts.
 
 ---
 
-## Why molforge?
+## Why molforge exists
 
-The protein/structural-bio Python ecosystem is fragmented: Biopython, MDAnalysis, RDKit, OpenMM, PyMOL, BioPandas, ProDy, ESM, OpenFold, and dozens of model-specific repos all use their own data representations. Moving a structure between two libraries usually means lossy conversion, re-parsing PDB files, or writing glue code.
+Modern protein work is multi-tool by nature. A real antibody-design loop might fold a sequence with ESMFold, identify CDR loops with anarci, score binding with FoldX, dock against a target with AutoDock Vina, relax with OpenMM, then evaluate with Rosetta. **Each of those tools speaks its own dialect**: different file formats, different atom-naming conventions, different ideas of what "the structure" is. Most of an engineer's day disappears into glue code.
 
-`molforge` aims to fix this with **one principled, hierarchical data model** for protein structures — Protein → Chain → Residue → Atom — paired with first-class support for sequences, MD trajectories, and ML-ready tensor views. Everything else (folding, docking, simulation, scoring) is a thin wrapper around that shared representation.
+`molforge` is the connective tissue. It provides:
+
+- A **canonical, NumPy-backed data model** that's cheap to convert in and out of — so every engine in your pipeline reads from and writes to the same representation.
+- **Thin wrappers** around the engines you already trust, with consistent interfaces (so swapping ESMFold for AlphaFold is one line, not a refactor).
+- **First-class IO** for the messy reality of structural-bio files: PDB, mmCIF, FASTA, PDBQT, PQR, SDF, MOL2, and AlphaFold predictions with pLDDT.
+- A **plugin registry** so the next docking engine, folding model, or scoring function can slot into your pipeline without forking molforge.
+
+Built as a library, not a framework: there's no orchestrator, no DAG runtime, no decorators you have to import to make things work. Use whatever workflow tool you like — Snakemake, Nextflow, Prefect, a shell script — molforge is just imports.
 
 ## Design principles
 
-1. **Library, not framework.** No runtime, no orchestration, no required entry point. Just import what you need.
-2. **One data model, many views.** Hierarchical (`protein.chains[0].residues[12].atoms`) and linear (`protein.atom_array`, `protein.sequence`) views of the same data, kept in sync.
-3. **Wrappers, not reimplementations.** We do not reimplement OpenMM, AutoDock, or AlphaFold. We provide consistent, typed interfaces around them.
-4. **Plugin-friendly.** A registry pattern lets third parties ship docking engines, folding models, or scoring functions as separate packages that integrate seamlessly.
-5. **Typed, tested, and documented.** Full type hints, >90% coverage target, MkDocs-based reference docs, runnable notebooks.
+1. **Workflows over silos.** Every design decision is judged by "does this make it easier to chain N tools together?"
+2. **Wrappers, not reimplementations.** We don't rebuild OpenMM or AutoDock. We give them a shared vocabulary.
+3. **One data model, two views.** Hierarchical (`protein.chains["A"].residues[42]`) for biology, linear (`protein.atom_array.coords`) for ML — same data, no conversion.
+4. **Heterogeneous content is first-class.** Antibodies have glycans. Drug targets have ligands and ions. Membrane proteins have lipids. The data model handles all of it without an awkward special case for "non-protein."
+5. **Typed, tested, documented.** Strict mypy, ruff-clean, >90% coverage target.
 
 ## Installation
 
 ```bash
-# minimal core (data model + IO + sequence)
+# minimal core (data model + sequence + basic IO)
 pip install molforge
 
-# with structure analysis extras
+# with structure analysis (RMSD, SASA, contacts)
 pip install "molforge[structure]"
 
 # with ML wrappers (torch, transformers, esm)
@@ -40,6 +47,9 @@ pip install "molforge[ml]"
 
 # with MD support (openmm, mdtraj)
 pip install "molforge[md]"
+
+# with docking (rdkit for small molecules)
+pip install "molforge[docking]"
 
 # everything
 pip install "molforge[all]"
@@ -52,45 +62,54 @@ pip install -e ".[dev,all]"
 
 ## Quickstart
 
+The smallest end-to-end example that shows the cross-tool point:
+
 ```python
-import molforge as bc
-
-# Load a protein from PDB, mmCIF, or fetch from RCSB
-protein = bc.load("1ubq.pdb")
-
-# Hierarchical access
-chain_a = protein.chains["A"]
-residue_42 = chain_a.residues[42]
-ca_atom = residue_42.atoms["CA"]
-
-# Linear / tensor views (zero-copy where possible)
-coords = protein.atom_array.coords          # (N_atoms, 3) numpy array
-sequence = protein.sequence                  # str, one-letter code
-chain_ids = protein.atom_array.chain_id      # (N_atoms,) array
-
-# Compose with engines via wrappers
+import molforge as mf
 from molforge.wrappers.folding import ESMFold
 from molforge.wrappers.docking import Vina
+from molforge.wrappers.md import OpenMM
 
-folded = ESMFold().predict("MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG")
-poses  = Vina().dock(receptor=protein, ligand="ligand.sdf")
+# 1. Fold a sequence
+folded = ESMFold().predict("MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVS...")
+
+# 2. Save as PDB, save as mmCIF, hand to anything
+mf.save(folded, "candidate.pdb")
+mf.save(folded, "candidate.cif")
+
+# 3. Dock a ligand against it
+result = Vina().dock(receptor=folded, ligand="ligand.sdf")
+top_pose = result.poses[0]
+
+# 4. Drop into MD for relaxation
+trajectory = OpenMM().simulate(top_pose.complex, steps=10_000)
+
+# 5. Inspect — hierarchical or linear, your call
+print(folded.sequence)                            # one-letter per chain
+print(folded.atom_array.coords.shape)             # (N, 3) NumPy array
+ca = folded.chains["A"].residues[42].atoms["CA"]  # specific atom
 ```
+
+Notice what *isn't* there: file-format conversions, atom-name remapping, hand-rolled PDB parsers, custom data classes per engine. molforge does that work so your script reads like the science you're actually doing.
 
 ## Repository structure
 
 ```
 molforge/
-├── src/molforge/              # Library source (src-layout)
-│   ├── core/                 # Hierarchical data model (Protein, Chain, Residue, Atom)
+├── src/molforge/             # Library source (src-layout)
+│   ├── core/                 # Hierarchical + linear data model
 │   ├── sequence/             # Sequence operations, alignment, mutations
-│   ├── structure/            # Structural analysis (RMSD, SASA, contacts, geometry)
-│   ├── md/                   # MD trajectory I/O and analysis
+│   ├── structure/            # RMSD, SASA, contacts, geometry
+│   ├── md/                   # MD trajectories and analysis
 │   ├── docking/              # Docking abstractions and pose handling
 │   ├── ml/                   # ML utilities, featurizers, tensor views
-│   ├── io/                   # Parsers and writers (PDB, mmCIF, FASTA, MOL2, SDF, ...)
-│   ├── plugins/              # Plugin registry and discovery
-│   ├── metrics/              # Scoring, evaluation, benchmarking metrics
+│   ├── io/                   # PDB, mmCIF, FASTA, PDBQT, PQR, SDF, MOL2
+│   ├── plugins/              # Plugin registry and entry-point discovery
+│   ├── metrics/              # TM-score, lDDT, GDT-TS, docking metrics
 │   └── wrappers/             # Thin interfaces to external engines
+│       ├── folding/          # AlphaFold, ESMFold, Boltz, Rosetta
+│       ├── docking/          # AutoDock Vina, DiffDock
+│       └── md/               # OpenMM, GROMACS
 │       ├── folding/          # AlphaFold, ESMFold, Boltz, ...
 │       ├── docking/          # AutoDock Vina, DiffDock, ...
 │       └── md/               # OpenMM, GROMACS, ...
@@ -106,25 +125,28 @@ molforge/
 ├── CONTRIBUTING.md
 ├── CODE_OF_CONDUCT.md
 ├── SECURITY.md
-└── LICENSE
+├── LICENSE
+└── ACKNOWLEDGEMENTS.md       # Prior art and intellectual debts
 ```
 
-A more detailed walkthrough of the architecture lives in [`docs/architecture/overview.md`](docs/architecture/overview.md).
+A deeper architecture walkthrough is in [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
-## Documentation
+## Status
 
-- **Tutorials & walkthroughs:** [`notebooks/walkthroughs/`](notebooks/walkthroughs/)
-- **API reference:** [molforge.readthedocs.io](https://molforge.readthedocs.io) (coming soon)
-- **Architecture:** [`docs/architecture/`](docs/architecture/)
+molforge is **pre-1.0** and under active development. The core data model is implemented and tested; IO, structural analysis, and engine wrappers are landing iteratively. See [`CHANGELOG.md`](CHANGELOG.md) for what's done and what's next.
+
+## Acknowledgements
+
+molforge is inspired by [Protkit](https://github.com/silicogenesis/protkit) (SilicoGenesis), which pioneered the idea of a unified, hierarchical representation for protein structures in Python. molforge extends that direction toward cross-tool, cross-format workflows and a different internal architecture (NumPy-backed linear store, hierarchical views as accessors). See [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md) for the longer list of projects we've learned from.
 
 ## Contributing
 
-We welcome contributions! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening an issue or PR.
+We welcome contributions. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening an issue or PR.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [`LICENSE`](LICENSE).
 
 ## Citation
 
-If you use `biocore` in academic work, please cite us (BibTeX coming soon).
+If you use `molforge` in academic work, please cite us (BibTeX coming with the first tagged release).
