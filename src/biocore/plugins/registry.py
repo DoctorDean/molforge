@@ -1,7 +1,7 @@
 """Plugin registry implementation.
 
 The registry is a simple in-memory mapping keyed by ``(kind, name)`` pairs.
-Discovery walks Python entry points under the ``biocore.plugins`` group.
+Discovery walks Python entry points under the ``molforge.plugins`` group.
 """
 
 from __future__ import annotations
@@ -38,11 +38,11 @@ def available(kind: str | None = None) -> list[str]:
 
 
 def discover() -> None:
-    """Discover and load plugins exposed via the ``biocore.plugins`` entry-point group.
+    """Discover and load plugins exposed via the ``molforge.plugins`` entry-point group.
 
     Each entry point should be a callable taking no arguments; it is
     expected to perform its own registration via the ``register_*``
     functions.
     """
-    # TODO: use importlib.metadata.entry_points(group="biocore.plugins")
+    # TODO: use importlib.metadata.entry_points(group="molforge.plugins")
     raise NotImplementedError

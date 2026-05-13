@@ -1,7 +1,7 @@
-site_name: biocore
+site_name: molforge
 site_description: A unified Python library for structural bioinformatics, MD, and ML.
-repo_url: https://github.com/DoctorDean/biocore
-repo_name: DoctorDean/biocore
+repo_url: https://github.com/DoctorDean/molforge
+repo_name: DoctorDean/molforge
 
 theme:
   name: material

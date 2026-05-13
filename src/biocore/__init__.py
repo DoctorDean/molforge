@@ -1,13 +1,13 @@
-"""biocore — a unified library for structural bioinformatics, MD, and ML.
+"""molforge — a unified library for structural bioinformatics, MD, and ML.
 
 This package exposes a small top-level surface. Subpackages are the primary
 import points; users should typically import them directly:
 
-    >>> from biocore.core import Protein, Chain, Residue, Atom
-    >>> from biocore.io import load, save
-    >>> from biocore.structure import rmsd
+    >>> from molforge.core import Protein, Chain, Residue, Atom
+    >>> from molforge.io import load, save
+    >>> from molforge.structure import rmsd
 
-`biocore` is a *library*, not a framework: there is no runtime, no
+`molforge` is a *library*, not a framework: there is no runtime, no
 orchestration layer, and no required entry point. Import what you need.
 """
 

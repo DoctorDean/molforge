@@ -1,22 +1,22 @@
-# biocore
+# molforge
 
-[![CI](https://github.com/DoctorDean/biocore/actions/workflows/ci.yml/badge.svg)](https://github.com/DoctorDean/biocore/actions/workflows/ci.yml)
-[![PyPI version](https://img.shields.io/pypi/v/biocore.svg)](https://pypi.org/project/biocore/)
-[![Python versions](https://img.shields.io/pypi/pyversions/biocore.svg)](https://pypi.org/project/biocore/)
+[![CI](https://github.com/DoctorDean/molforge/actions/workflows/ci.yml/badge.svg)](https://github.com/DoctorDean/molforge/actions/workflows/ci.yml)
+[![PyPI version](https://img.shields.io/pypi/v/molforge.svg)](https://pypi.org/project/molforge/)
+[![Python versions](https://img.shields.io/pypi/pyversions/molforge.svg)](https://pypi.org/project/molforge/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 > **A unified, composable Python library for structural bioinformatics, molecular dynamics, protein engineering, and machine learning.**
 
-`biocore` is an open-source library — **not a framework** — designed for researchers and engineers working on proteins. Import only what you need. Compose modules freely. Plug in your favorite folding, docking, or MD engine through a clean wrapper interface.
+`molforge` is an open-source library — **not a framework** — designed for researchers and engineers working on proteins. Import only what you need. Compose modules freely. Plug in your favorite folding, docking, or MD engine through a clean wrapper interface.
 
 ---
 
-## Why biocore?
+## Why molforge?
 
 The protein/structural-bio Python ecosystem is fragmented: Biopython, MDAnalysis, RDKit, OpenMM, PyMOL, BioPandas, ProDy, ESM, OpenFold, and dozens of model-specific repos all use their own data representations. Moving a structure between two libraries usually means lossy conversion, re-parsing PDB files, or writing glue code.
 
-`biocore` aims to fix this with **one principled, hierarchical data model** for protein structures — Protein → Chain → Residue → Atom — paired with first-class support for sequences, MD trajectories, and ML-ready tensor views. Everything else (folding, docking, simulation, scoring) is a thin wrapper around that shared representation.
+`molforge` aims to fix this with **one principled, hierarchical data model** for protein structures — Protein → Chain → Residue → Atom — paired with first-class support for sequences, MD trajectories, and ML-ready tensor views. Everything else (folding, docking, simulation, scoring) is a thin wrapper around that shared representation.
 
 ## Design principles
 
@@ -30,30 +30,30 @@ The protein/structural-bio Python ecosystem is fragmented: Biopython, MDAnalysis
 
 ```bash
 # minimal core (data model + IO + sequence)
-pip install biocore
+pip install molforge
 
 # with structure analysis extras
-pip install "biocore[structure]"
+pip install "molforge[structure]"
 
 # with ML wrappers (torch, transformers, esm)
-pip install "biocore[ml]"
+pip install "molforge[ml]"
 
 # with MD support (openmm, mdtraj)
-pip install "biocore[md]"
+pip install "molforge[md]"
 
 # everything
-pip install "biocore[all]"
+pip install "molforge[all]"
 
 # development
-git clone https://github.com/OWNER/biocore.git
-cd biocore
+git clone https://github.com/DoctorDean/molforge.git
+cd molforge
 pip install -e ".[dev,all]"
 ```
 
 ## Quickstart
 
 ```python
-import biocore as bc
+import molforge as bc
 
 # Load a protein from PDB, mmCIF, or fetch from RCSB
 protein = bc.load("1ubq.pdb")
@@ -69,8 +69,8 @@ sequence = protein.sequence                  # str, one-letter code
 chain_ids = protein.atom_array.chain_id      # (N_atoms,) array
 
 # Compose with engines via wrappers
-from biocore.wrappers.folding import ESMFold
-from biocore.wrappers.docking import Vina
+from molforge.wrappers.folding import ESMFold
+from molforge.wrappers.docking import Vina
 
 folded = ESMFold().predict("MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVSRQVIVQDIAYLRSLGYNIVATPRGYVLAGG")
 poses  = Vina().dock(receptor=protein, ligand="ligand.sdf")
@@ -79,8 +79,8 @@ poses  = Vina().dock(receptor=protein, ligand="ligand.sdf")
 ## Repository structure
 
 ```
-biocore/
-├── src/biocore/              # Library source (src-layout)
+molforge/
+├── src/molforge/              # Library source (src-layout)
 │   ├── core/                 # Hierarchical data model (Protein, Chain, Residue, Atom)
 │   ├── sequence/             # Sequence operations, alignment, mutations
 │   ├── structure/            # Structural analysis (RMSD, SASA, contacts, geometry)
@@ -114,7 +114,7 @@ A more detailed walkthrough of the architecture lives in [`docs/architecture/ove
 ## Documentation
 
 - **Tutorials & walkthroughs:** [`notebooks/walkthroughs/`](notebooks/walkthroughs/)
-- **API reference:** [biocore.readthedocs.io](https://biocore.readthedocs.io) (coming soon)
+- **API reference:** [molforge.readthedocs.io](https://molforge.readthedocs.io) (coming soon)
 - **Architecture:** [`docs/architecture/`](docs/architecture/)
 
 ## Contributing

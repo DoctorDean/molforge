@@ -22,7 +22,7 @@ class DockingResult:
 class DockingEngine:
     """Abstract base class for docking engines.
 
-    Concrete implementations live under :mod:`biocore.wrappers.docking`.
+    Concrete implementations live under :mod:`molforge.wrappers.docking`.
     """
 
     def dock(self, receptor: object, ligand: object) -> DockingResult:

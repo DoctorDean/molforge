@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from biocore.wrappers.md._base import MDEngine
+from molforge.wrappers.md._base import MDEngine
 
 
 class OpenMM(MDEngine):
     """Wrapper around OpenMM.
 
     TODO: implement system preparation, force-field selection, and
-    integration with :class:`biocore.md.Trajectory`.
+    integration with :class:`molforge.md.Trajectory`.
     """
 
     def __init__(self, **kwargs: object) -> None: ...

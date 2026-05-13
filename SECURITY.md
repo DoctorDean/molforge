@@ -6,7 +6,7 @@
 | ------- | ------------------ |
 | 0.x     | :white_check_mark: |
 
-While `biocore` is pre-1.0, only the latest minor release receives security fixes.
+While `molforge` is pre-1.0, only the latest minor release receives security fixes.
 
 ## Reporting a vulnerability
 
@@ -20,4 +20,4 @@ You should expect:
 - A status update within 7 days.
 - Coordinated disclosure once a fix is available.
 
-Thank you for helping keep `biocore` and its users safe.
+Thank you for helping keep `molforge` and its users safe.

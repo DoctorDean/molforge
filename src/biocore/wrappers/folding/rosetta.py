@@ -7,7 +7,7 @@ for installing PyRosetta separately.
 
 from __future__ import annotations
 
-from biocore.wrappers.folding._base import FoldingEngine
+from molforge.wrappers.folding._base import FoldingEngine
 
 
 class Rosetta(FoldingEngine):

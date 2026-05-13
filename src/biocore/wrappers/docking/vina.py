@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from biocore.docking import DockingEngine, DockingResult
+from molforge.docking import DockingEngine, DockingResult
 
 
 class Vina(DockingEngine):

@@ -1,10 +1,10 @@
 # Reference plugins
 
 This directory contains **reference / example plugins** that demonstrate
-how to extend `biocore` from an external package via the
-`biocore.plugins` entry-point group.
+how to extend `molforge` from an external package via the
+`molforge.plugins` entry-point group.
 
-These are intentionally separate from the main `biocore` package — they
+These are intentionally separate from the main `molforge` package — they
 are *not* installed by `pip install biocore`. To use them, install them
 explicitly:
 

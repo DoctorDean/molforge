@@ -2,7 +2,7 @@
 
 Metrics here are *task-level*: TM-score, lDDT, GDT-TS, docking RMSD,
 binding-affinity correlation, etc. Lower-level geometry (per-atom RMSD,
-distance maps) lives in :mod:`biocore.structure`.
+distance maps) lives in :mod:`molforge.structure`.
 """
 
 from __future__ import annotations

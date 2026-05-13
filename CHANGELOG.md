@@ -26,4 +26,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Walkthrough notebook stubs for sequences, structures, MD, and docking.
 - Pinned requirements files per extra under `requirements/`.
 
-[Unreleased]: https://github.com/DoctorDean/biocore/compare/HEAD...HEAD
+[Unreleased]: https://github.com/DoctorDean/molforge/compare/HEAD...HEAD

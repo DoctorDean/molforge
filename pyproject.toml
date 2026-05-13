@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 # Project metadata (PEP 621)
 # -----------------------------------------------------------------------------
 [project]
-name = "biocore"
+name = "molforge"
 dynamic = ["version"]
 description = "A unified Python library for structural bioinformatics, MD, protein engineering, and ML."
 readme = "README.md"
@@ -70,7 +70,7 @@ io = [
     "biotite>=0.40",
 ]
 all = [
-    "biocore[structure,sequence,md,docking,ml,io]",
+    "molforge[structure,sequence,md,docking,ml,io]",
 ]
 dev = [
     "pytest>=7.4",
@@ -91,29 +91,29 @@ docs = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/DoctorDean/biocore"
-Documentation = "https://biocore.readthedocs.io"
-Repository    = "https://github.com/DoctorDean/biocore"
-Issues        = "https://github.com/DoctorDean/biocore/issues"
-Changelog     = "https://github.com/DoctorDean/biocore/blob/main/CHANGELOG.md"
+Homepage      = "https://github.com/DoctorDean/molforge"
+Documentation = "https://molforge.readthedocs.io"
+Repository    = "https://github.com/DoctorDean/molforge"
+Issues        = "https://github.com/DoctorDean/molforge/issues"
+Changelog     = "https://github.com/DoctorDean/molforge/blob/main/CHANGELOG.md"
 
 # Entry-point group used by the plugin registry.
 # Third-party packages can register engines, parsers, scoring functions, etc.
-[project.entry-points."biocore.plugins"]
+[project.entry-points."molforge.plugins"]
 # example_plugin = "example_plugin:register"
 
 # -----------------------------------------------------------------------------
 # Hatch build / version config
 # -----------------------------------------------------------------------------
 [tool.hatch.version]
-path = "src/biocore/__init__.py"
+path = "src/molforge/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/biocore"]
+packages = ["src/molforge"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/biocore",
+    "src/molforge",
     "tests",
     "README.md",
     "LICENSE",
@@ -144,7 +144,7 @@ markers = [
 # -----------------------------------------------------------------------------
 [tool.coverage.run]
 branch = true
-source = ["biocore"]
+source = ["molforge"]
 omit = ["*/tests/*", "*/_version.py"]
 
 [tool.coverage.report]

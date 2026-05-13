@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from biocore.wrappers.folding._base import FoldingEngine
+from molforge.wrappers.folding._base import FoldingEngine
 
 
 class Boltz(FoldingEngine):
     """Wrapper around Boltz.
 
     TODO: implement model loading, prediction, and conversion of the engine's
-    native output into a :class:`biocore.core.Protein`.
+    native output into a :class:`molforge.core.Protein`.
     """
 
     def __init__(self, **kwargs: object) -> None:

@@ -1,6 +1,6 @@
-# Contributing to biocore
+# Contributing to molforge
 
-First — thank you. `biocore` exists because the protein/structural-bio community needs better, shared tooling, and that only happens with contributors like you.
+First — thank you. `molforge` exists because the protein/structural-bio community needs better, shared tooling, and that only happens with contributors like you.
 
 ## Table of contents
 
@@ -32,8 +32,8 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 Requires Python 3.10+.
 
 ```bash
-git clone https://github.com/DoctorDean/biocore.git
-cd biocore
+git clone https://github.com/DoctorDean/molforge.git
+cd molforge
 
 python -m venv .venv
 source .venv/bin/activate     # Windows: .venv\Scripts\activate
@@ -72,7 +72,7 @@ pytest
 
 ## Testing
 
-- Tests live in `tests/`, mirroring the `src/biocore/` layout.
+- Tests live in `tests/`, mirroring the `src/molforge/` layout.
 - Use `pytest`. Property tests with `hypothesis` are encouraged.
 - Mark slow tests with `@pytest.mark.slow` and integration tests with `@pytest.mark.integration`.
 - Aim for >90% line coverage on new code.
@@ -80,7 +80,7 @@ pytest
 ```bash
 pytest                         # full suite
 pytest -m "not slow"           # quick
-pytest --cov=biocore           # with coverage
+pytest --cov=molforge           # with coverage
 pytest tests/unit/core/        # one subpackage
 ```
 
@@ -113,7 +113,7 @@ PRs should:
 
 ## Releasing (maintainers only)
 
-1. Bump version in `src/biocore/__init__.py`.
+1. Bump version in `src/molforge/__init__.py`.
 2. Move `[Unreleased]` entries to a new versioned section in `CHANGELOG.md`.
 3. Commit: `chore(release): vX.Y.Z`.
 4. Tag: `git tag -a vX.Y.Z -m "Release X.Y.Z"` and push tags.

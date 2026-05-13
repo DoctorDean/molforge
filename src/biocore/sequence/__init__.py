@@ -1,7 +1,7 @@
 """Sequence-level operations: alignment, mutations, composition.
 
 Examples:
-    >>> from biocore.sequence import align, mutate
+    >>> from molforge.sequence import align, mutate
     >>> align("MKTV", "MKAV")
     >>> mutate(protein, chain="A", position=42, to="ALA")
 """
