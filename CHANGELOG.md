@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`molforge.structure`: structural analysis subpackage.**
+  - **Superposition** (`superpose`, `kabsch_rmsd`, `SuperpositionResult`):
+    Kabsch / Umeyama optimal rigid-body alignment via SVD with proper-
+    rotation guarantee (no reflections), optional per-point weights for
+    masking outliers, returns rotation + translation + aligned coords +
+    RMSD.
+  - **RMSD** (`rmsd`, `rmsd_raw`, `rmsd_per_residue`): structure-to-
+    structure RMSD with five atom-subset selectors (``ca``, ``backbone``,
+    ``backbone_o``, ``all_heavy``, ``all``), optional alignment, and
+    per-residue breakdown for localizing structural differences.
+  - **Contacts** (`contact_map`, `distance_map`, `residue_contacts`):
+    binary contact maps at configurable cutoff, continuous distance
+    maps, and all-atom inter-residue contact listings with chain-pair
+    filtering for interface analysis.
+  - **Geometry** (`centroid`, `center_of_mass`, `radius_of_gyration`,
+    `bounding_box`, `translate`, `rotate`, `center_at_origin`): bulk
+    geometric properties (mass-weighted or geometric) and in-place
+    coordinate transforms that mutate the canonical `AtomArray` directly.
+  - Stubs (still `NotImplementedError`): `sasa`, `dssp`.
+- 43 unit tests covering superposition correctness (identity, translation,
+  rotation, noisy alignment, proper-rotation guarantee, weighted),
+  RMSD computations across atom subsets, contact / distance map
+  symmetry and chain filtering, and all geometry operations.
+
 ### Changed
   - Full read/write of the ``_atom_site`` loop, the only mmCIF block
     that holds atomic coordinate data.

@@ -1,25 +1,88 @@
-"""Structural analysis: RMSD, SASA, contacts, secondary structure, geometry."""
+"""Structural analysis: superposition, RMSD, contacts, geometry.
+
+Workhorses for analyzing the geometric properties of protein
+structures and comparing them.
+
+Common entry points:
+    - :func:`rmsd` — RMSD between two structures (with optional
+      superposition).
+    - :func:`superpose` — Kabsch / Umeyama optimal rigid-body alignment.
+    - :func:`contact_map` / :func:`distance_map` — residue-residue
+      contact and distance matrices.
+    - :func:`residue_contacts` — all-atom contacts as a sorted list.
+    - :func:`radius_of_gyration`, :func:`centroid`, :func:`center_of_mass` —
+      bulk geometric properties.
+    - :func:`translate`, :func:`rotate`, :func:`center_at_origin` —
+      in-place coordinate transforms.
+
+Not yet implemented (stubs raising NotImplementedError):
+    - SASA (solvent-accessible surface area)
+    - DSSP secondary-structure assignment
+    - Backbone dihedrals (φ, ψ, ω) — coming next iteration
+"""
 
 from __future__ import annotations
 
-__all__ = ["contacts", "dssp", "rmsd", "sasa"]
+from molforge.structure.contacts import (
+    contact_map,
+    distance_map,
+    residue_contacts,
+)
+from molforge.structure.geometry import (
+    bounding_box,
+    center_at_origin,
+    center_of_mass,
+    centroid,
+    radius_of_gyration,
+    rotate,
+    translate,
+)
+from molforge.structure.rmsd import (
+    rmsd,
+    rmsd_per_residue,
+    rmsd_raw,
+)
+from molforge.structure.superposition import (
+    SuperpositionResult,
+    kabsch_rmsd,
+    superpose,
+)
 
-
-def rmsd(a: object, b: object, *, align: bool = True) -> float:
-    """Root-mean-square deviation between two structures (optionally superposed). TODO."""
-    raise NotImplementedError
+__all__ = [  # noqa: RUF022 — grouped by concern
+    # Superposition / RMSD
+    "superpose",
+    "kabsch_rmsd",
+    "SuperpositionResult",
+    "rmsd",
+    "rmsd_raw",
+    "rmsd_per_residue",
+    # Contacts / distance
+    "contact_map",
+    "distance_map",
+    "residue_contacts",
+    # Geometry
+    "centroid",
+    "center_of_mass",
+    "radius_of_gyration",
+    "bounding_box",
+    "translate",
+    "rotate",
+    "center_at_origin",
+    # Not yet implemented
+    "sasa",
+    "dssp",
+]
 
 
 def sasa(protein: object) -> object:
-    """Solvent-accessible surface area per atom or per residue. TODO."""
-    raise NotImplementedError
-
-
-def contacts(protein: object, cutoff: float = 5.0) -> object:
-    """Inter-residue contact map at the given distance cutoff. TODO."""
-    raise NotImplementedError
+    """Solvent-accessible surface area. TODO: implement (Shrake-Rupley)."""
+    raise NotImplementedError(
+        "SASA computation is planned; track at https://github.com/DoctorDean/molforge/issues."
+    )
 
 
 def dssp(protein: object) -> object:
-    """DSSP secondary-structure assignment. TODO."""
-    raise NotImplementedError
+    """DSSP secondary-structure assignment. TODO: implement."""
+    raise NotImplementedError(
+        "DSSP assignment is planned; track at https://github.com/DoctorDean/molforge/issues."
+    )
