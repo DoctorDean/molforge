@@ -1,0 +1,8 @@
+HEADER    ALPHAFOLD MONOMER V2.0 PREDICTION                                     
+TITLE     ALPHAFOLD MONOMER V2.0 PREDICTION FOR TEST_PROTEIN                    
+ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00 90.50           N  
+ATOM      2  CA  ALA A   1       1.000   0.000   0.000  1.00 90.50           C  
+ATOM      3  C   ALA A   1       2.000   0.000   0.000  1.00 90.50           C  
+ATOM      4  N   GLY A   2       3.000   0.000   0.000  1.00 75.20           N  
+ATOM      5  CA  GLY A   2       4.000   0.000   0.000  1.00 75.20           C  
+END                                                                             

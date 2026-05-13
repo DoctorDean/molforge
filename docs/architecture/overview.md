@@ -1,6 +1,6 @@
 # Architecture overview
 
-This document describes the high-level architecture of `biocore`.
+This document describes the high-level architecture of `molforge`.
 
 ## Design goals
 
@@ -8,14 +8,14 @@ This document describes the high-level architecture of `biocore`.
 2. **Two complementary views** of the same data:
    - *Hierarchical* (`Protein` → `Chain` → `Residue` → `Atom`) — for biology-aware reasoning.
    - *Linear* (`AtomArray`) — flat NumPy arrays for vectorized analysis and ML.
-3. **Composability over orchestration** — `biocore` is a library; users compose modules in their own scripts/notebooks. There is no runtime or DAG engine.
+3. **Composability over orchestration** — `molforge` is a library; users compose modules in their own scripts/notebooks. There is no runtime or DAG engine.
 4. **Wrappers, not reimplementations** — external engines (folding, docking, MD) are wrapped behind small, typed interfaces. The wrappers do conversion to/from the canonical data model; they do not reimplement the underlying science.
-5. **Plugin-friendly** — third parties can extend `biocore` without forking it by exposing entry points under the `biocore.plugins` group.
+5. **Plugin-friendly** — third parties can extend `molforge` without forking it by exposing entry points under the `molforge.plugins` group.
 
 ## Module map
 
 ```
-biocore
+molforge
 ├── core          # Data model: Protein, Chain, Residue, Atom, AtomArray
 ├── io            # Parsers/writers: PDB, mmCIF, FASTA, MOL2, SDF, trajectories
 ├── sequence      # Sequence-level ops: align, mutate, composition
@@ -64,17 +64,17 @@ analysis. The hierarchical and linear views are kept consistent.
 
 The plugin registry is a simple mapping keyed by `(kind, name)` pairs.
 Discovery walks `importlib.metadata` entry points under the
-`biocore.plugins` group. A third-party package looks like:
+`molforge.plugins` group. A third-party package looks like:
 
 ```toml
 # external_pkg/pyproject.toml
-[project.entry-points."biocore.plugins"]
+[project.entry-points."molforge.plugins"]
 my_docker = "external_pkg:register"
 ```
 
 ```python
 # external_pkg/__init__.py
-from biocore.plugins import register_engine
+from molforge.plugins import register_engine
 from .my_docker import MyDocker
 
 def register() -> None:
@@ -84,13 +84,13 @@ def register() -> None:
 After `pip install external_pkg`, users get:
 
 ```python
-from biocore.plugins import discover, get
+from molforge.plugins import discover, get
 discover()
 engine_cls = get("engine", "my_docker")
 ```
 
 ## Stability and versioning
 
-`biocore` follows SemVer. While we are pre-1.0, expect breaking changes
+`molforge` follows SemVer. While we are pre-1.0, expect breaking changes
 between minor releases — they will be documented in `CHANGELOG.md`. The
 public API is everything not prefixed with `_`.

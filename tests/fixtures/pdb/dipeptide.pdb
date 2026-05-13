@@ -1,0 +1,16 @@
+HEADER    TEST STRUCTURE                          01-JAN-26   TEST              
+TITLE     ALA-GLY DIPEPTIDE FOR MOLFORGE TESTING                                
+REMARK   2 RESOLUTION.    1.00 ANGSTROMS.                                       
+EXPDTA    THEORETICAL MODEL                                                     
+ATOM      1  N   ALA A   1      -0.677  -1.230  -0.491  1.00 20.00           N  
+ATOM      2  CA  ALA A   1      -0.001   0.064  -0.491  1.00 20.00           C  
+ATOM      3  C   ALA A   1       1.499  -0.110  -0.491  1.00 20.00           C  
+ATOM      4  O   ALA A   1       2.030  -1.227  -0.491  1.00 20.00           O  
+ATOM      5  CB  ALA A   1      -0.509   0.856   0.727  1.00 20.00           C  
+ATOM      6  N   GLY A   2       2.215   1.009  -0.491  1.00 20.00           N  
+ATOM      7  CA  GLY A   2       3.665   1.025  -0.491  1.00 20.00           C  
+ATOM      8  C   GLY A   2       4.211   2.439  -0.491  1.00 20.00           C  
+ATOM      9  O   GLY A   2       3.475   3.422  -0.491  1.00 20.00           O  
+TER      10      GLY A   2                                                      
+HETATM   11  O   HOH W 100       5.000   5.000   0.000  1.00 30.00           O  
+END                                                                             
