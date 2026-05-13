@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from biocore.plugins import available, get, register_engine
+from molforge.plugins import available, get, register_engine
 
 
 def test_register_and_retrieve_engine() -> None:
