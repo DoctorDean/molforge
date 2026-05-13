@@ -8,8 +8,8 @@ to the appropriate handler based on the file extension.
 Supported formats:
 
 - **PDB** (``.pdb``, ``.ent``) — full read/write, the universal default.
-- **mmCIF / PDBx** (``.cif``, ``.mmcif``) — read/write planned;
-  recommended for structures with >99,999 atoms (PDB's hard limit).
+- **mmCIF / PDBx** (``.cif``, ``.mmcif``) — full read/write; recommended
+  for structures with >99,999 atoms (PDB's hard limit).
 - **FASTA** (``.fasta``, ``.fa``, ``.faa``, ``.fna``) — sequence read/write.
 - **PDBQT** (``.pdbqt``) — AutoDock Vina format; read/write planned.
 - **PQR** (``.pqr``) — APBS / PDB2PQR with explicit charges and radii;
@@ -39,6 +39,14 @@ from molforge.io.fasta import (
     write_fasta,
     write_fasta_string,
 )
+from molforge.io.mmcif import (
+    CIFParseError,
+    CIFWriteError,
+    read_cif,
+    read_cif_string,
+    write_cif,
+    write_cif_string,
+)
 from molforge.io.pdb import (
     PDBParseError,
     PDBWriteError,
@@ -61,6 +69,13 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     "write_pdb_string",
     "PDBParseError",
     "PDBWriteError",
+    # mmCIF
+    "read_cif",
+    "read_cif_string",
+    "write_cif",
+    "write_cif_string",
+    "CIFParseError",
+    "CIFWriteError",
     # FASTA
     "read_fasta",
     "read_fasta_string",

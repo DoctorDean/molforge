@@ -125,7 +125,7 @@ A deeper architecture walkthrough is in [`docs/architecture/overview.md`](docs/a
 molforge is **pre-1.0** and under active development. What's working today:
 
 - **Core data model** — `Protein` / `Chain` / `Residue` / `Atom` over a canonical NumPy-backed `AtomArray`, with first-class heterogeneous content (ligands, water, ions, modified residues).
-- **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
+- **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes) and **mmCIF** (the modern format for large structures); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
 - **First engine wrapper** — **ESMFold** end-to-end from sequence string to `Protein` (`pip install 'molforge[ml]'`); the wrapper pattern is now proven and the other folding/docking/MD engines can follow the same template.
 
 Coming next: SASA, DSSP, sequence alignment, additional engine wrappers (AlphaFold, Vina, OpenMM). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.

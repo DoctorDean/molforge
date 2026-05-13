@@ -38,9 +38,9 @@ class TestLoadDispatch:
             load(bogus)
 
     def test_stub_format_raises_not_implemented(self, tmp_path: Path) -> None:
-        bogus = tmp_path / "x.cif"
+        bogus = tmp_path / "x.pdbqt"
         bogus.write_text("")
-        with pytest.raises(NotImplementedError, match="mmCIF"):
+        with pytest.raises(NotImplementedError, match="PDBQT"):
             load(bogus)
 
 
@@ -63,7 +63,7 @@ class TestSaveDispatch:
     def test_save_stub_format_raises(self, tmp_path: Path) -> None:
         p = load(FIXTURES / "pdb" / "dipeptide.pdb")
         with pytest.raises(NotImplementedError):
-            save(p, tmp_path / "out.cif")
+            save(p, tmp_path / "out.pdbqt")
 
 
 class TestFetch:

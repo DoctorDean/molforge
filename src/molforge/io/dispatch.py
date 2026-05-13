@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from molforge.io.fasta import read_fasta, write_fasta
+from molforge.io.mmcif import read_cif, write_cif
 from molforge.io.pdb import read_pdb, write_pdb
 
 if TYPE_CHECKING:
@@ -47,15 +48,16 @@ _EXT_TO_FORMAT: dict[str, str] = {
 # implemented are stubbed to raise NotImplementedError with a clear hint.
 _READERS: dict[str, Callable[..., object]] = {
     "pdb": read_pdb,
+    "cif": read_cif,
     "fasta": read_fasta,
 }
 _WRITERS: dict[str, Callable[..., None]] = {
     "pdb": write_pdb,
+    "cif": write_cif,
     "fasta": write_fasta,
 }
 
 _PLANNED_READERS: dict[str, str] = {
-    "cif": "mmCIF reader is planned; see molforge.io.mmcif",
     "pdbqt": "PDBQT reader is planned; see molforge.io.pdbqt",
     "pqr": "PQR reader is planned; see molforge.io.pqr",
     "sdf": "SDF reader is planned; see molforge.io.sdf (will require RDKit)",

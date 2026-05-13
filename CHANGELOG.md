@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+  - Full read/write of the ``_atom_site`` loop, the only mmCIF block
+    that holds atomic coordinate data.
+  - Hand-written tokenizer handles quoted strings, comments,
+    semicolon-bounded multi-line text fields, and the ``.``/``?`` sentinel
+    values for missing/unknown.
+  - Header metadata extracted: ``_entry.id``, ``_struct.title``,
+    ``_exptl.method``, ``_refine.ls_d_res_high``.
+  - Preference for ``auth_*`` columns (matching PDB conventions) with
+    fallback to ``label_*``, so PDB↔mmCIF round-trips preserve
+    author-assigned chain IDs and residue numbers.
+  - Reuses the same altloc resolution strategies and entity-type
+    classification as the PDB parser for behavioural consistency.
+  - ``CIFParseError`` and ``CIFWriteError`` for typed error handling.
+  - Wired into the top-level :func:`load` / :func:`save` dispatcher so
+    ``.cif`` and ``.mmcif`` extensions just work.
+- 27 unit tests covering the tokenizer, parsing, write, round-trip
+  (CIF→CIF and PDB→CIF→Protein), dispatch, and error paths.
 - **`molforge.wrappers.folding.ESMFold`: first fully-implemented engine wrapper.**
   - Wraps Meta AI's ``facebook/esmfold_v1`` via HuggingFace
     ``transformers``. Single-sequence folding (no MSA needed), fast,
