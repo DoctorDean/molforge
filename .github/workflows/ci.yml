@@ -65,7 +65,7 @@ jobs:
         run: pytest -m "not slow and not integration" --cov=molforge --cov-report=xml
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
