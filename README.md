@@ -99,6 +99,8 @@ ca = folded.chains["A"].residues[42].atoms["CA"]  # specific atom
 
 Notice what *isn't* there: file-format conversions, atom-name remapping, hand-rolled PDB parsers, custom data classes per engine. molforge does that work so your script reads like the science you're actually doing.
 
+> **See the full workflow in action:** [`notebooks/examples/end_to_end_design.ipynb`](notebooks/examples/end_to_end_design.ipynb) walks through a complete design loop — fold → analyze → mutate → re-fold → compare — using ESMFold, DSSP, sequence mutations, and RMSD comparison, all with one consistent data model.
+
 ## Repository structure
 
 ```

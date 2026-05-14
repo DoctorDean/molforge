@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **End-to-end design-loop notebook** (`notebooks/examples/end_to_end_design.ipynb`).
+  A 20-cell worked example walking the full pipeline: sequence input
+  with composition stats → ESMFold prediction → DSSP secondary
+  structure + radius of gyration → point mutation → re-fold → per-
+  residue RMSD, contact-map overlap, and DSSP-diff comparison
+  between wild-type and mutant. Cells call out the heavy ESMFold
+  inference steps as `# 🐢 SLOW` so the notebook renders correctly
+  without GPU; the rest run against the bundled `helix.pdb` fixture.
+  Every code cell ships pre-baked outputs that match the real
+  runtime values so it makes sense to read straight on GitHub.
+- **Vina docking walkthrough** (`notebooks/walkthroughs/04_docking.ipynb`).
+  Replaces the previous stub with a real 15-cell walkthrough:
+  engine construction, search-box specification, dock invocation,
+  result iteration, pose-to-pose RMSD with `molforge.structure`,
+  and run-metadata round-trip. Documents the current receptor /
+  ligand prep requirement and points at the `meeko` integration on
+  the roadmap.
 - **`molforge.structure.dssp`: Kabsch-Sander secondary-structure assignment.**
   - Pure-NumPy implementation of the canonical DSSP algorithm
     (Kabsch & Sander 1983) with no external dependencies — no DSSP
