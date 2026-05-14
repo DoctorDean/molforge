@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.wrappers.docking.Vina`: second fully-implemented engine wrapper.**
+  - Wraps AutoDock Vina via the
+    [`vina`](https://pypi.org/project/vina/) PyPI package, which bundles
+    the Vina binary so no manual install is required.
+  - Configurable scoring function (`vina` or `vinardo`), seed, CPU
+    thread count, and verbosity.
+  - Takes either a prepared `.pdbqt` file path or (eventually) a
+    `Protein` plus charges; the receptor / ligand preparation path for
+    `Protein` and `.pdb` / `.sdf` inputs raises a clear
+    `NotImplementedError` pointing users at meeko / AutoDockTools.
+  - Search box specified by `center` and `box_size` in Å.
+  - Multi-pose PDBQT output parsed back into `DockingResult` / `Pose`
+    objects with score (kcal/mol), RMSD lower/upper bounds vs the
+    best pose, rank, and the ligand atoms as a `Protein`.
+- **`molforge.docking`: completed ABC and result types.**
+  - `Pose` and `DockingResult` dataclasses with `best`, `top_n`,
+    iteration, and length helpers — replacing the previous stub classes
+    that raised `NotImplementedError` on construction.
+  - `DockingEngine` ABC with the formal `dock` contract; mirrors
+    `FoldingEngine` for API consistency across wrapper categories.
+  - `DockingEngineNotInstalledError` for missing-dependency error paths.
+- 28 unit tests (1 marked `@pytest.mark.slow` for the real engine):
+  construction is dependency-free, lazy import behavior, materialization
+  helpers (path passthrough plus clear errors for unsupported inputs),
+  and exhaustive PDBQT output parsing (multi-MODEL, single-pose-no-MODEL,
+  score/RMSD extraction, best-first sorting, rank reassignment, empty
+  input).
 - **`molforge.sequence`: sequence operations subpackage.**
   - **Pairwise alignment** (`align`, `needleman_wunsch`, `smith_waterman`,
     `Alignment`, `identity`): pure-NumPy Needleman-Wunsch (global) and

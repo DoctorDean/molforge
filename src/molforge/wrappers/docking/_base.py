@@ -1,11 +1,7 @@
-"""Abstract base class for docking engines.
-
-Concrete docking engines should subclass :class:`molforge.docking.DockingEngine`
-and live under :mod:`molforge.wrappers.docking`.
-"""
+"""Re-export the docking ABC for symmetry with folding/md wrappers."""
 
 from __future__ import annotations
 
-from molforge.docking import DockingEngine
+from molforge.docking import DockingEngine, DockingEngineNotInstalledError
 
-__all__ = ["DockingEngine"]
+__all__ = ["DockingEngine", "DockingEngineNotInstalledError"]
