@@ -4,7 +4,7 @@
 # Default owners for everything in the repo
 *       @DoctorDean
 
-# Per-subpackage owners
+# Per-subpackage owners (adjust as the team grows)
 /src/biocore/core/        @DoctorDean
 /src/biocore/structure/   @DoctorDean
 /src/biocore/md/          @DoctorDean

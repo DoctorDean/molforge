@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/biocore
+      url: https://pypi.org/p/molforge
     steps:
       - uses: actions/download-artifact@v4
         with:
