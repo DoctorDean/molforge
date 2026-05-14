@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.sequence`: sequence operations subpackage.**
+  - **Pairwise alignment** (`align`, `needleman_wunsch`, `smith_waterman`,
+    `Alignment`, `identity`): pure-NumPy Needleman-Wunsch (global) and
+    Smith-Waterman (local) with affine gap penalties, BLOSUM62 / PAM250
+    substitution matrices, and a `format()` method for human-readable
+    alignment blocks. No external dependencies (no Biopython, no
+    parasail) so it works in the minimal install.
+  - **Substitution matrices** (`BLOSUM62`, `PAM250`, `get_matrix`,
+    `available_matrices`): hardcoded as NumPy arrays from the NCBI BLAST
+    distribution. No runtime data-file dependency.
+  - **Mutations** (`Mutation`, `parse_mutations`, `apply_mutation`,
+    `apply_mutations`, `mutate_protein`): protein-engineering notation
+    (`A123V`, `A123V/T56K`, chain-prefixed `H:K42N`) with parsing,
+    sequence-level application, and `Protein`-level application that
+    updates the canonical `AtomArray` (sequence-only — atoms stay put;
+    side-chain rebuilding is a job for Rosetta or OpenMM).
+  - **Composition / properties** (`composition`, `length`,
+    `molecular_weight`, `gravy`, `aromaticity`): the everyday sequence
+    stats — per-residue counts/fractions, monoisotopic MW with
+    terminal water, Kyte-Doolittle GRAVY score, aromatic fraction.
+- 65 unit tests covering alignment correctness (identity, gaps, full and
+  local coverage), matrix lookup and symmetry, mutation parsing
+  (including chain prefix and multi-mutant syntax), `Protein` mutation
+  with original-unchanged semantics, and all composition helpers.
 - **`molforge.structure`: structural analysis subpackage.**
   - **Superposition** (`superpose`, `kabsch_rmsd`, `SuperpositionResult`):
     Kabsch / Umeyama optimal rigid-body alignment via SVD with proper-
@@ -32,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   RMSD computations across atom subsets, contact / distance map
   symmetry and chain filtering, and all geometry operations.
 
-### Changed
+- **`molforge.io.read_cif` / `write_cif`: mmCIF / PDBx implementation.**
   - Full read/write of the ``_atom_site`` loop, the only mmCIF block
     that holds atomic coordinate data.
   - Hand-written tokenizer handles quoted strings, comments,

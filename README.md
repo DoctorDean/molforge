@@ -77,9 +77,14 @@ folded = ESMFold().predict("MKTVRQERLKSIVRILERSKEPVSGAQLAEELSVS...")
 mf.save(folded, "candidate.pdb")
 mf.save(folded, "candidate.cif")
 
-# 3. Dock a ligand against it
-result = Vina().dock(receptor=folded, ligand="ligand.sdf")
-top_pose = result.poses[0]
+# 3. Dock a ligand against it (Vina-prepared PDBQT files)
+result = Vina().dock(
+    receptor="receptor.pdbqt",
+    ligand="ligand.pdbqt",
+    center=(10.0, 5.0, -2.0),
+    box_size=(20.0, 20.0, 20.0),
+)
+top_pose = result.best
 
 # 4. Drop into MD for relaxation
 trajectory = OpenMM().simulate(top_pose.complex, steps=10_000)
@@ -126,10 +131,11 @@ molforge is **pre-1.0** and under active development. What's working today:
 
 - **Core data model** — `Protein` / `Chain` / `Residue` / `Atom` over a canonical NumPy-backed `AtomArray`, with first-class heterogeneous content (ligands, water, ions, modified residues).
 - **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes) and **mmCIF** (the modern format for large structures); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
-- **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**.
-- **First engine wrapper** — **ESMFold** end-to-end from sequence string to `Protein` (`pip install 'molforge[ml]'`); the wrapper pattern is now proven and the other folding/docking/MD engines can follow the same template.
+- **Sequence operations** — pairwise **alignment** (Needleman-Wunsch / Smith-Waterman with BLOSUM62 / PAM250), point **mutations** with protein-engineering notation (`A123V`, `A123V/T56K`, `H:K42N`), composition and property helpers (MW, GRAVY, aromaticity).
+- **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary).
+- **Two engine wrappers working end-to-end** — **ESMFold** (sequence → folded `Protein`, `pip install 'molforge[ml]'`) and **AutoDock Vina** (receptor + ligand → ranked docking poses, `pip install vina meeko`). The wrapper pattern is now validated across both folding and docking categories; the rest follow the same template.
 
-Coming next: SASA, DSSP, sequence alignment, additional engine wrappers (AlphaFold, Vina, OpenMM). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
+Coming next: SASA, backbone dihedrals (φ/ψ/ω), `meeko`-based receptor/ligand prep for Vina, additional engine wrappers (AlphaFold, OpenMM). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
 
 ## Acknowledgements
 
