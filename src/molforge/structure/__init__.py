@@ -1,4 +1,4 @@
-"""Structural analysis: superposition, RMSD, contacts, geometry.
+"""Structural analysis: superposition, RMSD, contacts, geometry, DSSP.
 
 Workhorses for analyzing the geometric properties of protein
 structures and comparing them.
@@ -14,11 +14,12 @@ Common entry points:
       bulk geometric properties.
     - :func:`translate`, :func:`rotate`, :func:`center_at_origin` —
       in-place coordinate transforms.
+    - :func:`dssp` / :func:`dssp_3state` — Kabsch-Sander secondary-
+      structure assignment (8-state and 3-state).
 
 Not yet implemented (stubs raising NotImplementedError):
-    - SASA (solvent-accessible surface area)
-    - DSSP secondary-structure assignment
-    - Backbone dihedrals (φ, ψ, ω) — coming next iteration
+    - SASA (solvent-accessible surface area) — coming next
+    - Backbone dihedrals (phi, psi, omega) — coming next
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from molforge.structure.contacts import (
     distance_map,
     residue_contacts,
 )
+from molforge.structure.dssp import dssp, dssp_3state
 from molforge.structure.geometry import (
     bounding_box,
     center_at_origin,
@@ -68,9 +70,11 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     "translate",
     "rotate",
     "center_at_origin",
+    # Secondary structure
+    "dssp",
+    "dssp_3state",
     # Not yet implemented
     "sasa",
-    "dssp",
 ]
 
 
@@ -78,11 +82,4 @@ def sasa(protein: object) -> object:
     """Solvent-accessible surface area. TODO: implement (Shrake-Rupley)."""
     raise NotImplementedError(
         "SASA computation is planned; track at https://github.com/DoctorDean/molforge/issues."
-    )
-
-
-def dssp(protein: object) -> object:
-    """DSSP secondary-structure assignment. TODO: implement."""
-    raise NotImplementedError(
-        "DSSP assignment is planned; track at https://github.com/DoctorDean/molforge/issues."
     )

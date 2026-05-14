@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.structure.dssp`: Kabsch-Sander secondary-structure assignment.**
+  - Pure-NumPy implementation of the canonical DSSP algorithm
+    (Kabsch & Sander 1983) with no external dependencies — no DSSP
+    binary required, no Biopython, no mkdssp install.
+  - Returns both the full 8-state DSSP alphabet (`H` α-helix,
+    `G` 3-10 helix, `I` π-helix, `E` β-strand, `B` β-bridge,
+    `T` turn, `S` bend, `-` coil) and the 3-state collapse
+    (`H` / `E` / `C`) via :func:`dssp_3state`.
+  - Geometric backbone amide-H placement (no need for explicit H atoms
+    in input), Kabsch-Sander electrostatic H-bond energy model, both
+    parallel and antiparallel β-bridge detection.
+  - Non-protein residues (water, ligands, ions) and residues with
+    incomplete backbones get `-` rather than crashing.
+  - Result dict also exposes the full ``(n_res, n_res)`` H-bond energy
+    matrix for downstream analyses (custom topology metrics, contact-
+    map enrichment, etc.).
+  - Replaces the previous stub that raised `NotImplementedError`.
+- New test fixture `tests/fixtures/pdb/helix.pdb` — an idealized
+  15-residue poly-alanine α-helix built from canonical (φ, ψ) values
+  via NeRF placement. Produces the expected DSSP `CHHHHHHHHHHHHHC`
+  pattern.
+- 12 unit tests covering empty / tiny inputs, helix recognition (≥7 of
+  the middle 9 residues classified as H), 3-state collapse, alphabet
+  validity, residue labels, H-bond matrix shape, and graceful handling
+  of non-protein residues.
 - **`molforge.wrappers.docking.Vina`: second fully-implemented engine wrapper.**
   - Wraps AutoDock Vina via the
     [`vina`](https://pypi.org/project/vina/) PyPI package, which bundles
