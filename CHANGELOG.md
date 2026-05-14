@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.structure.sasa`: solvent-accessible surface area (Shrake-Rupley).**
+  - `sasa(protein)` — per-atom SASA in Å² via the standard
+    Shrake-Rupley algorithm. Configurable probe radius (default 1.4 Å,
+    water) and sphere-point count (default 100; 960 matches NACCESS).
+  - `sasa_per_residue(protein)` — sum across atoms in each residue.
+  - `total_sasa(protein)` — single-scalar shortcut.
+  - Default van-der-Waals radii from the Bondi 1964 set with
+    biomolecular adjustments (NACCESS / FreeSASA). Uses the
+    golden-spiral / Fibonacci method for uniform sphere-point
+    distribution.
+  - Pure-NumPy implementation; no FreeSASA / mkdssp / Biopython
+    dependency. ~1-2 s on a 3000-atom structure with 100 points.
+- **`molforge.structure.dihedrals`: backbone dihedrals.**
+  - `phi(protein)`, `psi(protein)`, `omega(protein)` — per-residue
+    backbone dihedral angles in degrees, with `NaN` at chain termini
+    or where backbone atoms are missing.
+  - `phi_psi_omega(protein)` — all three at once (cheapest path).
+  - `ramachandran(protein)` — `(n_res, 2)` φ/ψ pairs for plotting.
+  - `dihedral(p1, p2, p3, p4)` — scalar dihedral via the standard
+    `atan2(b1·(b2×b3), (b1×b2)·(b2×b3))` formula, no acos
+    near-singular issues.
+  - `dihedrals_batch(quartets)` — fully vectorized over an `(N, 4, 3)`
+    array, matches the scalar function bit-for-bit.
+- 24 unit tests for SASA (sphere-point uniformity, isolated-atom full
+  exposure, two-atom occlusion, far-apart atoms full exposure,
+  fixture-based per-atom / per-residue / total shape and non-
+  negativity) and dihedrals (scalar at 0°, 90°, 180°; degenerate
+  geometry returns NaN; batch matches scalar; chain termini are NaN;
+  helix fixture has |φ| ≈ 60°, |ψ| ≈ 45°, |ω| ≈ 180°; empty-protein
+  edge case).
+- Replaces the previous `sasa` stub that raised `NotImplementedError`.
 - **Automatic receptor / ligand preparation for Vina via meeko + RDKit.**
   - `molforge.wrappers.docking.prepare_receptor` / `prepare_ligand`:
     convert any of the common chemistry file formats (.pdb, .mmcif,

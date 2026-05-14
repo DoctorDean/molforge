@@ -1,4 +1,4 @@
-"""Structural analysis: superposition, RMSD, contacts, geometry, DSSP.
+"""Structural analysis: superposition, RMSD, contacts, geometry, DSSP, SASA, dihedrals.
 
 Workhorses for analyzing the geometric properties of protein
 structures and comparing them.
@@ -16,10 +16,10 @@ Common entry points:
       in-place coordinate transforms.
     - :func:`dssp` / :func:`dssp_3state` — Kabsch-Sander secondary-
       structure assignment (8-state and 3-state).
-
-Not yet implemented (stubs raising NotImplementedError):
-    - SASA (solvent-accessible surface area) — coming next
-    - Backbone dihedrals (phi, psi, omega) — coming next
+    - :func:`sasa` / :func:`sasa_per_residue` / :func:`total_sasa` —
+      solvent-accessible surface area (Shrake-Rupley).
+    - :func:`phi` / :func:`psi` / :func:`omega` / :func:`phi_psi_omega` /
+      :func:`ramachandran` / :func:`dihedral` — backbone dihedral angles.
 """
 
 from __future__ import annotations
@@ -28,6 +28,15 @@ from molforge.structure.contacts import (
     contact_map,
     distance_map,
     residue_contacts,
+)
+from molforge.structure.dihedrals import (
+    dihedral,
+    dihedrals_batch,
+    omega,
+    phi,
+    phi_psi_omega,
+    psi,
+    ramachandran,
 )
 from molforge.structure.dssp import dssp, dssp_3state
 from molforge.structure.geometry import (
@@ -43,6 +52,11 @@ from molforge.structure.rmsd import (
     rmsd,
     rmsd_per_residue,
     rmsd_raw,
+)
+from molforge.structure.sasa import (
+    sasa,
+    sasa_per_residue,
+    total_sasa,
 )
 from molforge.structure.superposition import (
     SuperpositionResult,
@@ -73,13 +87,16 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     # Secondary structure
     "dssp",
     "dssp_3state",
-    # Not yet implemented
+    # SASA
     "sasa",
+    "sasa_per_residue",
+    "total_sasa",
+    # Dihedrals
+    "dihedral",
+    "dihedrals_batch",
+    "phi",
+    "psi",
+    "omega",
+    "phi_psi_omega",
+    "ramachandran",
 ]
-
-
-def sasa(protein: object) -> object:
-    """Solvent-accessible surface area. TODO: implement (Shrake-Rupley)."""
-    raise NotImplementedError(
-        "SASA computation is planned; track at https://github.com/DoctorDean/molforge/issues."
-    )

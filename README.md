@@ -136,10 +136,10 @@ molforge is **pre-1.0** and under active development. What's working today:
 - **Core data model** — `Protein` / `Chain` / `Residue` / `Atom` over a canonical NumPy-backed `AtomArray`, with first-class heterogeneous content (ligands, water, ions, modified residues).
 - **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes) and **mmCIF** (the modern format for large structures); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
 - **Sequence operations** — pairwise **alignment** (Needleman-Wunsch / Smith-Waterman with BLOSUM62 / PAM250), point **mutations** with protein-engineering notation (`A123V`, `A123V/T56K`, `H:K42N`), composition and property helpers (MW, GRAVY, aromaticity).
-- **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary).
+- **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary), **SASA** (Shrake-Rupley, no FreeSASA dependency), and **backbone dihedrals** (φ, ψ, ω, Ramachandran).
 - **Two engine wrappers working end-to-end** — **ESMFold** (sequence → folded `Protein`, `pip install 'molforge[ml]'`) and **AutoDock Vina** (receptor + ligand → ranked docking poses, `pip install vina meeko`). The wrapper pattern is now validated across both folding and docking categories; the rest follow the same template.
 
-Coming next: SASA, backbone dihedrals (φ/ψ/ω), `meeko`-based receptor/ligand prep for Vina, additional engine wrappers (AlphaFold, OpenMM). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
+Coming next: OpenMM MD wrapper, AlphaFold wrapper, more docking engines (DiffDock). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
 
 ## Acknowledgements
 
