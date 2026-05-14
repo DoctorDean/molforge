@@ -91,24 +91,40 @@ class TestMaterialization:
         assert v._materialize_receptor(path, tmp_path) == path
         assert v._materialize_ligand(path, tmp_path) == path
 
-    def test_pdb_receptor_raises_clear_error(self, tmp_path: Path) -> None:
+    def test_pdb_receptor_without_meeko_raises_clear_error(self, tmp_path: Path) -> None:
+        """Without meeko installed, prep raises DockingEngineNotInstalledError."""
+        import importlib.util
+
+        if importlib.util.find_spec("meeko") is not None:
+            pytest.skip("meeko is installed; this test verifies the missing-dep path")
+
         v = Vina()
         bad = tmp_path / "rec.pdb"
         bad.write_text("HEADER fake\n")
-        with pytest.raises(NotImplementedError, match="meeko"):
+        with pytest.raises(DockingEngineNotInstalledError, match="meeko"):
             v._materialize_receptor(bad, tmp_path)
 
-    def test_sdf_ligand_raises_clear_error(self, tmp_path: Path) -> None:
+    def test_sdf_ligand_without_meeko_raises_clear_error(self, tmp_path: Path) -> None:
+        import importlib.util
+
+        if importlib.util.find_spec("meeko") is not None:
+            pytest.skip("meeko is installed; this test verifies the missing-dep path")
+
         v = Vina()
         bad = tmp_path / "lig.sdf"
         bad.write_text("dummy\n")
-        with pytest.raises(NotImplementedError, match="meeko"):
+        with pytest.raises(DockingEngineNotInstalledError):
             v._materialize_ligand(bad, tmp_path)
 
-    def test_protein_receptor_raises_clear_error(self, tmp_path: Path) -> None:
+    def test_protein_receptor_without_meeko_raises_clear_error(self, tmp_path: Path) -> None:
+        import importlib.util
+
+        if importlib.util.find_spec("meeko") is not None:
+            pytest.skip("meeko is installed; this test verifies the missing-dep path")
+
         v = Vina()
         p = Protein(AtomArray(0))
-        with pytest.raises(NotImplementedError, match="meeko"):
+        with pytest.raises(DockingEngineNotInstalledError, match="meeko"):
             v._materialize_receptor(p, tmp_path)
 
 

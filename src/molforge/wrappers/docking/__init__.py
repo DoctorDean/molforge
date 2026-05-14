@@ -22,13 +22,21 @@ from molforge.docking import (
     Pose,
 )
 from molforge.wrappers.docking.diffdock import DiffDock
+from molforge.wrappers.docking.prep import (
+    is_pdbqt_path,
+    prepare_ligand,
+    prepare_receptor,
+)
 from molforge.wrappers.docking.vina import Vina
 
-__all__ = [  # noqa: RUF022 — grouped: base, then engines
+__all__ = [  # noqa: RUF022 — grouped: base, then engines, then prep helpers
     "DockingEngine",
     "DockingEngineNotInstalledError",
     "DockingResult",
     "Pose",
     "Vina",
     "DiffDock",
+    "prepare_receptor",
+    "prepare_ligand",
+    "is_pdbqt_path",
 ]

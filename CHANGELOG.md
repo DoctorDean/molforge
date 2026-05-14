@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automatic receptor / ligand preparation for Vina via meeko + RDKit.**
+  - `molforge.wrappers.docking.prepare_receptor` / `prepare_ligand`:
+    convert any of the common chemistry file formats (.pdb, .mmcif,
+    .sdf, .mol, .mol2) into the PDBQT files Vina consumes, with
+    Gasteiger charges, AutoDock atom types, and rotatable-bond
+    identification. SMILES is supported for ligands via the
+    `from_smiles=True` flag (uses RDKit's ETKDG to generate a 3D
+    conformer first).
+  - `Vina().dock(receptor=protein, ligand="ligand.sdf", ...)` now
+    just works — meeko is invoked transparently when the input
+    isn't already a PDBQT file. Previously this raised
+    `NotImplementedError`.
+  - Lazy imports: meeko and RDKit are only imported when prep is
+    actually needed. Constructing a `Vina()` engine stays free.
+  - Missing-dep errors point at `pip install meeko` and
+    `pip install 'molforge[docking]'` so users can fix the setup
+    without grepping the docs.
+- 17 unit tests for the prep module: PDBQT passthrough for already-
+  prepared files, missing-dep error paths for both meeko and RDKit,
+  unsupported-extension validation, and a slow end-to-end SMILES-prep
+  test gated on meeko/rdkit availability.
 - **End-to-end design-loop notebook** (`notebooks/examples/end_to_end_design.ipynb`).
   A 20-cell worked example walking the full pipeline: sequence input
   with composition stats → ESMFold prediction → DSSP secondary

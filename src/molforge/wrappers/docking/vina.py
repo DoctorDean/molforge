@@ -116,12 +116,14 @@ class Vina(DockingEngine):
         """Dock ``ligand`` against ``receptor`` using Vina.
 
         Args:
-            receptor: A :class:`Protein`, or a path to a PDBQT file.
-                If a Protein is given, it must already be prepared
-                (charges assigned, polar Hs added) — molforge does not
-                do receptor prep.
-            ligand: A :class:`Protein` (with ligand atoms), or a path
-                to a PDBQT / SDF / MOL2 file.
+            receptor: A :class:`Protein`, a path to a PDB / mmCIF file
+                (prepared automatically with meeko), or a path to an
+                already-prepared ``.pdbqt`` file (used as-is).
+            ligand: A :class:`Protein` (with ligand atoms) or a path to
+                a ``.sdf`` / ``.mol`` / ``.mol2`` / ``.pdb`` / ``.pdbqt``
+                file. For SMILES input, use
+                :func:`molforge.wrappers.docking.prepare_ligand` directly
+                with ``from_smiles=True`` before calling ``dock``.
             center: ``(x, y, z)`` center of the search box in Å. This
                 is the most important parameter — get it wrong and
                 you'll dock to nothing.
@@ -216,47 +218,42 @@ class Vina(DockingEngine):
         """Return a path to a PDBQT receptor file.
 
         - If receptor is already a path to a .pdbqt file, return as-is.
-        - If receptor is a path to a .pdb file or a Protein, this is a
-          stub: real Vina runs require AutoDockTools / meeko receptor
-          prep. We raise NotImplementedError with a clear message.
+        - Otherwise, run meeko to prepare it (lazy import so users
+          without meeko installed still get a clean error message).
         """
-        if not hasattr(receptor, "atom_array"):
-            p = Path(receptor)  # type: ignore[arg-type]
-            if p.suffix.lower() == ".pdbqt":
-                return p
-            raise NotImplementedError(
-                f"Vina receptor preparation from {p.suffix} is not implemented. "
-                "Prepare a .pdbqt file upstream with AutoDockTools or meeko "
-                "and pass that path instead."
-            )
-        # Protein input: would need meeko / AutoDockTools to add charges
-        # and atom types. Out of scope for v0.0.2.
-        raise NotImplementedError(
-            "Receptor preparation from a Protein object is not implemented. "
-            "Run meeko or AutoDockTools to produce a .pdbqt file, then pass "
-            "that path to Vina().dock()."
-        )
+        from molforge.wrappers.docking.prep import is_pdbqt_path, prepare_receptor
+
+        if is_pdbqt_path(receptor):
+            return Path(receptor)  # type: ignore[arg-type]
+        out = tmpdir / "receptor.pdbqt"
+        return prepare_receptor(receptor, out)
 
     def _materialize_ligand(
         self,
         ligand: Protein | str | PathLike[str],
         tmpdir: Path,
     ) -> Path:
-        """Return a path to a PDBQT ligand file (same conventions as receptor)."""
-        if not hasattr(ligand, "atom_array"):
-            p = Path(ligand)  # type: ignore[arg-type]
-            if p.suffix.lower() == ".pdbqt":
-                return p
-            raise NotImplementedError(
-                f"Vina ligand preparation from {p.suffix} is not implemented. "
-                "Prepare a .pdbqt file upstream with meeko (or AutoDockTools) "
-                "and pass that path instead."
-            )
-        raise NotImplementedError(
-            "Ligand preparation from a Protein object is not implemented. "
-            "Run meeko on your ligand SDF/MOL2 to produce a .pdbqt file, "
-            "then pass that path to Vina().dock()."
-        )
+        """Return a path to a PDBQT ligand file.
+
+        Accepts a path to an existing .pdbqt, any common chemistry
+        file format (.sdf / .mol / .mol2 / .pdb) which is prepared via
+        meeko, or a Protein wrapping ligand atoms (also prepped).
+        SMILES is not auto-detected — use :func:`prepare_ligand`
+        explicitly with ``from_smiles=True``.
+        """
+        from molforge.wrappers.docking.prep import is_pdbqt_path, prepare_ligand
+
+        if is_pdbqt_path(ligand):
+            return Path(ligand)  # type: ignore[arg-type]
+        out = tmpdir / "ligand.pdbqt"
+        # If `ligand` is a Protein, write it to a PDB temp file first.
+        if hasattr(ligand, "atom_array"):
+            from molforge.io import write_pdb
+
+            tmp_pdb = tmpdir / "ligand_input.pdb"
+            write_pdb(ligand, tmp_pdb)  # type: ignore[arg-type]
+            return prepare_ligand(tmp_pdb, out)
+        return prepare_ligand(ligand, out)
 
     # ------------------------------------------------------------------
     # Output parsing (testable in isolation, no Vina needed)
