@@ -99,7 +99,12 @@ ca = folded.chains["A"].residues[42].atoms["CA"]  # specific atom
 
 Notice what *isn't* there: file-format conversions, atom-name remapping, hand-rolled PDB parsers, custom data classes per engine. molforge does that work so your script reads like the science you're actually doing.
 
-> **See the full workflow in action:** [`notebooks/examples/end_to_end_design.ipynb`](notebooks/examples/end_to_end_design.ipynb) walks through a complete design loop — fold → analyze → mutate → re-fold → compare — using ESMFold, DSSP, sequence mutations, and RMSD comparison, all with one consistent data model.
+> **Worked examples and walkthroughs** ([`notebooks/`](notebooks/)):
+> - [`end_to_end_design.ipynb`](notebooks/examples/end_to_end_design.ipynb) — full design loop: fold → analyze → mutate → re-fold → compare.
+> - [`01_sequences.ipynb`](notebooks/walkthroughs/01_sequences.ipynb) — alignment, mutations, composition.
+> - [`02_structures.ipynb`](notebooks/walkthroughs/02_structures.ipynb) — RMSD, contacts, DSSP, SASA, dihedrals.
+> - [`04_docking.ipynb`](notebooks/walkthroughs/04_docking.ipynb) — Vina with automatic ligand prep.
+> - [`05_ml_featurization.ipynb`](notebooks/walkthroughs/05_ml_featurization.ipynb) — one-hot, RBF distances, ESM-2 embeddings, graph construction.
 
 ## Repository structure
 
@@ -137,6 +142,7 @@ molforge is **pre-1.0** and under active development. What's working today:
 - **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes) and **mmCIF** (the modern format for large structures); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
 - **Sequence operations** — pairwise **alignment** (Needleman-Wunsch / Smith-Waterman with BLOSUM62 / PAM250), point **mutations** with protein-engineering notation (`A123V`, `A123V/T56K`, `H:K42N`), composition and property helpers (MW, GRAVY, aromaticity).
 - **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary), **SASA** (Shrake-Rupley, no FreeSASA dependency), and **backbone dihedrals** (φ, ψ, ω, Ramachandran).
+- **ML featurization** — sequence featurizers (one-hot, BLOSUM/PAM, positional encoding), structure featurizers (RBF-binned distances, pair orientations, local environment), **ESM-2 protein language model embeddings**, and graph construction (`to_graph` → PyTorch Geometric / DGL).
 - **Three engine-wrapper categories all live end-to-end** — folding (**ESMFold** + **AlphaFold/ColabFold**), docking (**AutoDock Vina** with automatic meeko/RDKit prep), and MD (**OpenMM** with full `prepare → minimize → run` flow). The wrapper pattern is now validated across folding/docking/MD, with a uniform contract (e.g. `metadata["confidence_per_residue"]` for all folding engines) so downstream code reads from the same keys regardless of engine.
 
 Coming next: DiffDock wrapper, GROMACS MD wrapper, explicit-solvent prep helpers, ML featurization for downstream models. See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.

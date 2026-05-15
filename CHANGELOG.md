@@ -8,6 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.ml`: featurization for protein ML.**
+  - **Sequence featurizers** (no structure required): `one_hot`
+    (21-dim with `X` for unknowns), `blosum_embed` (BLOSUM62/PAM250
+    rows as embeddings — surprisingly strong baseline featurization),
+    `positional_encoding` (sinusoidal Vaswani-style), `compose_features`
+    (concatenate any combination of per-residue featurizers).
+  - **Structure featurizers** (need 3D coordinates):
+    `pair_distances` (float32 distance map), `pair_distance_features`
+    (Gaussian-RBF binned distances — the standard input for
+    distance-based protein GNNs), `pair_orientations` (CA-CA unit
+    vectors + cosines against local-frame forward direction),
+    `local_environment` (atomic counts by element within a radius),
+    `per_residue_features` (combined one-hot + environment + DSSP
+    node features for GNNs).
+  - **Protein language model embeddings**: `ESM2Embedder` wraps
+    Meta's ESM-2 via HuggingFace transformers. Per-residue, batched,
+    and pooled (`mean` / `max` / `cls`) extraction modes.
+    Configurable model size, layer, device, dtype. Lazy imports so
+    `import molforge.ml` stays light.
+  - **Graph construction**: `to_graph` builds a `ProteinGraph` with
+    `(node_features, edge_index, edge_features)` in the PyTorch
+    Geometric / DGL convention. Configurable cutoff distance, self-
+    loops, edge distance binning, and which node features to include.
+  - Replaces the previous `featurize` / `to_tensor` / `to_graph` stubs
+    that raised `NotImplementedError`.
+- 54 unit tests covering: every featurizer (one-hot with/without
+  unk, BLOSUM/PAM matrices, positional encoding values and odd-dim
+  validation, compose_features shape compatibility); pair distances
+  / RBF features / orientations / local environment / per-residue
+  features against the helix fixture; graph construction (node
+  count, dim correctness, self-loop handling, cutoff respect,
+  edge feature dimensionality, bidirectional edges, empty-protein
+  edge case); ESM2Embedder construction, lazy load, missing-dep
+  error path, and a slow end-to-end test on the 8M model gated
+  on torch availability.
 - **`molforge.wrappers.md.OpenMM`: first MD-engine wrapper.**
   - Wraps [OpenMM](https://openmm.org/) (Eastman et al. 2017), the
     Python-first MD engine. GPU-accelerated, installable via pip
