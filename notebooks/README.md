@@ -1,13 +1,35 @@
 # Notebooks
 
-This directory hosts runnable walkthroughs and examples.
+Runnable walkthroughs and examples.
 
-- `walkthroughs/` — short, didactic notebooks that go end-to-end for a single capability area.
-- `examples/`     — longer real-world examples that combine multiple subpackages.
+## Walkthroughs (`walkthroughs/`)
+
+Short, didactic notebooks focused on a single capability area:
+
+| Notebook | Subpackage | Status |
+|---|---|---|
+| [`01_sequences.ipynb`](walkthroughs/01_sequences.ipynb) | `molforge.sequence` | ✅ Live |
+| [`02_structures.ipynb`](walkthroughs/02_structures.ipynb) | `molforge.structure` | ✅ Live |
+| [`03_md_simulations.ipynb`](walkthroughs/03_md_simulations.ipynb) | `molforge.wrappers.md` | Stub |
+| [`04_docking.ipynb`](walkthroughs/04_docking.ipynb) | `molforge.wrappers.docking` | ✅ Live |
+| [`05_ml_featurization.ipynb`](walkthroughs/05_ml_featurization.ipynb) | `molforge.ml` | ✅ Live |
+| [`06_plugin_authoring.ipynb`](walkthroughs/06_plugin_authoring.ipynb) | `molforge.plugins` | Stub |
+
+## Examples (`examples/`)
+
+Longer real-world examples combining multiple subpackages:
+
+| Notebook | What it shows |
+|---|---|
+| [`end_to_end_design.ipynb`](examples/end_to_end_design.ipynb) | Full protein-design loop: sequence → ESMFold → DSSP/Rg analysis → mutation → re-fold → per-residue RMSD + DSSP-diff comparison. |
+
+## Notebook conventions
 
 All notebooks should:
 
 - Run top-to-bottom on a fresh kernel.
-- Pin any model weights / data assets they depend on.
-- Print version info at the top (`import biocore; print(biocore.__version__)`).
-- Be small enough to render on GitHub (clear outputs before committing if heavy).
+- Print the molforge version at the top (`import molforge; print(molforge.__version__)`).
+- Cells that require heavy dependencies (`torch`, `vina`, `openmm`, `colabfold`) are marked with `# 🐢 SLOW` and include pre-baked outputs so the notebook renders on GitHub without forcing those installs.
+- Be small enough to render on GitHub. For longer notebooks with heavy outputs, clear them before committing.
+
+If you're adding a new notebook, run it once locally and commit with executed outputs so readers can follow along without setup.

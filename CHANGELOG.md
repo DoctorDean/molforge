@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Three new live walkthrough notebooks** (replacing the stubs that
+  came with the v0.0.1 repo skeleton):
+  - [`notebooks/walkthroughs/01_sequences.ipynb`](notebooks/walkthroughs/01_sequences.ipynb)
+    (19 cells) — composition / properties, Needleman-Wunsch and
+    Smith-Waterman alignment with BLOSUM62/PAM250, the
+    protein-engineering mutation notation (`A123V`, `A1V/T56K`,
+    `H:K42N`), wild-type validation, and `mutate_protein` on a real
+    structure.
+  - [`notebooks/walkthroughs/02_structures.ipynb`](notebooks/walkthroughs/02_structures.ipynb)
+    (24 cells) — geometry primitives, Kabsch superposition + RMSD
+    across atom subsets, per-residue RMSD that localizes structural
+    differences, contact / distance maps, DSSP 8-state and 3-state,
+    Shrake-Rupley SASA, backbone dihedrals (φ/ψ/ω) and Ramachandran.
+  - [`notebooks/walkthroughs/05_ml_featurization.ipynb`](notebooks/walkthroughs/05_ml_featurization.ipynb)
+    (16 cells) — every layer of `molforge.ml`: sequence featurizers
+    (one-hot, BLOSUM, positional encoding, compose), structure
+    featurizers (RBF-binned distances, pair orientations, local
+    environment, combined node features), graph construction in the
+    PyTorch Geometric / DGL convention, and ESM-2 embeddings via
+    `ESM2Embedder` (heavy cells marked `# 🐢 SLOW` with code shown
+    but not executed).
+- **`notebooks/README.md`**: updated index with a status table
+  showing which walkthroughs are live and which remain stubs.
+- All notebook outputs are pre-baked from real runs against the
+  bundled `mini_mixed.pdb` / `tripeptide.pdb` / `helix.pdb` fixtures
+  so the notebooks render correctly on GitHub without requiring
+  `torch`, `colabfold`, `vina`, or `openmm` to be installed.
 - **`molforge.ml`: featurization for protein ML.**
   - **Sequence featurizers** (no structure required): `one_hot`
     (21-dim with `X` for unknowns), `blosum_embed` (BLOSUM62/PAM250
