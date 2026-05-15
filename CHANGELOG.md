@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.wrappers.folding.AlphaFold`: second fully-implemented
+  folding engine wrapper.**
+  - Wraps [ColabFold](https://github.com/sokrypton/ColabFold)
+    (Mirdita et al. 2022), the streamlined practical interface to
+    AlphaFold (Jumper et al. 2021). Uses MMseqs2 remote MSA search
+    so users don't need to host the ~3 TB AlphaFold MSA database
+    locally.
+  - Configurable AlphaFold parameters: number of models (1-5),
+    number of recycling iterations (default 3), MSA mode
+    (`mmseqs2_uniref_env` for full pipeline, `single_sequence` for
+    MSA-free fast mode, comparable to ESMFold), model type
+    (`AlphaFold2-ptm` or `AlphaFold2`), device.
+  - Lazy import of `colabfold` keeps `import molforge` cheap;
+    missing-dependency errors point at `pip install colabfold` with
+    a link to ColabFold's platform-specific setup notes.
+  - **Validates the wrapper pattern across two engines.** The
+    uniform-confidence convention (`metadata["confidence_per_residue"]`,
+    `mean_confidence`, `confidence_per_atom`) is identical to ESMFold's,
+    so downstream code that filters or ranks by confidence reads from
+    the same keys regardless of which engine produced the output. A
+    test in `test_alphafold.py` explicitly verifies this.
+  - Server mode is stubbed (raises `NotImplementedError` with a
+    clear message) — coming in a future release.
+- 12 unit tests covering construction, lazy loading, sequence
+  validation, missing-deps error path, post-processing in isolation,
+  and a cross-engine metadata-convention test that fails CI if either
+  engine drifts away from the shared contract.
 - **CI / release-pipeline hardening.**
   - `.github/workflows/release.yml` now verifies that the pushed tag
     matches `src/molforge/__init__.py`'s `__version__` before
