@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Real-world fixture suite for integration testing.** Four new
+  hand-built PDB fixtures under `tests/fixtures/pdb/` exercise
+  realistic structural patterns that the idealized helix and
+  tripeptide didn't cover:
+  - `mini_beta_sheet.pdb` (48 atoms, 12 residues) — two adjacent
+    beta-strand-geometry segments.
+  - `mini_mixed.pdb` (60 atoms, 15 residues) — alpha helix + loop +
+    beta strand topology; DSSP correctly assigns `CHHHEEEEEEEECCC`.
+  - `mini_ensemble.pdb` (96 atoms, 3 NMR-style models with random
+    noise) — exercises multi-model parsing, model selection, and
+    round-trip preservation.
+  - `mini_with_ligand.pdb` (27 atoms: 5 protein residues + 5-atom
+    imidazole ligand + 2 waters) — exercises the entity-type
+    classifier across protein/ligand/water in a single file.
+- **`tests/integration/test_fixtures.py`**: 19 integration tests that
+  exercise the full IO -> data-model -> structural-analysis pipeline
+  on each fixture. Catches integration bugs that pure unit tests
+  miss (e.g. a regression in `entity_type` propagation, or in how
+  multi-model files round-trip through `write_pdb`). Covers DSSP
+  detection of mixed topology, phi/psi recovery, SASA pipeline,
+  NMR ensemble multi-model handling, ligand vs. protein vs. water
+  classification, `protein_only` and `remove_water` filtering,
+  parametrized round-trip preservation, and a complete
+  load -> analyze -> mutate -> compare end-to-end chain.
 - **`molforge.structure.sasa`: solvent-accessible surface area (Shrake-Rupley).**
   - `sasa(protein)` — per-atom SASA in Å² via the standard
     Shrake-Rupley algorithm. Configurable probe radius (default 1.4 Å,
