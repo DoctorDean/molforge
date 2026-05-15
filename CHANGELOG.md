@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CI / release-pipeline hardening.**
+  - `.github/workflows/release.yml` now verifies that the pushed tag
+    matches `src/molforge/__init__.py`'s `__version__` before
+    building, runs `twine check` on the built sdist + wheel, and
+    smoke-installs the wheel in a clean venv before publishing.
+    Mismatched-version tags now fail loudly rather than silently
+    publishing the wrong version.
+  - Workflow_dispatch trigger added with a `dry_run` input so the
+    release pipeline can be exercised manually without uploading to
+    PyPI.
+  - `.github/workflows/ci.yml` adds a `smoke-install` job that
+    installs the built wheel in a clean venv (no editable install,
+    no source layout) and runs the test suite against the
+    installed package. Catches packaging bugs — missing data files,
+    wrong package layout — that the regular CI doesn't see.
+  - The new smoke-install job already caught one bug during
+    development: the smoke-check tried `from molforge import load`,
+    which doesn't work (the top-level package surface is
+    intentionally minimal). Fixed to use `from molforge.io import
+    load, save` instead, matching the documented public API.
+- **`docs/RELEASING.md`**: complete release procedure with SemVer
+  guidance, step-by-step tagging instructions, the dry-run flow,
+  one-time PyPI trusted-publishing setup, and a troubleshooting
+  section for the most common pitfalls (version-tag mismatches,
+  "file already exists", missing data files).
 - **Real-world fixture suite for integration testing.** Four new
   hand-built PDB fixtures under `tests/fixtures/pdb/` exercise
   realistic structural patterns that the idealized helix and
