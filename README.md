@@ -137,9 +137,9 @@ molforge is **pre-1.0** and under active development. What's working today:
 - **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes) and **mmCIF** (the modern format for large structures); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
 - **Sequence operations** — pairwise **alignment** (Needleman-Wunsch / Smith-Waterman with BLOSUM62 / PAM250), point **mutations** with protein-engineering notation (`A123V`, `A123V/T56K`, `H:K42N`), composition and property helpers (MW, GRAVY, aromaticity).
 - **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary), **SASA** (Shrake-Rupley, no FreeSASA dependency), and **backbone dihedrals** (φ, ψ, ω, Ramachandran).
-- **Two engine wrappers working end-to-end** — **ESMFold** (sequence → folded `Protein`, `pip install 'molforge[ml]'`) and **AutoDock Vina** (receptor + ligand → ranked docking poses, `pip install vina meeko`). The wrapper pattern is now validated across both folding and docking categories; the rest follow the same template.
+- **Three engine-wrapper categories all live end-to-end** — folding (**ESMFold** + **AlphaFold/ColabFold**), docking (**AutoDock Vina** with automatic meeko/RDKit prep), and MD (**OpenMM** with full `prepare → minimize → run` flow). The wrapper pattern is now validated across folding/docking/MD, with a uniform contract (e.g. `metadata["confidence_per_residue"]` for all folding engines) so downstream code reads from the same keys regardless of engine.
 
-Coming next: OpenMM MD wrapper, AlphaFold wrapper, more docking engines (DiffDock). See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
+Coming next: DiffDock wrapper, GROMACS MD wrapper, explicit-solvent prep helpers, ML featurization for downstream models. See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
 
 ## Acknowledgements
 

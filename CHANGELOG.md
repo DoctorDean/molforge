@@ -8,6 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.wrappers.md.OpenMM`: first MD-engine wrapper.**
+  - Wraps [OpenMM](https://openmm.org/) (Eastman et al. 2017), the
+    Python-first MD engine. GPU-accelerated, installable via pip
+    (Linux/macOS) or conda-forge (Windows), supports the major
+    modern force fields out of the box.
+  - Same `prepare -> minimize -> run` flow as the abstract
+    :class:`MDEngine` contract: `engine.prepare(protein,
+    force_field="amber14-all")` returns a :class:`Simulation`,
+    `engine.minimize(sim)` energy-minimizes in place,
+    `engine.run(sim, n_steps=50_000, save_every=500)` returns a
+    :class:`Trajectory` with recorded frames.
+  - Configurable: platform (`CUDA`/`CPU`/`OpenCL`/auto), precision,
+    nonbonded cutoff and method, bond constraints, force field,
+    temperature, timestep.
+  - Curated force-field name registry (`amber14-all`, `amber99sb`,
+    `charmm36`, `amber99sb-ildn`) shipped with sensible defaults
+    including matching water-model XMLs; any other OpenMM-recognized
+    XML name passes through.
+  - The OpenMM `Simulation` object is exposed at
+    :attr:`Simulation.engine_handle` so users can drop down to the
+    full OpenMM API when the wrapper's surface isn't enough.
+  - Completes the **wrapper triad** (folding ✓, docking ✓, MD ✓).
+    Combined with ESMFold + Vina, this is a full
+    fold → minimize → equilibrate → dock loop in one library.
+- **`molforge.md.Trajectory`, `Simulation`, `MDEngine`**: replaces
+  the previous stubs that raised `NotImplementedError` on
+  construction. `Trajectory` is iterable, indexable by frame, and
+  exposes `topology`, `coordinates`, `times`, `energies`,
+  `temperatures`, `metadata`. `Simulation` carries the engine
+  handle, current coordinates/velocities/time, and force-field /
+  integrator settings.
+- **`MDEngineNotInstalledError`**: dedicated exception type for
+  missing OpenMM, mirroring the folding/docking error conventions.
+- 21 unit tests covering: Trajectory shape and iteration semantics,
+  frame snapshots returning deep copies (mutating a frame must not
+  corrupt the trajectory), Simulation construction and parameter
+  passthrough, ABC contract enforcement (cannot instantiate
+  `MDEngine` directly), end-to-end dummy-engine flow, OpenMM
+  wrapper construction with various parameter combinations, lazy
+  import behavior, missing-dependency error paths, run-parameter
+  validation, and force-field registry correctness.
 - **`molforge.wrappers.folding.AlphaFold`: second fully-implemented
   folding engine wrapper.**
   - Wraps [ColabFold](https://github.com/sokrypton/ColabFold)

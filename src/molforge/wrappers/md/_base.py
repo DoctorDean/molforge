@@ -1,13 +1,7 @@
-"""Abstract base class for MD engines."""
+"""Re-export the MD ABC for symmetry with folding/docking wrappers."""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from molforge.md import MDEngine, MDEngineNotInstalledError
 
-
-class MDEngine(ABC):
-    """Common interface for molecular-dynamics engines."""
-
-    @abstractmethod
-    def simulate(self, protein: object, *, steps: int, **kwargs: object) -> object:
-        """Run a simulation and return a `Trajectory`."""
+__all__ = ["MDEngine", "MDEngineNotInstalledError"]
