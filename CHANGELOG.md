@@ -6,8 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-### [v0.0.2] 2026-05-20 
+### [v0.0.3] 2026-05-20 
 
+- **`molforge.wrappers.generative`: protein design wrappers.**
+  - **`RFdiffusion`** — backbone generation via the RoseTTAFold
+    diffusion model (Watson et al. 2023, *Nature* 620:1089-1100).
+    Supports unconditional monomer generation (just specify a
+    length), motif scaffolding (preserve specific residues from an
+    input PDB), binder design (with hotspot residues on the
+    target), and symmetric design (cyclic / dihedral / tetrahedral).
+    The wrapper translates Python kwargs into RFdiffusion's Hydra
+    `key=value` syntax internally so users don't need to learn the
+    Hydra config dialect. Invokes the official `scripts/
+    run_inference.py` via subprocess for reliability.
+  - **`ProteinMPNN`** — sequence design (inverse folding) via the
+    message-passing neural network from Dauparas et al. 2022
+    (*Science* 378:49-56). Given a backbone `Protein`, samples
+    sequences that should fold to it. Supports monomer and multi-
+    chain design, fixed-position constraints (preserve a known
+    motif), all four official model variants (`v_48_002` /
+    `v_48_010` / `v_48_020` / `v_48_030`), soluble-only and
+    CA-only checkpoints, configurable sampling temperature and
+    omitted amino acids. Writes the helper-script JSONL formats
+    internally rather than shelling out to the helper scripts,
+    keeping the wrapper self-contained.
+  - **Shared infrastructure**: `molforge.generative.GenerativeEngine`
+    abstract base; `DesignedSequence` dataclass (sequence + score
+    + optional recovery + metadata) returned by sequence-design
+    engines; `GenerativeEngineNotInstalledError` mirroring the
+    folding / docking / MD error conventions.
+  - **Together with the existing wrappers, this completes the
+    *de novo* protein design loop in molforge**: RFdiffusion to
+    generate a backbone, ProteinMPNN to design sequences for it,
+    ESMFold / AlphaFold to validate the designs fold back to the
+    input shape, OpenMM to refine, Vina to dock against a target,
+    and `molforge.metrics` to score everything.
+- 33 unit tests covering: construction with parameter validation
+  (model name allowlist, temperature range, num_seqs minimum),
+  install-path resolution (env-var fallback, explicit-arg
+  override, sanity-check for missing scripts), missing-dependency
+  error paths, Hydra-arg building for all five RFdiffusion modes
+  (unconditional / motif / binder / symmetric / extra args),
+  FASTA output parsing in isolation (sample ProteinMPNN headers
+  with the score/T/sample/model_name/git_hash convention,
+  sort-by-score, native-record skip), fixed-positions JSONL
+  writing, and the `DesignedSequence` repr.
 - **[`notebooks/walkthroughs/03_md_simulations.ipynb`](notebooks/walkthroughs/03_md_simulations.ipynb)**:
   the last walkthrough stub from the v0.0.1 skeleton is now a real
   22-cell tour of the OpenMM MD wrapper. Covers the
