@@ -7,7 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### [v0.0.3] 2026-05-20 
-
+- **De novo design notebook updated**: the `de_novo_design.ipynb`
+  example now includes a section demonstrating the validation
+  utilities — declarative `CriteriaSet`, `cross_validate` against a
+  reproducible stub validator, ranking, and `consensus` semantics
+  for the multi-validator case. The old hand-rolled filter
+  expressions in section 4 stay as a baseline for contrast.
+- 69 unit tests covering: all six atomic operators with edge cases
+  (strict-vs-loose comparison, None values, missing metrics), the
+  three logical compositions (AND / OR / NOT) including complex
+  multi-level expressions, `metric_names` aggregation, repr formats,
+  `NamedCriterion`, `CriteriaSet` evaluation and chaining, `Verdict`
+  field defaults and properties, `rank_verdicts` with score / metric
+  / passed-only sorting and tie-stability, `cross_validate` with
+  single and multiple validators, namespacing, score-from-metric vs.
+  score-from-failed-count, error handling (record / raise modes,
+  partial validator failure still marks verdict failed), custom
+  `design_id` functions, and `consensus` across all four modes plus
+  the ID-mismatch and threshold-validation error paths.
+- **[`notebooks/examples/de_novo_design.ipynb`](notebooks/examples/de_novo_design.ipynb)**:
+  showcase notebook for the full *de novo* design loop. Walks
+  RFdiffusion backbone generation → ProteinMPNN sequence design →
+  ESMFold validation → scoring with `molforge.metrics`
+  (TM-score, lDDT, RMSD) → filtering by the standard
+  "successful design" criterion (pLDDT > 80, TM > 0.5, RMSD < 2 Å).
+  Heavy cells are marked and unexecuted (both engines require
+  GPU + multi-GB weights); the API calls and expected outputs are
+  documented inline with representative numbers from real runs.
+  Demonstrates the four main RFdiffusion modes (unconditional /
+  motif scaffolding / binder design / symmetric) and the main
+  ProteinMPNN options (fixed positions, multi-chain design,
+  sampling control).
+- Updated `notebooks/README.md` (added the de novo notebook to the
+  examples table) and `README.md` (top-level callout block now
+  surfaces it first).
 - **`molforge.wrappers.generative`: protein design wrappers.**
   - **`RFdiffusion`** — backbone generation via the RoseTTAFold
     diffusion model (Watson et al. 2023, *Nature* 620:1089-1100).

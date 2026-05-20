@@ -100,6 +100,7 @@ ca = folded.chains["A"].residues[42].atoms["CA"]  # specific atom
 Notice what *isn't* there: file-format conversions, atom-name remapping, hand-rolled PDB parsers, custom data classes per engine. molforge does that work so your script reads like the science you're actually doing.
 
 > **Worked examples and walkthroughs** ([`notebooks/`](notebooks/)):
+> - [`de_novo_design.ipynb`](notebooks/examples/de_novo_design.ipynb) — *de novo* design loop: RFdiffusion → ProteinMPNN → ESMFold → scoring.
 > - [`end_to_end_design.ipynb`](notebooks/examples/end_to_end_design.ipynb) — full design loop: fold → analyze → mutate → re-fold → compare.
 > - [`01_sequences.ipynb`](notebooks/walkthroughs/01_sequences.ipynb) — alignment, mutations, composition.
 > - [`02_structures.ipynb`](notebooks/walkthroughs/02_structures.ipynb) — RMSD, contacts, DSSP, SASA, dihedrals.

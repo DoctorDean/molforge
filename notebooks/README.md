@@ -22,6 +22,7 @@ Longer real-world examples combining multiple subpackages:
 | Notebook | What it shows |
 |---|---|
 | [`end_to_end_design.ipynb`](examples/end_to_end_design.ipynb) | Full protein-design loop: sequence → ESMFold → DSSP/Rg analysis → mutation → re-fold → per-residue RMSD + DSSP-diff comparison. |
+| [`de_novo_design.ipynb`](examples/de_novo_design.ipynb) | Full *de novo* design loop: generate backbone with RFdiffusion → design sequences with ProteinMPNN → fold with ESMFold → score with TM-score/lDDT/RMSD → filter to successful designs. |
 
 ## Notebook conventions
 
