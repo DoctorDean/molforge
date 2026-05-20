@@ -5,9 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
 ### Added
+- **`molforge.metrics`: evaluation metrics for protein prediction
+  quality.**
+  - **TM-score** (`tm_score`) — Zhang & Skolnick 2004 length-normalized
+    structural similarity. Configurable normalization length
+    (`reference` / `model` / `shorter` / `longer`); > 0.5 ≈ same fold.
+  - **GDT-TS / GDT-HA** (`gdt_ts`, `gdt_ha`) — CASP's gold-standard
+    metric. Average fraction of residues within 1/2/4/8 Å (TS) or
+    0.5/1/2/4 Å (HA) after optimal superposition. `gdt_per_cutoff`
+    exposes the underlying per-cutoff fractions for custom analyses.
+  - **lDDT** (`lddt`, `lddt_per_residue`) — Mariani et al. 2013
+    alignment-free local Distance Difference Test. Translation /
+    rotation invariant by construction (no superposition required).
+    This is the metric AlphaFold's pLDDT and ESMFold's pLDDT
+    confidence scores estimate; molforge's `lddt_per_residue` is
+    what you'd compare a pLDDT prediction against given a native
+    structure.
+  - **DockQ** (`dockq`, `fnat`, `irms`, `lrms`) — Basu & Wallner 2016
+    single-number protein-protein complex quality, breaking down
+    into Fnat (fraction of native interface contacts recovered),
+    iRMS (interface backbone RMSD), and LRMS (ligand-chain RMSD
+    after receptor superposition). Includes the CAPRI quality
+    thresholds in the docstring.
+  - All metrics are pure NumPy — no `tmalign` / `lddt` / DockQ
+    binaries required.
+  - Replaces the previous `tm_score` / `lddt` / `gdt_ts` stubs that
+    raised `NotImplementedError`.
+- New test fixtures for DockQ: `tests/fixtures/pdb/mini_complex_native.pdb`
+  (2-chain helix-helix complex, 56 atoms), `mini_complex_good.pdb`
+  (small 0.3 Å backbone noise applied to both chains), and
+  `mini_complex_bad.pdb` (chain B placed 30 Å away — no interface
+  preserved). These exercise the metric across the full quality
+  range (DockQ ≈ 1.0, ≈ 0.8, < 0.3 respectively).
+- 44 unit tests covering: TM-score `_d0` length-dependence, perfect-
+  match / translation-invariance / rotation-invariance (after
+  superposition), graded noise degradation, normalization modes,
+  error paths for mismatched lengths; GDT-TS / HA identity + noise
+  + monotonicity-across-cutoffs invariants; lDDT identity + small/
+  large noise + the alignment-free property under translation and
+  rotation; DockQ Fnat / iRMS / LRMS individual measures plus the
+  combined score across the three quality bands.
 - **Three new live walkthrough notebooks** (replacing the stubs that
   came with the v0.0.1 repo skeleton):
   - [`notebooks/walkthroughs/01_sequences.ipynb`](notebooks/walkthroughs/01_sequences.ipynb)
@@ -256,6 +294,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and run-metadata round-trip. Documents the current receptor /
   ligand prep requirement and points at the `meeko` integration on
   the roadmap.
+
+## [v0.0.1] 2026-05-14
+
 - **`molforge.structure.dssp`: Kabsch-Sander secondary-structure assignment.**
   - Pure-NumPy implementation of the canonical DSSP algorithm
     (Kabsch & Sander 1983) with no external dependencies — no DSSP
