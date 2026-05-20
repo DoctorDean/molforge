@@ -5,8 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`molforge.validation`: cross-validation utilities for protein
+  design.** Captures the common pattern of "score designs across
+  multiple validators and combine results" that was previously
+  hand-rolled as list comprehensions in user code.
+  - **`Criterion`**: declarative success conditions (e.g.
+    `Criterion.gt("plddt", 80)`). Atomic comparisons via the six
+    standard operators (`gt` / `ge` / `lt` / `le` / `eq` / `ne`),
+    composable with the standard logical operators (`&` for AND,
+    `|` for OR, `~` for NOT) to express arbitrarily complex success
+    rules. Tracks which metrics it references via
+    `criterion.metric_names`, useful for upstream validation.
+  - **`CriteriaSet`**: a named collection of criteria evaluated
+    together, returning per-criterion pass/fail for diagnostics
+    rather than just an opaque boolean. Implicit AND across criteria.
+  - **`Verdict`**: per-design result combining metric values,
+    per-criterion results, an overall pass/fail, and a sortable
+    score. Exposes `failed_criteria` / `passed_criteria` properties
+    for inspection.
+  - **`cross_validate(designs, validators, criteria)`**: the
+    workhorse. Runs every design through every validator, namespaces
+    metrics by validator name (`"esmfold.plddt"` not just `"plddt"`),
+    applies criteria, returns ranked verdicts. Handles validator
+    exceptions gracefully (default: record in metadata + mark
+    failed; opt-in propagation via `on_error="raise"`).
+  - **`consensus(verdict_lists, mode=...)`**: merges verdict lists
+    across validators under a chosen rule (`"all"` / `"any"` /
+    `"majority"` / explicit `"threshold"` count). Joins by
+    `design_id`; metric values from every validator are preserved
+    in the merged `Verdict.values`; per-criterion pass/fail is
+    namespaced by validator to keep diagnostics distinguishable.
+  - **`rank_verdicts(verdicts, only_passed=..., by=...)`**: ranking
+    helper. Defaults to ascending score (lower-is-better); can
+    filter to only-passed; can sort by an arbitrary metric name
+    instead of the score.
 
 ### [v0.0.3] 2026-05-20 
+
 - **De novo design notebook updated**: the `de_novo_design.ipynb`
   example now includes a section demonstrating the validation
   utilities — declarative `CriteriaSet`, `cross_validate` against a
