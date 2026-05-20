@@ -10,7 +10,7 @@ Short, didactic notebooks focused on a single capability area:
 |---|---|---|
 | [`01_sequences.ipynb`](walkthroughs/01_sequences.ipynb) | `molforge.sequence` | ✅ Live |
 | [`02_structures.ipynb`](walkthroughs/02_structures.ipynb) | `molforge.structure` | ✅ Live |
-| [`03_md_simulations.ipynb`](walkthroughs/03_md_simulations.ipynb) | `molforge.wrappers.md` | Stub |
+| [`03_md_simulations.ipynb`](walkthroughs/03_md_simulations.ipynb) | `molforge.wrappers.md` | ✅ Live |
 | [`04_docking.ipynb`](walkthroughs/04_docking.ipynb) | `molforge.wrappers.docking` | ✅ Live |
 | [`05_ml_featurization.ipynb`](walkthroughs/05_ml_featurization.ipynb) | `molforge.ml` | ✅ Live |
 | [`06_plugin_authoring.ipynb`](walkthroughs/06_plugin_authoring.ipynb) | `molforge.plugins` | Stub |

@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
+- **[`notebooks/walkthroughs/03_md_simulations.ipynb`](notebooks/walkthroughs/03_md_simulations.ipynb)**:
+  the last walkthrough stub from the v0.0.1 skeleton is now a real
+  22-cell tour of the OpenMM MD wrapper. Covers the
+  `prepare → minimize → run` flow with the bundled force-field
+  registry, what the `Simulation` and `Trajectory` dataclasses
+  look like in practice, and how to fold a trajectory back into
+  molforge's analysis layer (RMSD-vs-frame-0, DSSP-per-frame as
+  stability indicators). Heavy `engine.prepare(...)` /
+  `engine.run(...)` cells are marked `# 🐢 SLOW` and show their
+  call signatures with documented expected outputs rather than
+  executing — the notebook reads cleanly on GitHub without OpenMM
+  installed.
+- A synthetic-trajectory demonstration shows the analysis pattern
+  using a `Trajectory` constructed from Gaussian-perturbed copies of
+  the helix fixture, with an explicit note clarifying that real MD
+  trajectories would behave very differently — the point is the
+  API, not the dynamics.
+- Updated `notebooks/README.md` (status table) and `README.md` (top-
+  level callout block) to mark `03_md_simulations.ipynb` as live and
+  list it alongside the other walkthroughs. All six walkthroughs in
+  the v0.0.1 stub set now have at least one live entry — only
+  `06_plugin_authoring.ipynb` remains as a stub.
 - **`molforge.metrics`: evaluation metrics for protein prediction
   quality.**
   - **TM-score** (`tm_score`) — Zhang & Skolnick 2004 length-normalized

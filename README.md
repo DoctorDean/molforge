@@ -103,6 +103,7 @@ Notice what *isn't* there: file-format conversions, atom-name remapping, hand-ro
 > - [`end_to_end_design.ipynb`](notebooks/examples/end_to_end_design.ipynb) — full design loop: fold → analyze → mutate → re-fold → compare.
 > - [`01_sequences.ipynb`](notebooks/walkthroughs/01_sequences.ipynb) — alignment, mutations, composition.
 > - [`02_structures.ipynb`](notebooks/walkthroughs/02_structures.ipynb) — RMSD, contacts, DSSP, SASA, dihedrals.
+> - [`03_md_simulations.ipynb`](notebooks/walkthroughs/03_md_simulations.ipynb) — OpenMM `prepare → minimize → run` flow, trajectory analysis.
 > - [`04_docking.ipynb`](notebooks/walkthroughs/04_docking.ipynb) — Vina with automatic ligand prep.
 > - [`05_ml_featurization.ipynb`](notebooks/walkthroughs/05_ml_featurization.ipynb) — one-hot, RBF distances, ESM-2 embeddings, graph construction.
 
