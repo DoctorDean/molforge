@@ -5,9 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added 
+- **[`notebooks/walkthroughs/06_plugin_authoring.ipynb`](notebooks/walkthroughs/06_plugin_authoring.ipynb)**:
+  the last walkthrough stub from the v0.0.1 skeleton is now live.
+  14-cell tour of the plugin registry: when to use it vs. direct
+  imports, how to register engines / parsers / scorers, the
+  inline-vs-entry-point distinction, and how the
+  `pyproject.toml` entry-point declaration translates into
+  auto-discovery. Includes a runnable `RandomFolder` toy engine,
+  a minimal `.xyz` parser, and a `hydrophobic_fraction` scorer
+  registered inline so the notebook executes end-to-end without
+  installing anything extra.
+- 11 new plugin-registry tests bringing total registry coverage
+  to 12: basic register / available / get round-trip, all three
+  kinds (engine / parser / scorer), `clear()` isolation, and
+  `discover()` against a mocked `importlib.metadata.entry_points`
+  covering the multi-plugin case, the broken-plugin tolerance, and
+  the empty-entry-points fallthrough.
+
 ## [v0.1.0] 2026-05-20 
 
-### Added
 - **`molforge.validation`: cross-validation utilities for protein
   design.** Captures the common pattern of "score designs across
   multiple validators and combine results" that was previously
@@ -43,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     filter to only-passed; can sort by an arbitrary metric name
     instead of the score.
 
-### [v0.0.3] 
+## [v0.0.3] 2026-05-20 
 
 - **De novo design notebook updated**: the `de_novo_design.ipynb`
   example now includes a section demonstrating the validation

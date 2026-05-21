@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from molforge.plugins.registry import (
     available,
+    clear,
     discover,
     get,
     register_engine,
@@ -26,6 +27,7 @@ from molforge.plugins.registry import (
 
 __all__ = [
     "available",
+    "clear",
     "discover",
     "get",
     "register_engine",

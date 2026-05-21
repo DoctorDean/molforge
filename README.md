@@ -107,6 +107,7 @@ Notice what *isn't* there: file-format conversions, atom-name remapping, hand-ro
 > - [`03_md_simulations.ipynb`](notebooks/walkthroughs/03_md_simulations.ipynb) — OpenMM `prepare → minimize → run` flow, trajectory analysis.
 > - [`04_docking.ipynb`](notebooks/walkthroughs/04_docking.ipynb) — Vina with automatic ligand prep.
 > - [`05_ml_featurization.ipynb`](notebooks/walkthroughs/05_ml_featurization.ipynb) — one-hot, RBF distances, ESM-2 embeddings, graph construction.
+> - [`06_plugin_authoring.ipynb`](notebooks/walkthroughs/06_plugin_authoring.ipynb) — register custom engines, parsers, and scorers.
 
 ## Repository structure
 
@@ -146,6 +147,7 @@ molforge is **pre-1.0** and under active development. What's working today:
 - **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary), **SASA** (Shrake-Rupley, no FreeSASA dependency), and **backbone dihedrals** (φ, ψ, ω, Ramachandran).
 - **Validation utilities** — `molforge.validation` orchestrates the "score designs across multiple validators and combine results" pattern. Declarative `Criterion` (composable with `&` / `|` / `~`), `CriteriaSet` for per-criterion diagnostics, `cross_validate` to run designs through one or more validators, `consensus` to merge verdict lists ("ESMFold AND AlphaFold both pass" / "majority of validators pass" / threshold rules).
 - **Evaluation metrics** — `molforge.metrics` ships the standard structural-prediction metrics: **TM-score** (Zhang & Skolnick), **GDT-TS / GDT-HA** (CASP), **lDDT** (alignment-free, what AlphaFold's pLDDT estimates), and **DockQ** (Basu & Wallner, for protein-protein complexes). NumPy-only — no tmalign/lddt binaries required.- **ML featurization** — sequence featurizers (one-hot, BLOSUM/PAM, positional encoding), structure featurizers (RBF-binned distances, pair orientations, local environment), **ESM-2 protein language model embeddings**, and graph construction (`to_graph` → PyTorch Geometric / DGL).
+- **ML featurization** — sequence featurizers (one-hot, BLOSUM/PAM, positional encoding), structure featurizers (RBF-binned distances, pair orientations, local environment), **ESM-2 protein language model embeddings**, and graph construction (`to_graph` → PyTorch Geometric / DGL).
 - **Four engine-wrapper categories live end-to-end** — folding (**ESMFold** + **AlphaFold/ColabFold**), docking (**AutoDock Vina** with automatic meeko/RDKit prep), MD (**OpenMM** with full `prepare → minimize → run` flow), and now **generative design** (**RFdiffusion** for backbone generation, **ProteinMPNN** for sequence design). The full *de novo* design loop is in one library.
 
 Coming next: DiffDock wrapper, GROMACS MD wrapper, explicit-solvent prep helpers, ML featurization for downstream models. See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.

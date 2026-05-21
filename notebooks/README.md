@@ -13,7 +13,7 @@ Short, didactic notebooks focused on a single capability area:
 | [`03_md_simulations.ipynb`](walkthroughs/03_md_simulations.ipynb) | `molforge.wrappers.md` | ✅ Live |
 | [`04_docking.ipynb`](walkthroughs/04_docking.ipynb) | `molforge.wrappers.docking` | ✅ Live |
 | [`05_ml_featurization.ipynb`](walkthroughs/05_ml_featurization.ipynb) | `molforge.ml` | ✅ Live |
-| [`06_plugin_authoring.ipynb`](walkthroughs/06_plugin_authoring.ipynb) | `molforge.plugins` | Stub |
+| [`06_plugin_authoring.ipynb`](walkthroughs/06_plugin_authoring.ipynb) | `molforge.plugins` | ✅ Live |
 
 ## Examples (`examples/`)
 
