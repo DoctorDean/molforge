@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **[`notebooks/examples/cross_engine_validation.ipynb`](notebooks/examples/cross_engine_validation.ipynb)**:
+  20-cell worked example of the cross-validator consensus pattern.
+  Uses two deterministic synthetic validators (mimicking
+  ESMFold-like and AlphaFold-like output) to walk through:
+  single-validator `cross_validate`, the strict / permissive /
+  majority consensus modes, drilling into a borderline design to
+  see which validator disagreed, and ranking the survivors. End-
+  to-end executable without GPU; the validator stubs are designed
+  so the cross-architecture-disagreement pattern (one model
+  overconfident, one model rejecting) is clearly visible on a
+  single sample design.
+- Both this new notebook and the
+  [`05_ml_featurization`](notebooks/walkthroughs/05_ml_featurization.ipynb)
+  one are now in the CI's executable allowlist (so any drift
+  between the notebook outputs and library behavior breaks CI).
 - **CI now executes runnable notebooks.** A new `notebooks` job in
   `.github/workflows/ci.yml` parse-validates every notebook in
   `notebooks/` and executes the four that don't require external

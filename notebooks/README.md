@@ -23,6 +23,7 @@ Longer real-world examples combining multiple subpackages:
 |---|---|
 | [`end_to_end_design.ipynb`](examples/end_to_end_design.ipynb) | Full protein-design loop: sequence → ESMFold → DSSP/Rg analysis → mutation → re-fold → per-residue RMSD + DSSP-diff comparison. |
 | [`de_novo_design.ipynb`](examples/de_novo_design.ipynb) | Full *de novo* design loop: generate backbone with RFdiffusion → design sequences with ProteinMPNN → fold with ESMFold → score with TM-score/lDDT/RMSD → filter to successful designs. |
+| [`cross_engine_validation.ipynb`](examples/cross_engine_validation.ipynb) | Cross-engine consensus pattern: scoring candidate designs against two folding validators (ESMFold + AlphaFold), combining results with `consensus(mode="all" / "any" / "majority")`, and inspecting which validator disagreed for borderline designs. |
 
 ## Notebook conventions
 
