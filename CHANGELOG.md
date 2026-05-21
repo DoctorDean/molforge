@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **CI now executes runnable notebooks.** A new `notebooks` job in
+  `.github/workflows/ci.yml` parse-validates every notebook in
+  `notebooks/` and executes the four that don't require external
+  engines (`01_sequences`, `02_structures`,
+  `05_ml_featurization`, `06_plugin_authoring`) top-to-bottom
+  against the freshly-installed library. Catches the class of bug
+  where a notebook's outputs go silently out of sync with the
+  library — if any cell raises, CI fails.
+- **`scripts/execute_notebooks.py`**: the underlying executor.
+  Usable locally as `python scripts/execute_notebooks.py` (or
+  `--check-only` for parse-only). Maintains explicit allowlists
+  for executable vs. parse-only notebooks; updating either list is
+  the only thing required when adding a new notebook.
+- `nbclient>=0.10` and `ipykernel>=6.29` added to the `[dev]`
+  extra so the script is runnable in any dev environment via
+  `pip install -e ".[dev]"`.
+- **`molforge.plugins.discover()` implemented.** Was previously
+  raising `NotImplementedError`; now walks Python entry points
+  under the `molforge.plugins` group via
+  `importlib.metadata.entry_points`. Each entry point's registration
+  function is called once. Broken plugins (failed import, register
+  function raises) are tolerated and silently skipped so one bad
+  plugin can't break every downstream user of molforge. Returns the
+  list of successfully-loaded entry-point names so callers can
+  introspect what's available. Companion `clear()` exported for
+  test isolation.
 - **[`notebooks/walkthroughs/06_plugin_authoring.ipynb`](notebooks/walkthroughs/06_plugin_authoring.ipynb)**:
   the last walkthrough stub from the v0.0.1 skeleton is now live.
   14-cell tour of the plugin registry: when to use it vs. direct
