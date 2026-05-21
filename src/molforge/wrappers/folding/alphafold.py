@@ -129,9 +129,9 @@ class AlphaFold(FoldingEngine):
             - ``metadata["confidence_per_residue"]``: ``(L,)`` float32 pLDDT
             - ``metadata["mean_confidence"]``: float mean pLDDT
             - ``metadata["confidence_per_atom"]``: ``(N_atoms,)`` float32 pLDDT
-              (copy of B-factor column)
+                (copy of B-factor column)
             - ``metadata["ptm"]`` (if ``model_type="AlphaFold2-ptm"``):
-              predicted TM score
+                predicted TM score
         """
         sequence = _validate_sequence(sequence)
         return self._run_local(sequence)

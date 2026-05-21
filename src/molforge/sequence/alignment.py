@@ -133,10 +133,12 @@ def needleman_wunsch(
     """Global pairwise alignment (Needleman-Wunsch with affine gaps).
 
     Args:
-        a, b: Sequences to align.
+        a: First sequence to align.
+        b: Second sequence to align.
         matrix: Substitution matrix name (e.g. ``"BLOSUM62"``, ``"PAM250"``)
             or ``None`` to use ``match`` / ``mismatch`` instead.
-        match, mismatch: Per-position scores when ``matrix=None``.
+        match: Per-position match score when ``matrix=None``.
+        mismatch: Per-position mismatch score when ``matrix=None``.
         gap_open: Penalty for opening a new gap (added at gap start).
         gap_extend: Penalty for each additional gap position.
 
@@ -262,8 +264,13 @@ def smith_waterman(
     Finds the highest-scoring local subsequence pair.
 
     Args:
-        a, b: Sequences to align.
-        matrix, match, mismatch, gap_open, gap_extend: see :func:`needleman_wunsch`.
+        a: First sequence to align.
+        b: Second sequence to align.
+        matrix: see :func:`needleman_wunsch`.
+        match: see :func:`needleman_wunsch`.
+        mismatch: see :func:`needleman_wunsch`.
+        gap_open: see :func:`needleman_wunsch`.
+        gap_extend: see :func:`needleman_wunsch`.
 
     Returns:
         An :class:`Alignment` covering only the best-scoring local region;

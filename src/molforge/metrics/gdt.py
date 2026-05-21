@@ -102,7 +102,8 @@ def gdt_per_cutoff(
     Useful for plotting accuracy curves or building custom metrics.
 
     Args:
-        model, reference: Structures to compare.
+        model: Predicted structure to score.
+        reference: Reference structure (e.g. native or experimental).
         cutoffs: Distance cutoffs in Å. Defaults to GDT-TS's (1, 2, 4, 8).
 
     Returns:

@@ -30,7 +30,8 @@ def rmsd_raw(
     """RMSD between two equal-length coordinate sets, no alignment.
 
     Args:
-        a, b: ``(n, 3)`` coordinate arrays.
+        a: First ``(n, 3)`` coordinate array.
+        b: Second ``(n, 3)`` coordinate array, same shape as ``a``.
 
     Returns:
         Root-mean-square deviation in the input units (Å for biology).
@@ -131,7 +132,8 @@ def rmsd_per_residue(
     where a folding model disagrees with experiment.
 
     Args:
-        mobile, reference: Two structures with matching residue counts.
+        mobile: First structure (the one that is moved to align with reference).
+        reference: Second structure; must have the same residue count as ``mobile``.
         subset: Atom selector for both the global alignment and the
             per-residue comparison.
         align: Whether to superpose first.

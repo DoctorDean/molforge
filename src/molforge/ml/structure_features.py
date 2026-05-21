@@ -86,7 +86,8 @@ def pair_distance_features(
     Args:
         protein: input structure.
         n_bins: number of RBF basis functions. 16 is the typical default.
-        d_min, d_max: distance range covered by the basis (Å).
+        d_min: lower end of the distance range covered by the basis (Å).
+        d_max: upper end of the distance range covered by the basis (Å).
         atom_choice: anchor atom per residue.
 
     Returns:
@@ -215,8 +216,9 @@ def per_residue_features(
 
     Args:
         protein: input structure.
-        include_sequence, include_environment, include_dssp: toggle each
-            block.
+        include_sequence: include the one-hot residue identity block (21 dims).
+        include_environment: include the local-environment block (5 dims).
+        include_dssp: include the DSSP 3-state one-hot block (3 dims).
 
     Returns:
         ``(n_res, D)`` float32 array, where D depends on which blocks

@@ -78,8 +78,8 @@ def to_graph(
             contacts).
         self_loops: include i->i edges. Some GNN architectures want
             these; most don't.
-        include_dssp, include_environment: passed to
-            :func:`per_residue_features`.
+        include_dssp: passed to :func:`per_residue_features`.
+        include_environment: passed to :func:`per_residue_features`.
         edge_distance_bins: number of RBF basis functions for the
             edge-distance feature; pass 0 to use raw distance.
 

@@ -137,8 +137,10 @@ def residue_contacts(
     Args:
         protein: structure to analyze.
         cutoff: distance threshold in Å (default 5.0).
-        chain_a, chain_b: If both are given, only return contacts between
-            those two chains (useful for interface analysis).
+        chain_a: If both ``chain_a`` and ``chain_b`` are given, only
+            return contacts between those two chains (useful for
+            interface analysis).
+        chain_b: see ``chain_a``.
 
     Returns:
         Sorted list of contact tuples.

@@ -165,7 +165,8 @@ def sasa_per_residue(
 
     Args:
         protein: input structure.
-        probe_radius, n_sphere_points: see :func:`sasa`.
+        probe_radius: see :func:`sasa`.
+        n_sphere_points: see :func:`sasa`.
 
     Returns:
         ``(n_residues,)`` float64 array, one SASA value per residue

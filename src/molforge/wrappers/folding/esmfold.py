@@ -137,7 +137,7 @@ class ESMFold(FoldingEngine):
             - ``metadata["confidence_per_residue"]``: ``(L,)`` float32 pLDDT
             - ``metadata["mean_confidence"]``: float mean pLDDT
             - ``metadata["confidence_per_atom"]``: ``(N_atoms,)`` float32 pLDDT
-              (copy of B-factor column for convenience)
+                (copy of B-factor column for convenience)
         """
         sequence = _validate_sequence(sequence)
         self._ensure_loaded()

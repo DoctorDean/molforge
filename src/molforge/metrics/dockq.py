@@ -111,9 +111,12 @@ def fnat(
     Args:
         model: Predicted complex.
         reference: Native complex.
-        chain_a, chain_b: Which two chains to compare. If ``None``,
-            uses the first two protein chains. Chain IDs must match
+        chain_a: Which chain to compare on the receptor side. If
+            ``None``, uses the first protein chain shared between
+            ``model`` and ``reference``. Chain IDs must match
             between model and reference.
+        chain_b: Which chain to compare on the partner side. See
+            ``chain_a`` for default behavior.
         cutoff: Heavy-atom distance defining a contact (default 5 Å).
 
     Returns:

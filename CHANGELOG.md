@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **API reference pages live, strict mkdocs build green.** Eleven
+  reference pages now render real API content via mkdocstrings, with
+  `molforge.wrappers` split into a router landing page plus four
+  per-subcategory pages (folding, docking, md, generative) — totalling
+  ~1.2 MB of rendered API HTML across 15 reference pages. `mkdocs
+  build --strict` is the local + CI check, with zero warnings.
 - **mkdocs site skeleton (`docs/`, `mkdocs.yml`).** First end-to-end
   buildable docs site, replacing the half-finished biocore-era stub.
   Material for MkDocs theme with light/dark toggle, indigo palette,
@@ -157,6 +163,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     helper. Defaults to ascending score (lower-is-better); can
     filter to only-passed; can sort by an arbitrary metric name
     instead of the score.
+
+### Changed
+- **Docstring normalization for griffe.** Twelve docstrings across
+  `metrics/{dockq,gdt,lddt}`, `ml/{graph,structure_features}`,
+  `sequence/alignment`, `structure/{contacts,dihedrals,rmsd,sasa}`,
+  and `wrappers/folding/{alphafold,esmfold}` rewritten so each
+  parameter gets its own line in the `Args:` block (instead of
+  comma-grouping like `a, b: ...`), and continuation lines under
+  bullet points are re-indented to 8 spaces. No behavior or
+  signature changes; griffe was the only consumer mis-parsing them,
+  but the fix also makes the rendered tables clearer (each
+  parameter gets its own row). 664 + 8 skipped tests, unchanged.
+
+### Removed
+- **`tests/unit/core/test_core_types.py`.** A pre-existing fossil
+  from before the view-based data-model refactor: it imported from
+  `biocore.core` (the pre-rename namespace) and called constructors
+  like `Chain(chain_id="A")` and `Residue(name="ALA", seq_id=1)`
+  that no longer match the current view-based signatures (`Chain`,
+  `Residue`, and `Atom` are now views over an `AtomArray` and take
+  `(array, start, end)` not standalone keyword arguments). The
+  assertions it made were already fully covered by
+  `test_hierarchy.py` (260 lines, with dedicated `TestAtom`,
+  `TestResidue`, `TestChain`, `TestProtein`, and `TestConsistency`
+  classes) and `test_atom_array.py` (210 lines). Removing the
+  fossil unblocks the full test suite from running cleanly under
+  `pytest` (previously needed `--ignore` for that one file).
+  Headline test count unchanged: 664 + 8 skipped.
 
 ## [v0.0.3] 2026-05-20 
 

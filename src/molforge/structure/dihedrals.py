@@ -33,7 +33,10 @@ def dihedral(
     """Compute the dihedral angle (in degrees) between four 3D points.
 
     Args:
-        p1, p2, p3, p4: ``(3,)`` Cartesian coordinates.
+        p1: ``(3,)`` Cartesian coordinates of the first point.
+        p2: ``(3,)`` Cartesian coordinates of the second point.
+        p3: ``(3,)`` Cartesian coordinates of the third point.
+        p4: ``(3,)`` Cartesian coordinates of the fourth point.
 
     Returns:
         Angle in degrees in ``[-180, 180]``. Uses the standard atan2

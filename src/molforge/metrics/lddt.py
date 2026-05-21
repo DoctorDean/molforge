@@ -90,7 +90,8 @@ def lddt_per_residue(
     Args:
         model: Predicted structure.
         reference: Native / target structure.
-        inclusion_radius, thresholds: see :func:`lddt`.
+        inclusion_radius: see :func:`lddt`.
+        thresholds: see :func:`lddt`.
 
     Returns:
         ``(n_residues,)`` float32 array. Residues with no pair partners
