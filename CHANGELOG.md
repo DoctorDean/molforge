@@ -8,6 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **Realistic PDB fixtures + 29 new integration tests.**
+  Three new fixtures handcrafted from canonical bond lengths and
+  angles (Engh & Huber 1991) to exercise real-PDB code paths that
+  synthetic fixtures structurally can't:
+  - **`real_small_protein.pdb`** (193 atoms, 24 residues): mixed
+    helix/loop/strand topology with **all 20 standard amino acids
+    plus PRO**. Every residue carries its full canonical atom set,
+    so aromatic-ring parsing (PHE/TYR/TRP/HIS), branched side
+    chains (LEU/ILE/VAL), and the PRO ring-closure case all get
+    exercised. B-factors vary realistically (edges higher than
+    core, ~16-45 Å²). The helix is left-handed due to the NeRF
+    sign convention — documented honestly in a REMARK and in the
+    relevant test — which doesn't affect DSSP H-bond detection or
+    most other geometric analyses.
+  - **`real_with_altloc_sidechains.pdb`** (97 atoms, 12 residues):
+    same backbone as the first 12 residues of `real_small_protein`,
+    but with **A/B alternative conformations spanning the full
+    side chain** at LEU 2 (CB/CG/CD1/CD2) and SER 9 (CB/OG).
+    Occupancies 0.60/0.40. Replaces the prior 8-atom
+    `with_altloc.pdb` for any test that needs multi-atom altloc
+    context (the old one is kept for parser-level smoke tests).
+  - **`real_with_ligand_realistic.pdb`** (76 atoms, 13 residues
+    across 3 chains): 8-residue helix + a **benzene ligand** (BNZ,
+    6 aromatic carbons in a proper hexagonal ring at canonical 1.4 Å
+    spacing) + **a zinc ion** (ZN, properly classified as ion not
+    ligand thanks to the corrected element column) + **3
+    crystallographic waters** (HOH, classified as water). Replaces
+    `mini_with_ligand.pdb`'s fake imidazole + waters with proper
+    multi-chain hetero-atom chemistry.
+- 29 integration tests in `tests/integration/test_real_fixtures.py`
+  organized by code path (fixture loading, entity-type classification,
+  full side-chain atom counts, multi-atom alt-loc handling under all
+  four `altloc=` modes, write-then-read round-trip preservation,
+  structural-analysis algorithms exercised on the realistic protein,
+  ML featurization on full side chains, and sequence mutation through
+  `mutate_protein`). Each test class is named after the code path
+  it exercises rather than the fixture, so failures point at the
+  broken behavior rather than the test fixture.
+- Test coverage now stands at **664 passing + 8 correctly skipped**
+  (+29 from the new fixtures), with the integration suite growing
+  from 19 to 48 tests.
 - **[`notebooks/examples/cross_engine_validation.ipynb`](notebooks/examples/cross_engine_validation.ipynb)**:
   20-cell worked example of the cross-validator consensus pattern.
   Uses two deterministic synthetic validators (mimicking
