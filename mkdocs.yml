@@ -1,30 +1,132 @@
 site_name: molforge
-site_description: A unified Python library for structural bioinformatics, MD, and ML.
+site_description: A unified Python library for structural bioinformatics, MD, protein engineering, and ML.
+site_url: https://doctordean.github.io/molforge/
 repo_url: https://github.com/DoctorDean/molforge
 repo_name: DoctorDean/molforge
+edit_uri: edit/main/docs/
+
+docs_dir: docs
 
 theme:
   name: material
+  logo: assets/molforge.png
+  favicon: assets/molforge.png
   features:
     - navigation.tabs
     - navigation.sections
-    - navigation.expand
+    - navigation.top
+    - navigation.indexes
     - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
 
 nav:
   - Home: index.md
-  - Architecture: ../architecture/overview.md
-
-docs_dir: docs/source
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - User guide:
+      - Data model: guide/data-model.md
+      - File I/O: guide/io.md
+      - Engine wrappers: guide/wrappers.md
+      - Plugins: guide/plugins.md
+      - Validation: guide/validation.md
+  - Walkthroughs:
+      - Sequences: walkthroughs/01_sequences.ipynb
+      - Structures: walkthroughs/02_structures.ipynb
+      - MD simulations: walkthroughs/03_md_simulations.ipynb
+      - Docking: walkthroughs/04_docking.ipynb
+      - ML featurization: walkthroughs/05_ml_featurization.ipynb
+      - Plugin authoring: walkthroughs/06_plugin_authoring.ipynb
+  - Examples:
+      - Overview: examples/index.md
+      - Cross-engine validation: examples/cross_engine_validation.ipynb
+      - De novo design: examples/de_novo_design.ipynb
+      - End-to-end design: examples/end_to_end_design.ipynb
+  - Architecture: architecture/overview.md
+  - API reference:
+      - molforge.core: reference/core.md
+      - molforge.io: reference/io.md
+      - molforge.sequence: reference/sequence.md
+      - molforge.structure: reference/structure.md
+      - molforge.ml: reference/ml.md
+      - molforge.metrics: reference/metrics.md
+      - molforge.validation: reference/validation.md
+      - molforge.md: reference/md.md
+      - molforge.docking: reference/docking.md
+      - molforge.plugins: reference/plugins.md
+      - molforge.wrappers:
+          - Overview: reference/wrappers.md
+          - molforge.wrappers.folding: reference/wrappers/folding.md
+          - molforge.wrappers.docking: reference/wrappers/docking.md
+          - molforge.wrappers.md: reference/wrappers/md.md
+          - molforge.wrappers.generative: reference/wrappers/generative.md
+  - Project:
+      - Releasing: RELEASING.md
 
 plugins:
   - search
-  # - mkdocstrings:
-  #     handlers:
-  #       python:
-  #         paths: [src]
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: false
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+            members_order: source
+            filters: ["!^_"]
+            heading_level: 2
+  - mkdocs-jupyter:
+      # Notebooks are symlinked into docs/walkthroughs/ and docs/examples/
+      # from the canonical notebooks/ directory. CI runs the notebooks
+      # there separately; we just render the already-baked outputs.
+      execute: false
+      include_source: true
+      ignore_h1_titles: true
+      include: ["walkthroughs/*.ipynb", "examples/*.ipynb"]
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
   - pymdownx.superfences
-  - pymdownx.highlight
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/DoctorDean/molforge
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/molforge/

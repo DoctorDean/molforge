@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **mkdocs site skeleton (`docs/`, `mkdocs.yml`).** First end-to-end
+  buildable docs site, replacing the half-finished biocore-era stub.
+  Material for MkDocs theme with light/dark toggle, indigo palette,
+  navigation tabs, edit-on-GitHub links, and snippets-driven content
+  reuse. `mkdocstrings[python]` wired up against `src/` with
+  Google-style docstring parsing, source-order member listing, and
+  underscore filtering. Site is organized into five top-level
+  sections — Getting started, User guide, Architecture, API
+  reference, Project — and `mkdocs build` runs in ~2 s producing
+  17 pages including 11 stubbed API-reference pages (one per
+  subpackage, each rendering the live `__all__`). API-reference
+  content fills out in the next commit; this commit lands the
+  structure, theme, configuration, and all hand-written guide
+  prose. Stale `docs/source/` directory removed.
 - **Realistic PDB fixtures + 29 new integration tests.**
   Three new fixtures handcrafted from canonical bond lengths and
   angles (Engh & Huber 1991) to exercise real-PDB code paths that
