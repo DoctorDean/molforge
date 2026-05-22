@@ -181,6 +181,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the actual public attributes. Discovered while writing ensemble
   test fixtures.
 
+### Removed
+- **`tests/unit/core/test_core_types.py`.** A pre-existing fossil
+  from before the view-based data-model refactor: it imported from
+  `biocore.core` (the pre-rename namespace) and called constructors
+  like `Chain(chain_id="A")` and `Residue(name="ALA", seq_id=1)`
+  that no longer match the current view-based signatures (`Chain`,
+  `Residue`, and `Atom` are now views over an `AtomArray` and take
+  `(array, start, end)` not standalone keyword arguments). The
+  assertions it made were already fully covered by
+  `test_hierarchy.py` (260 lines, with dedicated `TestAtom`,
+  `TestResidue`, `TestChain`, `TestProtein`, and `TestConsistency`
+  classes) and `test_atom_array.py` (210 lines). Removing the
+  fossil unblocks the full test suite from running cleanly under
+  `pytest` (previously needed `--ignore` for that one file).
+  Headline test count unchanged: 664 + 8 skipped.
+
 ## [v0.1.0] 2026-05-20 
 
 - **`molforge.validation`: cross-validation utilities for protein
