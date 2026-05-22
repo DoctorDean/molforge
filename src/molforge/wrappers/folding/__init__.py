@@ -4,8 +4,8 @@ Concrete engines:
     - :class:`ESMFold` — implemented (single-sequence transformer; fast)
     - :class:`AlphaFold` — implemented (MSA-based via ColabFold)
     - :class:`Boltz` — implemented (Boltz-1 / Boltz-2 via subprocess)
-    - :class:`RoseTTAFold` — stub
-
+    - :class:`RoseTTAFold` — implemented (RoseTTAFold All-Atom; subprocess)
+    - :class:`Rosetta` — *deprecated alias for* :class:`RoseTTAFold`
 
 Shared:
     - :class:`FoldingEngine` — abstract base for the engine contract
@@ -28,7 +28,8 @@ from molforge.wrappers.folding._base import (
 from molforge.wrappers.folding.alphafold import AlphaFold
 from molforge.wrappers.folding.boltz import Boltz
 from molforge.wrappers.folding.esmfold import ESMFold
-from molforge.wrappers.folding.rosetta import Rosetta
+from molforge.wrappers.folding.rosetta import Rosetta  # deprecated alias
+from molforge.wrappers.folding.rosettafold import RoseTTAFold
 
 __all__ = [  # noqa: RUF022 — grouped: base classes, then engines
     "FoldingEngine",
@@ -36,5 +37,6 @@ __all__ = [  # noqa: RUF022 — grouped: base classes, then engines
     "ESMFold",
     "AlphaFold",
     "Boltz",
-    "Rosetta",
+    "RoseTTAFold",
+    "Rosetta",  # deprecated alias retained for backward compatibility
 ]

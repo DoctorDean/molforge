@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **RoseTTAFold All-Atom folding wrapper.** New file
+  `src/molforge/wrappers/folding/rosettafold.py` implements a real
+  wrapper around the Baker lab's RoseTTAFold-All-Atom (Krishna et
+  al. 2024, *Science* 384: eadl2528). Like Boltz, RFAA is driven via
+  subprocess — invocation is `python -m rf2aa.run_inference
+  --config-name <name>` from inside the cloned repo with a Hydra
+  config the wrapper writes to a temporary directory. Constructor
+  resolves the repo via explicit `repo_dir=` or the `RFAA_HOME`
+  environment variable; checks for both directory existence and an
+  `rf2aa/` subdirectory before invocation. Supports custom Python
+  executable (for callers whose conda env is separate from
+  molforge's), the `loader_params.MAXCYCLE` override RFAA recommends
+  for hard cases, custom job naming, and arbitrary Hydra-style
+  overrides via `extra_overrides=`. Output post-processing parses
+  the PDB (per-atom pLDDT in the B-factor column) plus the
+  `*_aux.pt` PyTorch confidence file when torch is importable —
+  torch tensors converted to NumPy on the way out. Surfaces the
+  uniform folding-engine metadata keys
+  (`confidence_per_residue`, `confidence_per_atom`,
+  `mean_confidence`) plus RFAA-specific tensors (`pae`, `pde`,
+  `mean_pae`, `pae_prot`, `pae_inter` — the last is RFAA's headline
+  metric, <10 = high-quality interface). Degrades gracefully when
+  torch isn't installed or the aux file is malformed: PDB-derived
+  confidence is still populated. v1 scope is single-chain protein
+  prediction matching the rest of the folding wrappers; protein-
+  ligand and covalent-modification co-folding (RFAA's headline
+  capability) need a separate `predict_complex()` surface and
+  remain planned. 47 new tests (45 passing + 2 correctly skipped:
+  one for the torch tensor conversion when torch isn't installed,
+  one @slow end-to-end requiring `$RFAA_HOME`). Total test count:
+  830 → 875 passed + 11 skipped.
+
+### Deprecated
+- **`molforge.wrappers.folding.Rosetta` is now a deprecated alias
+  for `RoseTTAFold`.** The original `rosetta.py` placeholder was
+  ambiguous about whether it referred to PyRosetta (the Baker lab's
+  classical sequence-design library) or RoseTTAFold (the deep-
+  learning model). The new real wrapper lives at
+  `RoseTTAFold` for clarity. `Rosetta` is retained as a thin
+  subclass that emits `DeprecationWarning` on construction so
+  existing imports / isinstance checks keep working through the
+  next minor release. A PyRosetta wrapper, if added, would live in
+  a separate module (`pyrosetta.py`) since PyRosetta's surface is
+  much wider than the `FoldingEngine` contract.
+
+### Added 
 - **Boltz / Boltz-2 folding wrapper.** Real implementation replacing
   the `boltz.py` stub. Drives the `boltz predict` CLI via subprocess
   against a temporary directory and parses the resulting mmCIF +
