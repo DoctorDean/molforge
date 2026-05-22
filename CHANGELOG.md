@@ -8,6 +8,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **`molforge.ensembles` — weighted statistics over pose ensembles.**
+  New top-level subpackage with seven public functions covering the
+  four standard analyses run against docking output:
+
+  - **Weighting:** `boltzmann_weights` (numerically-stable softmax
+    over scores, with physical defaults — kT at 298 K, 0.593 kcal/mol
+    — and a `lower_is_better` flag for ML confidence scores) and
+    `resample` (weighted bootstrap of pose objects, reproducible
+    with explicit `rng`).
+  - **Geometry:** `pairwise_rmsd` (N×N heavy-atom RMSD matrix over
+    ligand poses, vectorized in NumPy) and `pose_diversity` (summary
+    statistics over the upper triangle — min/max/mean/median/std —
+    for "did the docking actually explore?" diagnostics).
+  - **Clustering:** `pose_clusters` (hierarchical average-linkage
+    clustering at a user-specified RMSD cutoff, pure NumPy with no
+    scipy dependency; returns a `PoseClusteringResult` with cluster
+    labels, ordered `PoseCluster` objects with medoid index and
+    intra-cluster mean RMSD, and the underlying RMSD matrix).
+  - **Spatial:** `binding_site_density` (3D histogram of ligand
+    heavy-atom positions, auto-sized bounding box with configurable
+    padding or explicit `origin`/`shape` for comparative grids,
+    Boltzmann-weightable; returns a `DensityGrid` with a
+    `coordinate_of(ijk)` helper).
+  - **Consensus:** `consensus_pose` (medoid pick — returns one of
+    the input poses by reference — or weighted-mean synthesis —
+    returns a new `Pose` with averaged coords and weighted-average
+    score, marked in `metadata`).
+
+  Designed as a top-level subpackage (not under `docking`) because
+  the primitives generalize to MD trajectories and other structural
+  ensembles; v1 focuses on docking poses since that's the immediately
+  useful case. 1094 source lines across 5 modules, 120 new tests
+  across 5 test files. Total test count: 664 → 784 passed + 8 skipped.
+
+  Limitations documented in the module docstring and user guide:
+  pose RMSD is order-sensitive (upper-bound for symmetric ligands),
+  receptor is treated as fixed, and clustering is O(n³) and best
+  suited for ensembles of n ≲ 200 (single-docking-run sizes; MD-scale
+  ensembles would benefit from scipy's optimized linkage in a future
+  enhancement).
+- **Docs: ensembles user guide + API reference.** `docs/guide/ensembles.md`
+  walks through the canonical workflow (score → weights → diversity →
+  clusters → density → consensus); `docs/reference/ensembles.md`
+  renders the full API via mkdocstrings. Added to mkdocs nav.
 - **Notebook rendering via mkdocs-jupyter.** All six walkthrough
   notebooks (`notebooks/walkthroughs/01_sequences.ipynb` through
   `06_plugin_authoring.ipynb`) and all three example notebooks

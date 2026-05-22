@@ -24,8 +24,8 @@ atom. Columns include:
 | `coords`     | `float32` `(N, 3)`     | Cartesian coordinates in Å.                    |
 | `atom_name`  | `<U4`                  | Standard PDB atom name, e.g. `"CA"`.           |
 | `element`    | `<U2`                  | One- or two-letter symbol.                     |
-| `res_name`   | `<U3`                  | Three-letter residue code.                     |
-| `res_id`     | `int32`                | Author residue number.                         |
+| `residue_name` | `<U3`                | Three-letter residue code.                     |
+| `residue_id`   | `int32`              | Author residue number.                         |
 | `chain_id`   | `<U2`                  | Chain identifier.                              |
 | `entity_type`| `<U10`                 | `"protein"`, `"ligand"`, `"ion"`, `"water"`.   |
 | `b_factor`   | `float32`              | Temperature factor.                            |

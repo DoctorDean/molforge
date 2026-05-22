@@ -49,6 +49,7 @@ nav:
       - Engine wrappers: guide/wrappers.md
       - Plugins: guide/plugins.md
       - Validation: guide/validation.md
+      - Ensembles: guide/ensembles.md
   - Walkthroughs:
       - Sequences: walkthroughs/01_sequences.ipynb
       - Structures: walkthroughs/02_structures.ipynb
@@ -70,6 +71,7 @@ nav:
       - molforge.ml: reference/ml.md
       - molforge.metrics: reference/metrics.md
       - molforge.validation: reference/validation.md
+      - molforge.ensembles: reference/ensembles.md
       - molforge.md: reference/md.md
       - molforge.docking: reference/docking.md
       - molforge.plugins: reference/plugins.md
