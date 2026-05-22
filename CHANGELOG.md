@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **Notebook rendering via mkdocs-jupyter.** All six walkthrough
+  notebooks (`notebooks/walkthroughs/01_sequences.ipynb` through
+  `06_plugin_authoring.ipynb`) and all three example notebooks
+  (`cross_engine_validation`, `de_novo_design`, `end_to_end_design`)
+  now render as proper docs pages alongside the rest of the site.
+  Notebooks live at their canonical `notebooks/` location (where CI
+  executes them); they're symlinked into `docs/walkthroughs/` and
+  `docs/examples/` so mkdocs-jupyter can find them inside `docs_dir`
+  without duplicating files. `execute: false` in the plugin config —
+  the docs build never re-runs notebooks; it renders the pre-baked
+  outputs that are already committed to the repo (matching the CI
+  setup that catches notebook drift separately). A new
+  `docs/examples/index.md` landing page gives a 1-line summary of
+  each example. Total site size now ~7.6 MB across 24 pages; the
+  notebook pages average ~700 KB each (mkdocs-jupyter bundles
+  notebook CSS/JS per page). Build time ~6 s.
 - **Docs CI + GitHub Pages deployment.** `.github/workflows/docs.yml`
   rewritten from the placeholder `echo` into a real two-job workflow:
   `build` runs `mkdocs build --strict` on every push and PR (catches
@@ -141,6 +157,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `discover()` against a mocked `importlib.metadata.entry_points`
   covering the multi-plugin case, the broken-plugin tolerance, and
   the empty-entry-points fallthrough.
+
+### Fixed
+- **Docs notebooks no longer use symlinks.** The walkthrough and
+  example notebooks were previously symlinked from `docs/` into the
+  canonical `notebooks/` directory. Symlinks broke two things: (1)
+  extracting a release tarball on Windows failed with "a required
+  privilege is not held by the client" because creating symlinks
+  needs a privilege normal accounts lack, and (2) the GitHub Pages
+  docs build failed in strict mode because `actions/checkout`
+  didn't preserve the links, leaving nine dangling `nav` references
+  (13 strict-mode warnings, non-zero exit). Replaced with a build
+  hook (`docs/_hooks/copy_notebooks.py`, registered via the
+  `hooks:` key in `mkdocs.yml`) that copies the notebooks from
+  `notebooks/` into `docs/` during `on_config`, before mkdocs's
+  file discovery runs so mkdocs-jupyter renders them normally. The
+  copies are git-ignored; the notebooks remain single-source in
+  `notebooks/`. No symlinks anywhere in the repo, and the tarball
+  extracts cleanly on every platform.
+- **`docs/guide/data-model.md` field names.** Two rows in the
+  `AtomArray` schema table used pre-rename names (`res_name`,
+  `res_id`); corrected to `residue_name`, `residue_id` to match
+  the actual public attributes. Discovered while writing ensemble
+  test fixtures.
 
 ## [v0.1.0] 2026-05-20 
 

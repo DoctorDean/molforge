@@ -1,0 +1,4 @@
+# This directory holds Jupyter notebooks copied from notebooks/walkthroughs/
+# at docs-build time by docs/_hooks/copy_notebooks.py. The .ipynb files here
+# are git-ignored; only this .gitkeep is tracked, so the directory exists on
+# a fresh clone before the build hook runs.

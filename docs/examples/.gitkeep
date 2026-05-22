@@ -1,0 +1,3 @@
+# This directory holds Jupyter notebooks copied from notebooks/examples/ at
+# docs-build time by docs/_hooks/copy_notebooks.py, alongside the tracked
+# index.md. The .ipynb files here are git-ignored.

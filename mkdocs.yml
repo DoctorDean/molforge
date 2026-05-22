@@ -101,13 +101,21 @@ plugins:
             filters: ["!^_"]
             heading_level: 2
   - mkdocs-jupyter:
-      # Notebooks are symlinked into docs/walkthroughs/ and docs/examples/
-      # from the canonical notebooks/ directory. CI runs the notebooks
-      # there separately; we just render the already-baked outputs.
+      # Notebooks are authored in the top-level notebooks/ directory and
+      # copied into docs/walkthroughs/ and docs/examples/ at build time
+      # by the docs/_hooks/copy_notebooks.py hook (see `hooks:` below).
+      # The copies are git-ignored. CI runs the notebooks separately;
+      # here we just render the already-baked outputs.
       execute: false
       include_source: true
       ignore_h1_titles: true
       include: ["walkthroughs/*.ipynb", "examples/*.ipynb"]
+
+# Build hooks. copy_notebooks.py stages the canonical notebooks/ files
+# into docs/ at build time so mkdocs-jupyter can render them without
+# symlinks (which break on Windows tarball extraction and on CI).
+hooks:
+  - docs/_hooks/copy_notebooks.py
 
 markdown_extensions:
   - admonition

@@ -63,6 +63,11 @@ Thumbs.db
 docs/_build/
 docs/site/
 site/
+# Notebooks copied into docs/ at build time by docs/_hooks/copy_notebooks.py.
+# The canonical copies live in notebooks/; these staged copies are
+# regenerated on every build and must never be committed.
+docs/walkthroughs/*.ipynb
+docs/examples/*.ipynb
 
 # Data files (keep small fixtures only; ignore bulk data)
 data/*
