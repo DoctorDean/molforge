@@ -12,6 +12,8 @@
 
 `molforge` is an open-source Python library that lets you compose protein workflows across the tools you already use. Bring your structures and sequences in, plug in your engines of choice (Vina, OpenMM, ESMFold, AlphaFold, RFdiffusion, ProteinMPNN, your own model), and walk out with a coherent pipeline instead of five incompatible Python environments and a graveyard of conversion scripts.
 
+**Documentation:** [doctordean.github.io/molforge](https://doctordean.github.io/molforge/)
+
 ---
 
 ## Why molforge exists

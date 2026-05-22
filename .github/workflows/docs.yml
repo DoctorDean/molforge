@@ -2,25 +2,74 @@ name: Docs
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
+# Allow exactly one concurrent deployment. Don't cancel in-progress runs
+# — letting the running deploy finish keeps Pages history consistent.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
+  # Build job — runs on every push and PR. This is the strictness gate:
+  # any nav warning, broken link, or mkdocstrings reference miss fails CI.
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # mkdocs reads commit timestamps from git history for "last
+          # updated" footers; without depth=0 it sees only the tip.
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install
+          cache: pip
+
+      - name: Install docs toolchain
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[docs]"
-      - name: Build docs
-        run: |
-          # TODO: enable once mkdocs.yml is added
-          # mkdocs build --strict
-          echo "Docs build placeholder — wire up mkdocs.yml"
+          # molforge's heavy deps are all lazy-imported inside method
+          # bodies, so [docs] alone is enough for mkdocstrings to
+          # introspect the public surface. No torch / scipy / openmm
+          # needed at doc-build time.
+          # ruff is included for mkdocstrings signature formatting —
+          # without a formatter, signatures still render but stay on
+          # one long line.
+          pip install -e ".[docs]" ruff
+
+      - name: Build site
+        run: mkdocs build --strict
+
+      - name: Upload Pages artifact
+        # Only the main-branch push needs the deploy artifact. Skipping
+        # on PRs saves a few seconds per build.
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  # Deploy job — only on push to main/master. Uses the modern GitHub
+  # Pages CI flow (no gh-pages branch). Requires Pages to be enabled in
+  # the repo settings with source set to "GitHub Actions".
+  deploy:
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write       # to deploy to Pages
+      id-token: write    # to verify the deployment originates here
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **Docs CI + GitHub Pages deployment.** `.github/workflows/docs.yml`
+  rewritten from the placeholder `echo` into a real two-job workflow:
+  `build` runs `mkdocs build --strict` on every push and PR (catches
+  broken nav links, unresolved cross-references, missing
+  mkdocstrings symbols), and `deploy` runs only on pushes to
+  `main`/`master`, using the modern `actions/deploy-pages@v4` flow
+  (no `gh-pages` orphan branch). The deploy job has `pages: write`
+  and `id-token: write` permissions, is gated behind a
+  `github-pages` environment, and uses a `pages` concurrency group
+  with `cancel-in-progress: false` so concurrent deploys queue
+  rather than thrash. CI install is just `pip install -e
+  ".[docs]" ruff` — molforge's lazy-import discipline means no
+  torch / scipy / openmm / biopython is needed at doc-build time,
+  which keeps the docs job under a minute. Verified locally by
+  building strictly in a fresh venv with only `[docs]` installed.
 - **API reference pages live, strict mkdocs build green.** Eleven
   reference pages now render real API content via mkdocstrings, with
   `molforge.wrappers` split into a router landing page plus four

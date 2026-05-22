@@ -94,7 +94,7 @@ docs = [
 
 [project.urls]
 Homepage      = "https://github.com/DoctorDean/molforge"
-Documentation = "https://molforge.readthedocs.io"
+Documentation = "https://doctordean.github.io/molforge/"
 Repository    = "https://github.com/DoctorDean/molforge"
 Issues        = "https://github.com/DoctorDean/molforge/issues"
 Changelog     = "https://github.com/DoctorDean/molforge/blob/main/CHANGELOG.md"
