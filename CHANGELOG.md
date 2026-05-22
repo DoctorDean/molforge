@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **Boltz / Boltz-2 folding wrapper.** Real implementation replacing
+  the `boltz.py` stub. Drives the `boltz predict` CLI via subprocess
+  against a temporary directory and parses the resulting mmCIF +
+  confidence JSON sidecar. Supports both `boltz1` and `boltz2`
+  (default `boltz2`), MSA server toggling (`use_msa_server=True`
+  default; pass `False` for fast single-sequence inference),
+  configurable recycling steps, diffusion samples, sampling steps,
+  CPU/GPU routing via `--accelerator`, custom executable path, and
+  custom weights cache via `BOLTZ_CACHE`. Lazy CLI detection
+  (`shutil.which("boltz")`) — construction never touches the binary;
+  the first `predict()` call resolves it or raises a
+  `FoldingEngineNotInstalledError` with install hints. Output
+  metadata follows the uniform folding-engine convention
+  (`confidence_per_residue`, `confidence_per_atom`, `mean_confidence`)
+  and additionally surfaces Boltz-specific `ptm`, `iptm`, and
+  `confidence_score` from the JSON sidecar. 47 new tests (46 passing
+  + 1 correctly skipped @slow end-to-end), structured as a series of
+  testable seams: construction, sequence validation, YAML input
+  construction, command-line assembly, environment setup, output
+  collection, subprocess invocation (with mocked `subprocess.run`),
+  and CIF post-processing in isolation. Total test count: 784 → 830
+  passed + 9 skipped.
 - **`molforge.ensembles` — weighted statistics over pose ensembles.**
   New top-level subpackage with seven public functions covering the
   four standard analyses run against docking output:

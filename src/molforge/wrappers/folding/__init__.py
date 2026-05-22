@@ -2,14 +2,16 @@
 
 Concrete engines:
     - :class:`ESMFold` — implemented (single-sequence transformer; fast)
-    - :class:`AlphaFold` — stub (MSA-based; most accurate)
-    - :class:`Boltz` — stub
-    - :class:`Rosetta` — stub
+    - :class:`AlphaFold` — implemented (MSA-based via ColabFold)
+    - :class:`Boltz` — implemented (Boltz-1 / Boltz-2 via subprocess)
+    - :class:`RoseTTAFold` — stub
+
 
 Shared:
     - :class:`FoldingEngine` — abstract base for the engine contract
-    - :class:`FoldingEngineNotInstalledError` — raised when heavy dependencies
-      (torch, transformers) aren't installed.
+    - :class:`FoldingEngineNotInstalledError` — raised when heavy
+      dependencies (torch, transformers, colabfold, the boltz CLI,
+      the RFAA repo + databases, ...) aren't installed.
 
 All engines write per-residue confidence to
 ``protein.metadata["confidence_per_residue"]`` so downstream code can
