@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added 
+### Added
 - **`molforge.core.metadata_keys` — documented vocabulary for
   `Protein.metadata`.** `Protein.metadata` remains a free-form
   `dict[str, Any]` (no breaking change), but the keys molforge's own
@@ -37,6 +37,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `load_alphafold` now populates both sets (uniform keys preferred,
   legacy keys retained for backward compatibility); the two carry
   identical values. Surfaced by the API audit.
+
+### Changed
+- **BREAKING: `cross_validate` now defaults to `on_error="raise"`.**
+  Previously `cross_validate` defaulted to `on_error="record"` —
+  exceptions raised by individual validators were silently caught,
+  recorded in verdict metadata, and the verdict marked
+  `passed=False`. The problem: a validator that throws on every
+  design (a misconfigured engine, a missing dependency, a bad
+  input) produced a full list of `passed=False` verdicts that
+  *looked* like a real result, hiding the bug. The new default
+  fails loud. Code that genuinely wants a batch to survive
+  individual validator failures must now pass `on_error="record"`
+  explicitly. Flagged and resolved by the API audit.
+
+### Documented
+- **`Simulation.engine_handle` contract clarified.** The attribute
+  type (`object | None`) is correct — it really is an opaque,
+  engine-specific handle — but the contract was under-specified.
+  The docstring now states explicitly that `engine_handle` is
+  engine-private (callers must not inspect it or set it), is **not
+  serialized** (it typically wraps unpicklable C-extension state;
+  persistence layers must drop it and let the engine wrapper
+  rebuild it on resume), and carries **no semver guarantee**. For
+  inspectable per-simulation data, `Simulation.metadata` is the
+  supported field. No code change. Flagged by the API audit.
 
 ### Added 
 - **RoseTTAFold All-Atom folding wrapper.** New file

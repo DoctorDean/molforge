@@ -137,7 +137,7 @@ class TestCrossValidateScoring:
 
 
 class TestCrossValidateErrorHandling:
-    def test_record_mode_default(self) -> None:
+    def test_record_mode_collects_errors(self) -> None:
         designs = ["a", "b"]
 
         def failing_validator(d: str) -> dict[str, float]:
@@ -146,7 +146,13 @@ class TestCrossValidateErrorHandling:
             return {"plddt": 85.0}
 
         cs = CriteriaSet().add("plddt_ok", Criterion.gt("v.plddt", 80))
-        verdicts = cross_validate(designs=designs, validators={"v": failing_validator}, criteria=cs)
+        # on_error="record" is now opt-in (the default flipped to "raise").
+        verdicts = cross_validate(
+            designs=designs,
+            validators={"v": failing_validator},
+            criteria=cs,
+            on_error="record",
+        )
         assert verdicts[0].passed is True
         # b failed: errors recorded, marked failed, criterion eval gracefully
         # marks plddt_ok as False (no plddt available)
@@ -155,6 +161,19 @@ class TestCrossValidateErrorHandling:
         assert "validator_errors" in verdicts[1].metadata
         assert "v" in verdicts[1].metadata["validator_errors"]
         assert "oops" in verdicts[1].metadata["validator_errors"]["v"]
+
+    def test_raise_is_the_default(self) -> None:
+        """A validator exception propagates when on_error is not given."""
+        def failing_validator(d: str) -> dict[str, float]:
+            raise RuntimeError("kaboom")
+
+        cs = CriteriaSet().add("x", Criterion.gt("v.x", 0))
+        with pytest.raises(RuntimeError, match="kaboom"):
+            cross_validate(
+                designs=["a"],
+                validators={"v": failing_validator},
+                criteria=cs,
+            )
 
     def test_raise_mode_propagates(self) -> None:
         def failing_validator(d: str) -> dict[str, float]:
@@ -194,6 +213,7 @@ class TestCrossValidateErrorHandling:
             designs=designs,
             validators={"ok": validator_a, "broken": failing_validator},
             criteria=cs,
+            on_error="record",
         )
         # plddt criterion passes (ok validator worked), but broken validator
         # errored -> overall verdict fails

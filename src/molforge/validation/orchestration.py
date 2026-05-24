@@ -35,7 +35,7 @@ def cross_validate(
     criteria: CriteriaSet,
     design_id: Callable[[Any], str] | None = None,
     score_metric: str | None = None,
-    on_error: str = "record",
+    on_error: str = "raise",
 ) -> list[Verdict]:
     """Run every design through every validator; collect verdicts.
 
@@ -57,10 +57,27 @@ def cross_validate(
             as the sortable :attr:`Verdict.score`. If ``None``, the
             score is the count of failed criteria (so passed designs
             sort to the front).
-        on_error: How to handle validator exceptions:
-            - ``"record"`` (default): record the failure in metadata
-              and mark the verdict as failed.
-            - ``"raise"``: propagate the exception up.
+        on_error: How to handle exceptions raised by a validator:
+
+            - ``"raise"`` (default): propagate the exception
+              immediately. This is the default because a validator
+              that throws is almost always a bug — a misconfigured
+              engine, a missing dependency, a bad input — and
+              silently swallowing it produces a full list of
+              ``passed=False`` verdicts that *looks* like a real
+              result. Failing loud surfaces the problem at once.
+            - ``"record"``: catch the exception, record it under
+              ``verdict.metadata["validator_errors"]``, mark that
+              verdict ``passed=False``, and carry on to the next
+              design. Opt into this when you genuinely want a large
+              batch to survive individual validator failures (e.g.
+              an overnight screen where one bad design shouldn't
+              abort the run).
+
+            .. versionchanged:: 0.2
+               The default flipped from ``"record"`` to ``"raise"``.
+               Code that relied on the old fault-tolerant default
+               must now pass ``on_error="record"`` explicitly.
 
     Returns:
         One :class:`Verdict` per design, in input order.

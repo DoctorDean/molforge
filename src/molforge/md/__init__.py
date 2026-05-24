@@ -110,10 +110,31 @@ class Simulation:
             ``"amber14-all"``).
         temperature: Thermostat target temperature (K).
         timestep: Integrator timestep (ps).
-        engine_handle: Opaque engine-specific state (e.g. an OpenMM
-            ``Simulation`` object). Not serialized; rebuilt on resume
-            via the engine wrapper.
-        metadata: engine-specific extras.
+        engine_handle: **Engine-private. Not part of the public API.**
+            An opaque reference to whatever live state the engine
+            wrapper that produced this :class:`Simulation` needs to
+            resume it — for OpenMM this is the ``openmm.app.Simulation``
+            object, for GROMACS a handle to the run directory, and so
+            on. Its concrete type is intentionally ``object``: callers
+            must not inspect it, depend on its type, or set it
+            themselves. It is engine wrapper ↔ engine wrapper plumbing.
+
+            Two consequences worth being explicit about:
+
+            - It is **not serialized.** :class:`Simulation` is a plain
+              dataclass, but ``engine_handle`` typically wraps
+              C-extension state that cannot be pickled. Any
+              persistence layer must drop this field and have the
+              engine wrapper rebuild it on resume.
+            - It carries **no semantic-versioning guarantee.** The set
+              of things that may appear here, and the fact that the
+              field exists at all, can change between minor releases.
+
+            For per-simulation data you *do* want to read, use
+            :attr:`metadata`.
+        metadata: Free-form engine-specific extras. Unlike
+            ``engine_handle`` this is plain, inspectable data (strings,
+            numbers, arrays) and is safe to read and serialize.
     """
 
     topology: Protein
@@ -123,6 +144,8 @@ class Simulation:
     force_field: str = ""
     temperature: float = 300.0
     timestep: float = 0.002  # picoseconds
+    # Engine-private; see the class docstring. Not public API, not
+    # serialized, not covered by semver. Typed `object` deliberately.
     engine_handle: object | None = None
     metadata: dict[str, object] = field(default_factory=dict)
 

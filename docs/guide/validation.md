@@ -55,14 +55,22 @@ See the
 [cross-engine validation notebook](https://github.com/DoctorDean/molforge/blob/main/notebooks/examples/cross_engine_validation.ipynb)
 for a full walkthrough including consensus rules.
 
-!!! note "API status"
-    `cross_validate` defaults to `on_error="record"` — exceptions
-    raised by individual validators are captured in the verdict
-    rather than propagated. This is friendly for batch jobs but
-    can mask bugs in your validators. Pass `on_error="raise"` while
-    developing, switch to `"record"` for production runs. The
-    default may flip in a future release; this is under
-    [API audit](https://github.com/DoctorDean/molforge/issues).
+!!! note "Error handling"
+    `cross_validate` defaults to `on_error="raise"` — an exception
+    raised by any validator propagates immediately and aborts the
+    run. This is deliberate: a validator that throws is almost
+    always a bug (a misconfigured engine, a missing dependency, a
+    bad input), and silently swallowing it would produce a tidy
+    list of `passed=False` verdicts that *looks* like a real
+    result. For long batch jobs where one bad design shouldn't
+    abort the whole screen, pass `on_error="record"` explicitly:
+    failures are then captured under
+    `verdict.metadata["validator_errors"]` and that verdict is
+    marked `passed=False`, but the run continues.
+
+    *Changed in 0.2: the default flipped from `"record"` to
+    `"raise"`. Code relying on the old fault-tolerant default must
+    now pass `on_error="record"` explicitly.*
 
 ## Reference
 
