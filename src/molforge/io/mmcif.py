@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from molforge.core import AtomArray, Protein
+from molforge.core import metadata_keys as mk
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -225,7 +226,7 @@ def read_cif_string(
         if tok.startswith("data_"):
             pdb_id = tok[5:].strip()
             if pdb_id and pdb_id.lower() != "unknown":
-                metadata["pdb_id"] = pdb_id
+                metadata[mk.PDB_ID] = pdb_id
             pos += 1
             continue
 
@@ -289,15 +290,15 @@ def _maybe_capture_metadata(key: str, value: str, metadata: dict[str, object]) -
     if value in (".", "?"):
         return
     mapping = {
-        "_entry.id": "pdb_id",
-        "_struct.title": "title",
-        "_exptl.method": "experimental_method",
-        "_refine.ls_d_res_high": "resolution",
-        "_reflns.d_resolution_high": "resolution",
+        "_entry.id": mk.PDB_ID,
+        "_struct.title": mk.TITLE,
+        "_exptl.method": mk.EXPERIMENTAL_METHOD,
+        "_refine.ls_d_res_high": mk.RESOLUTION,
+        "_reflns.d_resolution_high": mk.RESOLUTION,
     }
     if key in mapping:
         target = mapping[key]
-        if target == "resolution":
+        if target == mk.RESOLUTION:
             import contextlib
 
             with contextlib.suppress(ValueError):
@@ -428,7 +429,7 @@ def _atom_site_rows_to_protein(
     if altloc != "all":
         arr = _resolve_altlocs(arr, strategy=altloc)
 
-    return Protein(arr, name=str(metadata.get("pdb_id", "")), metadata=metadata)
+    return Protein(arr, name=str(metadata.get(mk.PDB_ID, "")), metadata=metadata)
 
 
 # ----------------------------------------------------------------------
@@ -458,22 +459,22 @@ def write_cif_string(protein: Protein) -> str:
     cleanly through :func:`read_cif_string`.
     """
     arr = protein.atom_array
-    block_id = (protein.name or str(protein.metadata.get("pdb_id", "")) or "molforge").strip()
+    block_id = (protein.name or str(protein.metadata.get(mk.PDB_ID, "")) or "molforge").strip()
     # Block IDs must not contain whitespace; replace any with underscore.
     block_id = "".join(c if not c.isspace() else "_" for c in block_id) or "molforge"
 
     lines: list[str] = [f"data_{block_id}", "#"]
-    pdb_id = str(protein.metadata.get("pdb_id", "")).strip()
+    pdb_id = str(protein.metadata.get(mk.PDB_ID, "")).strip()
     if pdb_id:
         lines.append(f"_entry.id  {pdb_id}")
-    title = str(protein.metadata.get("title", "")).strip()
+    title = str(protein.metadata.get(mk.TITLE, "")).strip()
     if title:
         # Quote the title to safely include spaces.
         lines.append(f"_struct.title  '{title}'")
-    method = str(protein.metadata.get("experimental_method", "")).strip()
+    method = str(protein.metadata.get(mk.EXPERIMENTAL_METHOD, "")).strip()
     if method:
         lines.append(f"_exptl.method  '{method}'")
-    resolution = protein.metadata.get("resolution")
+    resolution = protein.metadata.get(mk.RESOLUTION)
     if isinstance(resolution, (int, float)):
         lines.append(f"_refine.ls_d_res_high  {float(resolution):.2f}")
     lines.append("#")

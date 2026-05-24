@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, TextIO
 import numpy as np
 
 from molforge.core import AtomArray, Protein
+from molforge.core import metadata_keys as mk
 from molforge.core.constants import (
     THREE_TO_ONE,
     is_ion,
@@ -203,16 +204,16 @@ def read_pdb_string(
         if record == "HEADER":
             # cols 11-50 classification, 51-59 date, 63-66 idcode
             if len(raw_line) >= 66:
-                metadata["classification"] = raw_line[10:50].strip()
-                metadata["deposition_date"] = raw_line[50:59].strip()
-                metadata["pdb_id"] = raw_line[62:66].strip()
+                metadata[mk.CLASSIFICATION] = raw_line[10:50].strip()
+                metadata[mk.DEPOSITION_DATE] = raw_line[50:59].strip()
+                metadata[mk.PDB_ID] = raw_line[62:66].strip()
             continue
         if record == "TITLE":
-            metadata.setdefault("title", "")
-            metadata["title"] = (str(metadata["title"]) + " " + raw_line[10:].strip()).strip()
+            metadata.setdefault(mk.TITLE, "")
+            metadata[mk.TITLE] = (str(metadata[mk.TITLE]) + " " + raw_line[10:].strip()).strip()
             continue
         if record == "EXPDTA":
-            metadata["experimental_method"] = raw_line[10:].strip()
+            metadata[mk.EXPERIMENTAL_METHOD] = raw_line[10:].strip()
             continue
         if record == "REMARK":
             # REMARK 2  RESOLUTION.    1.50 ANGSTROMS.
@@ -221,7 +222,7 @@ def read_pdb_string(
                     # Find the float right after "RESOLUTION."
                     rest = raw_line.split("RESOLUTION.")[1].strip()
                     val = rest.split()[0]
-                    metadata["resolution"] = float(val)
+                    metadata[mk.RESOLUTION] = float(val)
                 except (IndexError, ValueError):
                     pass
             continue
@@ -517,11 +518,11 @@ def write_pdb_string(protein: Protein, *, write_end: bool = True) -> str:
 
     lines: list[str] = []
     # Optional header records from metadata.
-    pdb_id = str(protein.metadata.get("pdb_id", "")).strip()[:4]
-    classification = str(protein.metadata.get("classification", "")).strip()[:40]
+    pdb_id = str(protein.metadata.get(mk.PDB_ID, "")).strip()[:4]
+    classification = str(protein.metadata.get(mk.CLASSIFICATION, "")).strip()[:40]
     if pdb_id or classification:
         lines.append(f"HEADER    {classification:<40}{'        '}{pdb_id:<4}              ")
-    title = str(protein.metadata.get("title", "")).strip()
+    title = str(protein.metadata.get(mk.TITLE, "")).strip()
     if title:
         # TITLE may span multiple continuation lines for long titles;
         # we keep it simple here and truncate at 70 chars per line.

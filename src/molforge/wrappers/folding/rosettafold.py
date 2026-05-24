@@ -54,6 +54,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from molforge.core import metadata_keys as mk
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -388,16 +389,16 @@ class RoseTTAFold(FoldingEngine):
         )
 
         meta: dict[str, object] = {
-            "engine": "RoseTTAFold",
-            "source_sequence": sequence,
-            "job_name": self.job_name,
-            "confidence_per_atom": plddt_per_atom,
-            "confidence_per_residue": per_residue_arr,
-            "mean_confidence": mean_conf,
+            mk.ENGINE: "RoseTTAFold",
+            mk.SOURCE_SEQUENCE: sequence,
+            mk.JOB_NAME: self.job_name,
+            mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
+            mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
+            mk.MEAN_CONFIDENCE: mean_conf,
         }
 
         # Surface the RFAA-specific tensors when available.
-        for key in ("pae", "pde", "mean_pae", "pae_prot", "pae_inter", "mean_plddt"):
+        for key in (mk.PAE, mk.PDE, mk.MEAN_PAE, mk.PAE_PROT, mk.PAE_INTER, mk.MEAN_PLDDT):
             if key in confidence:
                 meta[key] = confidence[key]
 

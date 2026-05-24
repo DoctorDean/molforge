@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from molforge.core import metadata_keys as mk
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -220,15 +221,17 @@ class AlphaFold(FoldingEngine):
 
         protein.metadata.update(
             {
-                "engine": "AlphaFold",
-                "model_type": self.model_type,
-                "source_sequence": sequence,
+                mk.ENGINE: "AlphaFold",
+                mk.MODEL_TYPE: self.model_type,
+                mk.SOURCE_SEQUENCE: sequence,
+                # Engine-specific config echoes (not in the documented
+                # metadata vocabulary; permitted but unguaranteed).
                 "msa_mode": self.msa_mode,
                 "num_models": self.num_models,
                 "num_recycles": self.num_recycles,
-                "confidence_per_atom": plddt_per_atom,
-                "confidence_per_residue": per_residue_arr,
-                "mean_confidence": (float(per_residue_arr.mean()) if per_residue_arr.size else 0.0),
+                mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
+                mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
+                mk.MEAN_CONFIDENCE: (float(per_residue_arr.mean()) if per_residue_arr.size else 0.0),
             }
         )
         return protein

@@ -35,6 +35,7 @@ from molforge.core.constants import (
     is_water,
     three_to_one,
 )
+from molforge.core.metadata_keys import ProteinMetadata
 from molforge.core.protein import Protein
 from molforge.core.residue import Residue
 
@@ -52,6 +53,9 @@ __all__ = [  # noqa: RUF022 — grouped by concept, not alphabetical
     "FloatArray",
     "IntArray",
     "StrArray",
+    # Metadata vocabulary (string constants live in
+    # molforge.core.metadata_keys; the TypedDict is re-exported here)
+    "ProteinMetadata",
     # Constants & helpers
     "THREE_TO_ONE",
     "ONE_TO_THREE",

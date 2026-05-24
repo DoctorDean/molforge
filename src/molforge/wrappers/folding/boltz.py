@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from molforge.core import metadata_keys as mk
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -374,16 +375,16 @@ class Boltz(FoldingEngine):
 
         protein.metadata.update(
             {
-                "engine": "Boltz",
-                "model_version": self.model_version,
-                "source_sequence": sequence,
-                "use_msa_server": self.use_msa_server,
-                "confidence_per_atom": plddt_per_atom,
-                "confidence_per_residue": per_residue_arr,
-                "mean_confidence": mean_conf,
-                "ptm": ptm,
-                "iptm": iptm,
-                "confidence_score": composite,
+                mk.ENGINE: "Boltz",
+                mk.MODEL_VERSION: self.model_version,
+                mk.SOURCE_SEQUENCE: sequence,
+                mk.USE_MSA_SERVER: self.use_msa_server,
+                mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
+                mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
+                mk.MEAN_CONFIDENCE: mean_conf,
+                mk.PTM: ptm,
+                mk.IPTM: iptm,
+                mk.CONFIDENCE_SCORE: composite,
             }
         )
         return protein

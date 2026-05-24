@@ -29,7 +29,14 @@ class Protein:
         atom_array: The flat array of atoms backing this protein. If
             omitted, an empty array is used.
         name: Optional identifier (e.g. PDB ID).
-        metadata: Free-form key/value metadata (resolution, header, ...).
+        metadata: Free-form key/value metadata (resolution, header,
+            engine confidence, ...). The dict accepts any keys, but the
+            names molforge's own parsers and engine wrappers use form a
+            stable, documented vocabulary — see
+            :mod:`molforge.core.metadata_keys` and the
+            :class:`~molforge.core.metadata_keys.ProteinMetadata`
+            TypedDict. Keys outside that vocabulary are permitted but
+            carry no cross-version stability guarantee.
     """
 
     __slots__ = ("atom_array", "metadata", "name")

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from molforge.core import metadata_keys as mk
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -223,12 +224,12 @@ class ESMFold(FoldingEngine):
 
         protein.metadata.update(
             {
-                "engine": "ESMFold",
-                "model_name": self.model_name,
-                "source_sequence": sequence,
-                "confidence_per_atom": plddt_per_atom,
-                "confidence_per_residue": per_residue_arr,
-                "mean_confidence": float(per_residue_arr.mean()) if per_residue_arr.size else 0.0,
+                mk.ENGINE: "ESMFold",
+                mk.MODEL_NAME: self.model_name,
+                mk.SOURCE_SEQUENCE: sequence,
+                mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
+                mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
+                mk.MEAN_CONFIDENCE: float(per_residue_arr.mean()) if per_residue_arr.size else 0.0,
             }
         )
         return protein

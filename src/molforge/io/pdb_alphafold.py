@@ -60,32 +60,53 @@ def is_alphafold_pdb(text_or_path: str | PathLike[str]) -> bool:
 
 
 def load_alphafold(path: str | PathLike[str]) -> Protein:
-    """Load an AlphaFold prediction, exposing pLDDT as a metadata field.
+    """Load an AlphaFold prediction, exposing pLDDT as metadata.
 
-    The protein is read via :func:`molforge.io.read_pdb`, then:
+    The protein is read via :func:`molforge.io.read_pdb`, then its
+    ``metadata`` is populated with confidence information under two
+    sets of keys:
 
-    - ``protein.metadata["plddt"]`` is set to a ``(n_atoms,)`` float32
-      array of per-atom pLDDT scores (copied from the B-factor column).
-    - ``protein.metadata["plddt_per_residue"]`` is set to a
-      ``(n_residues,)`` float32 array of per-residue pLDDT (mean across
-      the residue's atoms).
-    - ``protein.metadata["mean_plddt"]`` is the overall mean.
-    - ``protein.metadata["source"]`` is set to ``"alphafold"``.
+    - **Uniform folding-engine keys** (preferred) — the same keys
+      every molforge folding-engine wrapper sets, so downstream code
+      can read confidence without caring which engine ran:
+      ``confidence_per_atom``, ``confidence_per_residue``,
+      ``mean_confidence``, and ``engine`` (= ``"AlphaFold"``).
+    - **Legacy AlphaFold-specific keys** (retained for backward
+      compatibility): ``plddt``, ``plddt_per_residue``,
+      ``mean_plddt``, ``source`` (= ``"alphafold"``).
 
-    The B-factor column is left intact for compatibility with downstream
-    tools that still expect to find pLDDT there.
+    The two sets carry the same values; new code should prefer the
+    uniform keys. See :mod:`molforge.core.metadata_keys` for the
+    documented vocabulary.
+
+    The B-factor column is left intact for compatibility with
+    downstream tools that still expect to find pLDDT there.
     """
+    from molforge.core import metadata_keys as mk
+
     protein = read_pdb(path)
     arr = protein.atom_array
     plddt = np.asarray(arr.b_factor, dtype=np.float32).copy()
-    protein.metadata["plddt"] = plddt
-    protein.metadata["mean_plddt"] = float(plddt.mean()) if plddt.size else 0.0
-    protein.metadata["source"] = "alphafold"
 
     # Per-residue mean (residues are guaranteed by AlphaFold to have
     # uniform per-atom pLDDT, but we compute the mean anyway for safety).
     per_res: list[float] = []
     for sl in arr.iter_residue_slices():
         per_res.append(float(plddt[sl].mean()))
-    protein.metadata["plddt_per_residue"] = np.asarray(per_res, dtype=np.float32)
+    plddt_per_residue = np.asarray(per_res, dtype=np.float32)
+    mean_plddt = float(plddt.mean()) if plddt.size else 0.0
+
+    # Uniform folding-engine keys (preferred).
+    protein.metadata[mk.ENGINE] = "AlphaFold"
+    protein.metadata[mk.CONFIDENCE_PER_ATOM] = plddt
+    protein.metadata[mk.CONFIDENCE_PER_RESIDUE] = plddt_per_residue
+    protein.metadata[mk.MEAN_CONFIDENCE] = mean_plddt
+
+    # Legacy AlphaFold-specific keys (retained for backward compatibility;
+    # carry the same values as the uniform keys above).
+    protein.metadata[mk.PLDDT] = plddt
+    protein.metadata[mk.PLDDT_PER_RESIDUE] = plddt_per_residue
+    protein.metadata[mk.MEAN_PLDDT] = mean_plddt
+    protein.metadata[mk.SOURCE] = "alphafold"
+
     return protein

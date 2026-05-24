@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added 
+- **`molforge.core.metadata_keys` — documented vocabulary for
+  `Protein.metadata`.** `Protein.metadata` remains a free-form
+  `dict[str, Any]` (no breaking change), but the keys molforge's own
+  parsers and engine wrappers produce are now a documented, stable
+  contract. The new module provides string constants for every such
+  key (`ENGINE`, `MEAN_CONFIDENCE`, `PDB_ID`, `PAE_INTER`, ...), a
+  `ProteinMetadata` TypedDict (`total=False`) re-exported from
+  `molforge.core` for editor/mypy support, and a `DOCUMENTED_KEYS`
+  frozenset. Keys cover three groups: structural-IO header keys (PDB
+  / mmCIF parsers), uniform folding-engine keys (set by every folding
+  wrapper), and engine-specific folding keys. The PDB/mmCIF parsers
+  and all four folding wrappers now write metadata via these
+  constants, so a key typo is an import-time `NameError` rather than
+  a silently-missing key. Keys outside the documented vocabulary are
+  still permitted but carry no cross-version stability guarantee. 15
+  new tests, including consistency checks that the parsers only emit
+  documented keys and that the TypedDict matches `DOCUMENTED_KEYS`.
+
+### Fixed
+- **`load_alphafold` now emits the uniform confidence metadata keys.**
+  `molforge.io.load_alphafold` previously wrote only AlphaFold-specific
+  keys (`plddt`, `plddt_per_residue`, `mean_plddt`, `source`), while
+  the AlphaFold *wrapper* wrote the cross-engine-uniform keys
+  (`confidence_per_atom`, `confidence_per_residue`, `mean_confidence`,
+  `engine`). Downstream code reading confidence uniformly across
+  engines silently missed AlphaFold structures loaded from disk.
+  `load_alphafold` now populates both sets (uniform keys preferred,
+  legacy keys retained for backward compatibility); the two carry
+  identical values. Surfaced by the API audit.
+
+### Added 
 - **RoseTTAFold All-Atom folding wrapper.** New file
   `src/molforge/wrappers/folding/rosettafold.py` implements a real
   wrapper around the Baker lab's RoseTTAFold-All-Atom (Krishna et
