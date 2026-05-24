@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`io.fetch` is now implemented.** `molforge.io.fetch` — exported
+  but previously a `NotImplementedError` stub — now downloads
+  structures from the RCSB Protein Data Bank
+  (`source="rcsb"`, the default) or the AlphaFold Protein Structure
+  Database (`source="alphafold"`), in PDB or mmCIF format. It uses
+  only the standard library (`urllib`), so it adds no dependency.
+  Network and HTTP-404 failures surface as a clear `OSError` with
+  the failing URL; bad arguments raise `ValueError`. 7 new tests
+  (argument validation + mocked-network success and failure paths).
+  Surfaced by the API audit.
+- **`docs/architecture/api-stability.md` — API stability reference.**
+  New documentation page recording the pre-1.0 API audit: which
+  parts of the public surface are committed (semver-protected) vs.
+  tentative (may still change), the audit-driven changes, and the
+  contract for engine-private fields. Added to the docs nav under
+  Architecture.
 - **`molforge.core.metadata_keys` — documented vocabulary for
   `Protein.metadata`.** `Protein.metadata` remains a free-form
   `dict[str, Any]` (no breaking change), but the keys molforge's own
@@ -37,6 +53,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `load_alphafold` now populates both sets (uniform keys preferred,
   legacy keys retained for backward compatibility); the two carry
   identical values. Surfaced by the API audit.
+- **`GROMACS` and `DiffDock` are now coherent stubs.** Both are
+  exported (committed import paths) but unimplemented. Previously
+  they were *incoherent*: `GROMACS` didn't implement its `MDEngine`
+  abstract methods at all, so `GROMACS()` failed with a cryptic
+  "Can't instantiate abstract class" `TypeError` rather than a
+  meaningful message; both engines' methods raised a bare
+  `NotImplementedError` with no text. They are now coherent stubs —
+  instantiable, satisfying their respective engine ABCs
+  (`MDEngine` / `DockingEngine`), with every method raising
+  `NotImplementedError` carrying a clear message that points at the
+  working alternative (`OpenMM` / `Vina`) and the tracking issue.
+  10 new tests. Surfaced by the API audit.
 
 ### Changed
 - **BREAKING: `cross_validate` now defaults to `on_error="raise"`.**

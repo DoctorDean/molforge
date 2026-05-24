@@ -62,7 +62,9 @@ nav:
       - Cross-engine validation: examples/cross_engine_validation.ipynb
       - De novo design: examples/de_novo_design.ipynb
       - End-to-end design: examples/end_to_end_design.ipynb
-  - Architecture: architecture/overview.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - API stability: architecture/api-stability.md
   - API reference:
       - molforge.core: reference/core.md
       - molforge.io: reference/io.md

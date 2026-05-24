@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from molforge.io.fasta import read_fasta, write_fasta
-from molforge.io.mmcif import read_cif, write_cif
-from molforge.io.pdb import read_pdb, write_pdb
+from molforge.io.mmcif import read_cif, read_cif_string, write_cif
+from molforge.io.pdb import read_pdb, read_pdb_string, write_pdb
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -128,29 +128,83 @@ def fetch(
     *,
     source: str = "rcsb",
     format: str = "pdb",
+    timeout: float = 30.0,
 ) -> Protein:
     """Fetch a structure by ID from a remote source.
 
+    Downloads the structure over HTTPS and parses it into a
+    :class:`~molforge.core.Protein`. Uses only the standard library
+    (:mod:`urllib`), so it adds no dependency.
+
     Args:
-        pdb_id: 4-character PDB ID (RCSB) or UniProt accession (AlphaFold DB).
-        source: ``"rcsb"`` for the PDB or ``"alphafold"`` for AlphaFold DB.
-        format: ``"pdb"`` or ``"cif"``.
+        pdb_id: 4-character PDB ID (for ``source="rcsb"``) or UniProt
+            accession (for ``source="alphafold"``). Case-insensitive
+            for RCSB.
+        source: ``"rcsb"`` for the RCSB Protein Data Bank, or
+            ``"alphafold"`` for the AlphaFold Protein Structure
+            Database.
+        format: ``"pdb"`` or ``"cif"``. AlphaFold DB only serves
+            ``"pdb"`` and ``"cif"``; both are supported.
+        timeout: Network timeout in seconds for the download.
 
     Returns:
-        A :class:`molforge.core.Protein`.
+        A :class:`~molforge.core.Protein` parsed from the downloaded
+        file.
 
-    Notes:
-        This function requires network access. The implementation is
-        stubbed pending the addition of an HTTP utility; for now we
-        raise :class:`NotImplementedError` rather than pull in
-        ``requests`` as a core dependency.
+    Raises:
+        ValueError: If ``source`` or ``format`` is unrecognized, or
+            ``pdb_id`` is empty.
+        OSError: If the download fails — network error, timeout, or a
+            non-existent ID (which the server returns as HTTP 404).
+            The underlying :class:`urllib.error.URLError` /
+            :class:`~urllib.error.HTTPError` is chained as the cause.
+
+    Example:
+        >>> from molforge.io import fetch
+        >>> protein = fetch("1ABC")                       # RCSB, PDB format
+        >>> af = fetch("P00520", source="alphafold")      # AlphaFold DB
     """
-    # TODO: implement with stdlib urllib (avoid requests dep). The
-    # endpoints are:
-    #   https://files.rcsb.org/download/{pdb_id}.pdb
-    #   https://files.rcsb.org/download/{pdb_id}.cif
-    #   https://alphafold.ebi.ac.uk/files/AF-{uniprot}-F1-model_v4.pdb
-    raise NotImplementedError(
-        f"fetch({pdb_id!r}, source={source!r}, format={format!r}) is planned; "
-        "for now, download manually and use load()."
-    )
+    import urllib.error
+    import urllib.request
+
+    if not pdb_id or not pdb_id.strip():
+        raise ValueError("pdb_id must be a non-empty string")
+    pdb_id = pdb_id.strip()
+
+    if source not in ("rcsb", "alphafold"):
+        raise ValueError(
+            f"source must be 'rcsb' or 'alphafold', got {source!r}"
+        )
+    if format not in ("pdb", "cif"):
+        raise ValueError(f"format must be 'pdb' or 'cif', got {format!r}")
+
+    if source == "rcsb":
+        # RCSB serves both formats from files.rcsb.org. IDs are
+        # conventionally uppercase there.
+        url = f"https://files.rcsb.org/download/{pdb_id.upper()}.{format}"
+    else:
+        # AlphaFold DB. v4 is the current model version; the filename
+        # pattern is AF-<accession>-F1-model_v4.<ext>.
+        ext = "cif" if format == "cif" else "pdb"
+        url = (
+            "https://alphafold.ebi.ac.uk/files/"
+            f"AF-{pdb_id.upper()}-F1-model_v4.{ext}"
+        )
+
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - https only, URL built internally
+            text = response.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        raise OSError(
+            f"fetch failed: {source} returned HTTP {e.code} for "
+            f"{pdb_id!r} ({url}). Check that the ID exists and the "
+            "format is available from this source."
+        ) from e
+    except urllib.error.URLError as e:
+        raise OSError(
+            f"fetch failed: could not reach {source} at {url} "
+            f"({e.reason}). Check your network connection."
+        ) from e
+
+    reader = read_cif_string if format == "cif" else read_pdb_string
+    return reader(text)
