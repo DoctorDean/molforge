@@ -18,7 +18,7 @@ Design notes:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -132,7 +132,7 @@ class AtomArray:
         return cls(n)
 
     @classmethod
-    def from_dict(cls, data: dict[str, NDArray]) -> AtomArray:
+    def from_dict(cls, data: dict[str, NDArray[Any]]) -> AtomArray:
         """Construct from a dict of equal-length arrays.
 
         Args:
@@ -168,7 +168,7 @@ class AtomArray:
     def __repr__(self) -> str:
         return f"AtomArray(n_atoms={len(self)})"
 
-    def __getitem__(self, key: int | slice | NDArray) -> AtomArray:
+    def __getitem__(self, key: int | slice | NDArray[Any]) -> AtomArray:
         """Slice or fancy-index the array; returns a new AtomArray (copy)."""
         if isinstance(key, int):
             # Single-atom selection still returns an AtomArray of length 1

@@ -78,6 +78,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails loud. Code that genuinely wants a batch to survive
   individual validator failures must now pass `on_error="record"`
   explicitly. Flagged and resolved by the API audit.
+- **`molforge.core` is now `mypy --strict` clean, and CI enforces
+  it.** The `core` subpackage — the data model the rest of the
+  library is built on — now passes `mypy --strict` with zero
+  errors (fixed: two missing `NDArray` type arguments in
+  `AtomArray`, an `Any`-return in `Atom.coord`, and an untyped
+  `Chain.__iter__` that was suppressed with a `type: ignore`). The
+  CI `typecheck` job now runs `mypy --strict src/molforge/core/`
+  as a hard gate, with a separate non-blocking full-tree `mypy src`
+  step that keeps the remaining (out-of-`core`) type errors visible
+  while they're worked through. A new `slow`-marked regression test
+  (`tests/unit/core/test_typing.py`) runs the strict check in-suite
+  so a `core` type regression is caught locally too.
 
 ### Documented
 - **`Simulation.engine_handle` contract clarified.** The attribute

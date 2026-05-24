@@ -10,7 +10,7 @@ with the linear view.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -79,7 +79,9 @@ class Atom:
     @property
     def coord(self) -> NDArray[np.float32]:
         """The atom's 3-D coordinate as a (3,) float32 view (mutable)."""
-        return self._array.coords[self._index]
+        # Indexing a (N, 3) float32 array with a scalar yields a (3,)
+        # float32 view; numpy's stubs widen this to Any, so cast.
+        return cast("NDArray[np.float32]", self._array.coords[self._index])
 
     @coord.setter
     def coord(self, value: NDArray[np.float32]) -> None:

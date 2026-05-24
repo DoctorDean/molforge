@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -76,7 +79,7 @@ class Chain:
             out.append(Residue(self._array, int(s), e, parent=self))
         return out
 
-    def __iter__(self):  # type: ignore[no-untyped-def]
+    def __iter__(self) -> Iterator[Residue]:
         bounds = self._residue_slice_bounds()
         for i, s in enumerate(bounds):
             e = int(bounds[i + 1]) if i + 1 < len(bounds) else self._end
