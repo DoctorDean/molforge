@@ -96,6 +96,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails loud. Code that genuinely wants a batch to survive
   individual validator failures must now pass `on_error="record"`
   explicitly. Flagged and resolved by the API audit.
+- **The entire `molforge` package is now `mypy --strict` clean.**
+  With `wrappers` and `plugins` brought up to strict, all 77 source
+  modules across every subpackage pass `mypy --strict` with zero
+  errors. The CI `typecheck` job is correspondingly simplified: the
+  previous two-step arrangement (a strict gate on the clean
+  subpackages plus a non-blocking informational full-tree run)
+  collapses to a single `mypy src` gate that fails the build on any
+  type error. The `tests/unit/test_typing.py` regression test is
+  likewise simplified to one whole-package check. 31 errors fixed in
+  this final tranche: 20 stale `# type: ignore` comments (made
+  redundant when the optional heavy dependencies were added to the
+  mypy `ignore_missing_imports` override), four deliberate engine-
+  method `# type: ignore[override]` annotations (the concrete
+  engine wrappers refine the permissive `**kwargs` signatures of
+  their `DockingEngine` / `MDEngine` / `GenerativeEngine` abstract
+  bases — an intentional, documented refinement that mypy's strict
+  Liskov check cannot model), `cast`s for the opaque
+  `Simulation.engine_handle` inside the OpenMM wrapper and for the
+  unstubbed-dependency return values, and `Vina.dock`'s receptor
+  narrowing switched from `hasattr` to `isinstance` (a more correct
+  check that mypy can also narrow on).
 - **`molforge.ml` is now `mypy --strict` clean.** The ML subpackage
   (sequence/structure featurization, protein-language-model
   embeddings) joins the strict gate — eight strict-clean

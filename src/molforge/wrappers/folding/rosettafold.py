@@ -340,7 +340,7 @@ class RoseTTAFold(FoldingEngine):
         derived confidence so the wrapper degrades gracefully.
         """
         try:
-            import torch  # type: ignore[import-not-found]
+            import torch
         except ImportError:
             return {}
         try:

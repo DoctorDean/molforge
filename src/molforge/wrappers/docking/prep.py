@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 def _require_meeko() -> Any:
     """Import meeko or raise a clean DockingEngineNotInstalledError."""
     try:
-        import meeko  # type: ignore[import-not-found]
+        import meeko
     except ImportError as e:
         raise DockingEngineNotInstalledError(
             "Receptor/ligand preparation requires `meeko`. Install with:\n"
@@ -49,7 +49,7 @@ def _require_meeko() -> Any:
 def _require_rdkit() -> Any:
     """Import rdkit or raise a clean DockingEngineNotInstalledError."""
     try:
-        from rdkit import Chem  # type: ignore[import-not-found]
+        from rdkit import Chem
     except ImportError as e:
         raise DockingEngineNotInstalledError(
             "Ligand preparation from SMILES / SDF requires RDKit. Install with:\n"
@@ -88,7 +88,7 @@ def prepare_receptor(
     out = Path(out_path)
     # Fast path: caller already has a PDBQT
     if not hasattr(receptor, "atom_array"):
-        src = Path(receptor)  # type: ignore[arg-type]
+        src = Path(receptor)
         if src.suffix.lower() == ".pdbqt":
             out.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
             return out
@@ -105,7 +105,7 @@ def prepare_receptor(
         write_pdb(receptor, tmp_pdb)  # type: ignore[arg-type]
         src_pdb = tmp_pdb
     else:
-        src_pdb = Path(receptor)  # type: ignore[arg-type]
+        src_pdb = Path(receptor)
 
     # Newer meeko (>=0.5) exposes MoleculePreparation for receptors via the
     # ProteinPrepper / PDBQTReceptor classes; older versions use a CLI tool.
@@ -130,8 +130,8 @@ def prepare_receptor(
 
     # Fallback: try the CLI-equivalent function if available.
     try:
-        from meeko import MoleculePreparation, PDBQTWriterLegacy  # type: ignore[import-not-found]
-        from rdkit import Chem  # type: ignore[import-not-found]
+        from meeko import MoleculePreparation, PDBQTWriterLegacy
+        from rdkit import Chem
 
         # This path works for ligand-ish receptors only; for real
         # protein receptors users should upgrade meeko.
@@ -184,15 +184,15 @@ def prepare_ligand(
 
     # Fast path: caller already has a PDBQT file
     if not from_smiles:
-        src = Path(ligand)  # type: ignore[arg-type]
+        src = Path(ligand)
         if src.exists() and src.suffix.lower() == ".pdbqt":
             out.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
             return out
 
     chem = _require_rdkit()
     _require_meeko()
-    from meeko import MoleculePreparation, PDBQTWriterLegacy  # type: ignore[import-not-found]
-    from rdkit.Chem import AllChem  # type: ignore[import-not-found]
+    from meeko import MoleculePreparation, PDBQTWriterLegacy
+    from rdkit.Chem import AllChem
 
     # Load the molecule
     if from_smiles:
@@ -200,7 +200,7 @@ def prepare_ligand(
         if mol is None:
             raise ValueError(f"RDKit could not parse SMILES: {ligand!r}")
     else:
-        src = Path(ligand)  # type: ignore[arg-type]
+        src = Path(ligand)
         suffix = src.suffix.lower()
         if suffix == ".sdf":
             supplier = chem.SDMolSupplier(str(src), removeHs=False)

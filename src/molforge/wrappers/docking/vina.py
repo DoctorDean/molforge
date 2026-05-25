@@ -35,6 +35,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from molforge.core import Protein
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -44,8 +45,6 @@ from molforge.docking import (
 
 if TYPE_CHECKING:
     from os import PathLike
-
-    from molforge.core import Protein
 
 
 class Vina(DockingEngine):
@@ -100,7 +99,7 @@ class Vina(DockingEngine):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def dock(
+    def dock(  # type: ignore[override]  # engine-specific kwargs refine the **kwargs ABC contract
         self,
         receptor: Protein | str | PathLike[str],
         ligand: Protein | str | PathLike[str],
@@ -176,7 +175,7 @@ class Vina(DockingEngine):
 
         return self._parse_poses_pdbqt(
             text,
-            receptor=receptor if hasattr(receptor, "atom_array") else None,
+            receptor=receptor if isinstance(receptor, Protein) else None,
             run_metadata={
                 "center": center,
                 "box_size": box_size,
@@ -192,7 +191,7 @@ class Vina(DockingEngine):
     def _make_vina_handle(self) -> Any:
         """Construct a vina.Vina instance, raising a clean error if missing."""
         try:
-            from vina import Vina as _Vina  # type: ignore[import-not-found]
+            from vina import Vina as _Vina
         except ImportError as e:
             raise DockingEngineNotInstalledError(
                 "AutoDock Vina requires the `vina` PyPI package. Install with:\n"

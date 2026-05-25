@@ -172,7 +172,7 @@ class ProteinMPNN(GenerativeEngine):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def generate(
+    def generate(  # type: ignore[override]  # engine-specific kwargs + refined return type vs the ABC
         self,
         backbone: Protein | str | os.PathLike[str],
         *,
@@ -240,7 +240,7 @@ class ProteinMPNN(GenerativeEngine):
                 pdb_path = tmpdir / "backbone.pdb"
                 write_pdb(backbone, pdb_path)  # type: ignore[arg-type]
             else:
-                pdb_path = Path(backbone).resolve()  # type: ignore[arg-type]
+                pdb_path = Path(backbone).resolve()
 
             python = self.python_executable or sys.executable
             run_script = pmpnn_dir / "protein_mpnn_run.py"

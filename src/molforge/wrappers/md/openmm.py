@@ -40,7 +40,7 @@ Linux and macOS. On Windows, install via conda-forge.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -117,9 +117,9 @@ class OpenMM(MDEngine):
     def _require_openmm(self) -> Any:
         """Import OpenMM or raise a clean MDEngineNotInstalledError."""
         try:
-            import openmm  # type: ignore[import-not-found]
-            import openmm.app as app  # type: ignore[import-not-found]
-            import openmm.unit as unit  # type: ignore[import-not-found]
+            import openmm
+            import openmm.app as app
+            import openmm.unit as unit
         except ImportError as e:
             raise MDEngineNotInstalledError(
                 "OpenMM is required for the OpenMM wrapper. Install with:\n"
@@ -132,7 +132,7 @@ class OpenMM(MDEngine):
     # ------------------------------------------------------------------
     # Prepare
     # ------------------------------------------------------------------
-    def prepare(
+    def prepare(  # type: ignore[override]  # engine-specific kwargs refine the **kwargs ABC contract
         self,
         protein: Protein,
         *,
@@ -254,6 +254,10 @@ class OpenMM(MDEngine):
         handle = simulation.engine_handle
         if handle is None:
             raise ValueError("simulation has no engine_handle — was prepare() called?")
+        # engine_handle is typed `object` (opaque by contract); inside the
+        # OpenMM wrapper we know prepare() put an openmm.app.Simulation
+        # there. openmm ships no stubs, so Any is the honest static type.
+        handle = cast("Any", handle)
         handle.minimizeEnergy(
             tolerance=tolerance * unit.kilojoule_per_mole / unit.nanometer,
             maxIterations=max_iterations,
@@ -295,6 +299,10 @@ class OpenMM(MDEngine):
         handle = simulation.engine_handle
         if handle is None:
             raise ValueError("simulation has no engine_handle — was prepare() called?")
+        # engine_handle is typed `object` (opaque by contract); inside the
+        # OpenMM wrapper we know prepare() put an openmm.app.Simulation
+        # there. openmm ships no stubs, so Any is the honest static type.
+        handle = cast("Any", handle)
         if n_steps < 0:
             raise ValueError(f"n_steps must be >= 0, got {n_steps}")
         if save_every < 1:

@@ -184,7 +184,7 @@ class AlphaFold(FoldingEngine):
     def _require_colabfold(self) -> Any:
         """Import colabfold or raise a clean error with install hints."""
         try:
-            from colabfold.batch import run as run_fn  # type: ignore[import-not-found]
+            from colabfold.batch import run as run_fn
         except ImportError as e:
             raise FoldingEngineNotInstalledError(
                 "AlphaFold requires `colabfold`. Install with:\n"

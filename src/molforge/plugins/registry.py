@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from importlib import metadata
-from typing import Any
+from typing import Any, cast
 
 _REGISTRY: dict[tuple[str, str], Any] = {}
 
@@ -79,7 +79,12 @@ def discover() -> list[str]:
         eps = metadata.entry_points(group="molforge.plugins")
     except TypeError:
         # Older importlib.metadata didn't accept group=; fall back.
-        eps = metadata.entry_points().get("molforge.plugins", [])  # type: ignore[union-attr]
+        # (Unreachable on Python >= 3.10, the supported floor, but kept
+        # defensively.) The legacy .entry_points() returns a dict; cast
+        # the result so its static type matches the try branch above.
+        eps = cast(
+            "Any", metadata.entry_points()
+        ).get("molforge.plugins", [])
 
     for ep in eps:
         try:

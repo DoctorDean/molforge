@@ -173,10 +173,10 @@ class ESMFold(FoldingEngine):
         we stay aligned with upstream changes to the output format.
         """
         # The transformers convenience function returns list[str], one per item
-        from transformers.models.esm.openfold_utils import (  # type: ignore[import-not-found]
+        from transformers.models.esm.openfold_utils import (
             atom14_to_atom37,
         )
-        from transformers.models.esm.openfold_utils.protein import (  # type: ignore[import-not-found]
+        from transformers.models.esm.openfold_utils.protein import (
             Protein as OFProtein,
         )
         from transformers.models.esm.openfold_utils.protein import (
@@ -202,7 +202,7 @@ class ESMFold(FoldingEngine):
                 chain_index=outputs["chain_index"][i] if "chain_index" in outputs else None,
             )
             of_proteins.append(to_pdb(pred))
-        return of_proteins[0]
+        return str(of_proteins[0])
 
     def _pdb_to_protein(self, pdb_text: str, *, sequence: str) -> Protein:
         """Parse the model's PDB output and attach ESMFold metadata.

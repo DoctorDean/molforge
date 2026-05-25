@@ -194,7 +194,7 @@ class RFdiffusion(GenerativeEngine):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
-    def generate(
+    def generate(  # type: ignore[override]  # engine-specific kwargs + refined return type vs the ABC
         self,
         *,
         length: int | None = None,
