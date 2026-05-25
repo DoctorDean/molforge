@@ -59,7 +59,7 @@ jobs:
           /tmp/release-smoke/bin/pip install dist/*.whl
           /tmp/release-smoke/bin/python -c "import molforge; print(f'Smoke-test OK: molforge {molforge.__version__}')"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
