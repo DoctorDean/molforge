@@ -207,11 +207,20 @@ no_implicit_optional = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
+# Heavy, optional third-party dependencies that ship no type stubs.
+# They are lazy-imported inside the engine wrappers and ML modules, so
+# they need not be installed for most of molforge to work — but mypy
+# still needs to be told not to flag the missing stubs.
 module = [
     "Bio.*",
     "biotite.*",
+    "colabfold.*",
     "mdtraj.*",
+    "meeko.*",
     "openmm.*",
     "rdkit.*",
+    "torch.*",
+    "transformers.*",
+    "vina.*",
 ]
 ignore_missing_imports = true

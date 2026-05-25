@@ -25,7 +25,7 @@ Installation::
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -134,7 +134,7 @@ class ESM2Embedder:
         hidden = output.hidden_states[self.layer]  # (1, L+2, D)
         # Strip the leading CLS and trailing EOS to align with residues.
         residue_emb = hidden[0, 1:-1, :].cpu().numpy().astype(np.float32)
-        return residue_emb
+        return cast("NDArray[np.float32]", residue_emb)
 
     def embed_many(self, sequences: Sequence[str]) -> list[NDArray[np.float32]]:
         """Per-residue embeddings for a batch of sequences.
@@ -174,11 +174,20 @@ class ESM2Embedder:
         hidden = output.hidden_states[self.layer][0]  # (L+2, D)
         if pooling == "mean":
             # Average over actual residues (skip CLS, EOS)
-            return hidden[1:-1].mean(dim=0).cpu().numpy().astype(np.float32)
+            return cast(
+                "NDArray[np.float32]",
+                hidden[1:-1].mean(dim=0).cpu().numpy().astype(np.float32),
+            )
         if pooling == "max":
-            return hidden[1:-1].amax(dim=0).cpu().numpy().astype(np.float32)
+            return cast(
+                "NDArray[np.float32]",
+                hidden[1:-1].amax(dim=0).cpu().numpy().astype(np.float32),
+            )
         if pooling == "cls":
-            return hidden[0].cpu().numpy().astype(np.float32)
+            return cast(
+                "NDArray[np.float32]",
+                hidden[0].cpu().numpy().astype(np.float32),
+            )
         raise ValueError(f"unknown pooling {pooling!r}; expected 'mean', 'max', or 'cls'")
 
     def __repr__(self) -> str:

@@ -96,6 +96,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails loud. Code that genuinely wants a batch to survive
   individual validator failures must now pass `on_error="record"`
   explicitly. Flagged and resolved by the API audit.
+- **`molforge.ml` is now `mypy --strict` clean.** The ML subpackage
+  (sequence/structure featurization, protein-language-model
+  embeddings) joins the strict gate — eight strict-clean
+  subpackages in total, 51 source files. Six errors fixed: the four
+  numpy-widening `no-any-return`s in `embeddings.py` (resolved with
+  `cast`s), and two real type bugs in `structure_features.py` —
+  `pair_distances` and `pair_distance_features` declared
+  `atom_choice: str` but pass it to `distance_map`, which requires
+  the `Literal["ca","cb","heavy","all"]` the docstrings already
+  specify, and a coordinate feature array silently upcast to
+  float64 by a division. The `torch` and `transformers` (and
+  `colabfold`, `meeko`, `vina`) optional heavy dependencies, which
+  ship no type stubs, are added to the mypy `ignore_missing_imports`
+  override alongside the existing `Bio` / `biotite` / `mdtraj` /
+  `openmm` / `rdkit` entries. CI strict gate and the
+  `tests/unit/test_typing.py` regression test updated; only
+  `plugins` and `wrappers` remain outside the gate.
 - **Six more subpackages are now `mypy --strict` clean.**
   `molforge.io`, `molforge.sequence`, `molforge.structure`,
   `molforge.metrics`, `molforge.ensembles`, and

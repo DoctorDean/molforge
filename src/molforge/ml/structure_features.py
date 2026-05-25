@@ -17,7 +17,7 @@ NumPy float32 arrays.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -48,7 +48,7 @@ def _ca_coords_and_labels(
 def pair_distances(
     protein: Protein,
     *,
-    atom_choice: str = "ca",
+    atom_choice: Literal["ca", "cb", "heavy", "all"] = "ca",
 ) -> NDArray[np.float32]:
     """Compute the residue-residue distance matrix.
 
@@ -74,7 +74,7 @@ def pair_distance_features(
     n_bins: int = 16,
     d_min: float = 2.0,
     d_max: float = 22.0,
-    atom_choice: str = "ca",
+    atom_choice: Literal["ca", "cb", "heavy", "all"] = "ca",
 ) -> NDArray[np.float32]:
     """Gaussian-radial-basis-function (RBF) encoding of pair distances.
 
@@ -145,7 +145,8 @@ def pair_orientations(
         forward[1:-1] = coords[2:] - coords[:-2]
     fwd_norm = np.linalg.norm(forward, axis=-1, keepdims=True)
     fwd_norm = np.where(fwd_norm > 1e-6, fwd_norm, 1.0)
-    forward = forward / fwd_norm
+    # Division upcasts to float64; keep the feature array float32.
+    forward = (forward / fwd_norm).astype(np.float32)
 
     # cosine(theta) between (CA_j - CA_i) and i's forward direction.
     cosine = np.einsum("ijk,ik->ij", direction, forward).astype(np.float32)
