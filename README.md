@@ -130,10 +130,11 @@ molforge/
 │       ├── folding/          # AlphaFold, ESMFold, Boltz, Rosetta
 │       ├── docking/          # AutoDock Vina, DiffDock
 │       └── md/               # OpenMM, GROMACS
-├── tests/                    # pytest suite (664 passing + 8 correctly skipped)
+├── tests/                    # pytest suite (909 passing + skips)
 │   ├── fixtures/pdb/         # synthetic mini_*.pdb + realistic real_*.pdb fixtures
 │   ├── unit/                 # per-subpackage unit tests
-│   └── integration/          # end-to-end tests against the realistic fixtures
+│   ├── integration/          # end-to-end tests against the realistic fixtures
+│   └── benchmarks/           # performance benchmarks (pytest -m benchmark)
 ├── docs/                     # Architecture docs and reference
 ├── notebooks/                # Walkthroughs and worked examples
 ├── plugins/                  # Example external plugins

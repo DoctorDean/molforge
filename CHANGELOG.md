@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Performance benchmark suite (`tests/benchmarks/`).** Baseline
+  timings for the five structural-analysis functions most likely to
+  sit in a pipeline inner loop: RMSD (with and without Kabsch
+  superposition), DSSP, lDDT, distance/contact maps, and global /
+  local sequence alignment. 8 benchmarks total, run against a
+  synthetic 200-residue protein generated parametrically (an
+  idealized alpha-helix with valid per-residue backbone geometry —
+  reproducible, no large fixture files). Built on `pytest-benchmark`
+  (added to the `[dev]` extra). The benchmarks are marked
+  `benchmark` *and* `slow`, so a normal `pytest` run and the CI
+  `test` job (`-m "not slow"`) skip them; run them explicitly with
+  `pytest -m benchmark`. A new non-blocking CI `benchmark` job
+  exercises them on every push so a broken benchmark is caught,
+  while timing variance on shared runners never gates the build —
+  for real regression tracking, save a local baseline with
+  `pytest -m benchmark --benchmark-save=baseline` and compare. The
+  suite skips cleanly (rather than erroring) when `pytest-benchmark`
+  isn't installed.
 - **`io.fetch` is now implemented.** `molforge.io.fetch` — exported
   but previously a `NotImplementedError` stub — now downloads
   structures from the RCSB Protein Data Bank
