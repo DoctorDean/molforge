@@ -27,7 +27,7 @@ lists are already in correspondence.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -56,7 +56,7 @@ def _ca_distances_after_superposition(model: Protein, reference: Protein) -> NDA
         raise ValueError(f"GDT requires at least 3 residues, got {m_coords.shape[0]}")
     result = superpose(m_coords, r_coords)
     diff = result.mobile_aligned.astype(np.float64) - r_coords
-    return np.linalg.norm(diff, axis=1)
+    return cast("NDArray[np.float64]", np.linalg.norm(diff, axis=1))
 
 
 def gdt_ts(model: Protein, reference: Protein) -> float:

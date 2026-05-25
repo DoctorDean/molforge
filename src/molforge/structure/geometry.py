@@ -6,7 +6,7 @@ objects (or raw NumPy arrays via the ``_raw`` variants).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -66,8 +66,10 @@ def centroid(protein: Protein, *, mass_weighted: bool = False) -> NDArray[np.flo
         return np.zeros(3, dtype=np.float64)
     if mass_weighted:
         m = _masses(protein)
-        return (m[:, None] * coords).sum(axis=0) / m.sum()
-    return coords.mean(axis=0)
+        return cast(
+            "NDArray[np.float64]", (m[:, None] * coords).sum(axis=0) / m.sum()
+        )
+    return cast("NDArray[np.float64]", coords.mean(axis=0))
 
 
 def center_of_mass(protein: Protein) -> NDArray[np.float64]:

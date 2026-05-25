@@ -53,7 +53,7 @@ def _d0(length: int) -> float:
     """
     if length < 21:
         return 0.5
-    return 1.24 * (length - 15) ** (1.0 / 3.0) - 1.8
+    return float(1.24 * (length - 15) ** (1.0 / 3.0) - 1.8)
 
 
 def _ca_coords(protein: Protein) -> np.ndarray:

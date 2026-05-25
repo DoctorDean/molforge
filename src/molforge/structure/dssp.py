@@ -114,7 +114,7 @@ def _place_hydrogens(
     c_coords: NDArray[np.float32],
     mask: NDArray[np.bool_],
     chain_starts: list[int],
-) -> NDArray[np.float32]:
+) -> tuple[NDArray[np.float32], NDArray[np.bool_]]:
     """Place each residue's backbone amide H by extrapolating from the
     previous residue's C=O vector.
 

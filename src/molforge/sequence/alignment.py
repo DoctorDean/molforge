@@ -100,7 +100,7 @@ def _score(
     matrix_index: dict[str, int] | None,
     match: int,
     mismatch: int,
-) -> NDArray[np.int_]:
+) -> NDArray[np.int32]:
     """Build the (len(a)+1, len(b)+1) substitution-score lookup for two strings.
 
     Returns a 2D array `s[i, j]` = score of pairing a[i-1] with b[j-1].

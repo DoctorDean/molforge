@@ -46,6 +46,21 @@ The following are considered stable and ready to freeze for 1.0:
   and `DockingEngine` abstract bases, and the uniform metadata
   conventions their implementations follow.
 
+## Type checking
+
+The **entire `molforge` package** is verified under `mypy --strict` —
+all 77 source modules, every subpackage. CI enforces it: the
+`typecheck` job's `Mypy (strict)` step runs `mypy src` (the
+`[tool.mypy]` config sets `strict = true`) and fails the build on any
+new type error. A `slow`-marked regression test
+(`tests/unit/test_typing.py`) runs the same check in-suite, so a type
+regression is caught in a local test run too.
+
+This was reached incrementally — `core` first, then the analysis
+subpackages, then `ml`, and finally the `wrappers` and `plugins`
+subpackages — but the whole tree is now strict-clean and gated as a
+single check.
+
 ## Tentative surface
 
 The following are intentionally **not** frozen yet. They are exported

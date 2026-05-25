@@ -220,7 +220,7 @@ def irms(
     # Build indexing: each interface residue contributes its 4 backbone atoms.
     def _interface_bb(chain_bb: np.ndarray, positions: list[int]) -> np.ndarray:
         # backbone-atoms-per-residue: 4 (N, CA, C, O).
-        sel = []
+        sel: list[int] = []
         for p in positions:
             sel.extend(range(p * 4, p * 4 + 4))
         return chain_bb[sel]

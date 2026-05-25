@@ -41,16 +41,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-      - name: Mypy (strict gate — molforge.core)
-        # molforge.core is fully --strict clean and this gate enforces
-        # it stays that way. The rest of the tree is being brought up
-        # to strict incrementally; see the informational step below.
-        run: mypy --strict src/molforge/core/
-      - name: Mypy (informational — full tree)
-        # Non-blocking: surfaces the remaining type errors outside
-        # molforge.core without failing the build while they're being
-        # worked through.
-        continue-on-error: true
+      - name: Mypy (strict)
+        # The entire src/ tree is mypy --strict clean. This gate
+        # enforces that it stays that way. The mypy config already
+        # sets strict = true, so `mypy src` is a strict check.
         run: mypy src
 
   test:

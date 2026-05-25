@@ -113,7 +113,7 @@ def cross_validate(
         raise ValueError(f"on_error must be 'record' or 'raise', got {on_error!r}")
     if design_id is None:
 
-        def design_id(design: Any) -> str:  # type: ignore[misc]
+        def design_id(design: Any) -> str:
             s = str(design)
             return s if len(s) <= 60 else s[:57] + "..."
 

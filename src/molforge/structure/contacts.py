@@ -12,7 +12,7 @@ Both work on a single chain (default) or across all chains.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -85,7 +85,7 @@ def distance_map(
     # Pairwise distance: ||a - b||
     diff = coords[:, None, :] - coords[None, :, :]
     d = np.sqrt((diff * diff).sum(axis=-1))
-    return d.astype(np.float32)
+    return cast("NDArray[np.float32]", d.astype(np.float32))
 
 
 def contact_map(

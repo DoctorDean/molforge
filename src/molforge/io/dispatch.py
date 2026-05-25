@@ -120,7 +120,7 @@ def save(
     if writer is None:
         hint = _PLANNED_WRITERS.get(fmt, f"no writer registered for format {fmt!r}")
         raise NotImplementedError(hint)
-    writer(obj, path, **kwargs)  # type: ignore[arg-type]
+    writer(obj, path, **kwargs)
 
 
 def fetch(

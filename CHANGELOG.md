@@ -96,6 +96,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fails loud. Code that genuinely wants a batch to survive
   individual validator failures must now pass `on_error="record"`
   explicitly. Flagged and resolved by the API audit.
+- **Six more subpackages are now `mypy --strict` clean.**
+  `molforge.io`, `molforge.sequence`, `molforge.structure`,
+  `molforge.metrics`, `molforge.ensembles`, and
+  `molforge.validation` now pass `mypy --strict` with zero errors,
+  joining `molforge.core` — seven strict-clean subpackages in total,
+  46 source files. The 12 errors fixed were mostly numpy operations
+  mypy widens to `Any` (resolved with explicit `cast`s that document
+  the known array dtype) and two stale `type: ignore` comments; two
+  were genuine annotation bugs — `_place_hydrogens` in `dssp.py` was
+  declared to return a single array but actually returns a
+  `(coords, mask)` tuple, and `_score` in `alignment.py` was
+  declared `NDArray[np.int_]` but builds an `int32` array (`np.int_`
+  is `int64` on 64-bit platforms). The CI strict gate now covers all
+  seven subpackages; the regression test
+  (`tests/unit/test_typing.py`, moved up from `tests/unit/core/` and
+  parametrized) checks each one in-suite. The remaining subpackages
+  (`ml`, `plugins`, `wrappers`) are still tracked by the
+  non-blocking informational `mypy src` CI step.
 - **`molforge.core` is now `mypy --strict` clean, and CI enforces
   it.** The `core` subpackage — the data model the rest of the
   library is built on — now passes `mypy --strict` with zero

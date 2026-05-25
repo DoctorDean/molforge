@@ -19,7 +19,7 @@ is better.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -96,7 +96,7 @@ def boltzmann_weights(
     canon = sign * arr  # now "lower is better" in canon-space
     canon = canon - canon.min()  # most-favorable point → 0 → exp(0) = 1
     unnormalized = np.exp(-canon / temperature)
-    return unnormalized / unnormalized.sum()
+    return cast("NDArray[np.float64]", unnormalized / unnormalized.sum())
 
 
 def resample(
@@ -190,5 +190,9 @@ def _coerce_to_score_array(
     first = seq[0]
     if hasattr(first, "score"):
         # Looks like a Pose (or anything with a .score attribute).
-        return np.array([p.score for p in seq], dtype=np.float64)
+        # mypy can't narrow `object` on a hasattr check; getattr keeps
+        # the access type-clean while preserving the runtime behaviour.
+        return np.array(
+            [float(getattr(p, "score")) for p in seq], dtype=np.float64  # noqa: B009
+        )
     return np.asarray(seq, dtype=np.float64).ravel()
