@@ -155,3 +155,207 @@ class TestDesignedSequenceRepr:
         d = DesignedSequence(sequence="A" * 100, score=1.0)
         assert "..." in repr(d)
         assert "A" * 100 not in repr(d)
+
+
+class TestParseMetadataHelper:
+    """Edge cases for the FASTA-header key=value parser."""
+
+    def test_numeric_and_string_values_distinguished(self) -> None:
+        meta = ProteinMPNN._parse_metadata("T=0.1, model_name=v_48_020, sample=3")
+        assert meta["T"] == pytest.approx(0.1)
+        assert isinstance(meta["T"], float)
+        assert meta["model_name"] == "v_48_020"
+        assert isinstance(meta["model_name"], str)
+        assert meta["sample"] == pytest.approx(3.0)
+
+    def test_tokens_without_equals_are_skipped(self) -> None:
+        # A bare token (no '=') must not crash the parser or appear as a key.
+        meta = ProteinMPNN._parse_metadata("score=1.2, garbage_token, T=0.1")
+        assert meta["score"] == pytest.approx(1.2)
+        assert meta["T"] == pytest.approx(0.1)
+        assert "garbage_token" not in meta
+
+    def test_engine_key_always_present(self) -> None:
+        assert ProteinMPNN._parse_metadata("")["engine"] == "ProteinMPNN"
+
+
+class TestParseOutputs:
+    """`_parse_outputs` discovers the FASTA file ProteinMPNN writes."""
+
+    def _make_seqs_dir(self, out_folder: Path) -> Path:
+        seqs = out_folder / "seqs"
+        seqs.mkdir(parents=True)
+        return seqs
+
+    def test_reads_single_fasta(self, tmp_path: Path) -> None:
+        out = tmp_path / "out"
+        seqs = self._make_seqs_dir(out)
+        (seqs / "backbone.fa").write_text(_SAMPLE_FASTA, encoding="utf-8")
+        designs = ProteinMPNN()._parse_outputs(out, "backbone")
+        assert len(designs) == 3
+        assert designs[0].score == pytest.approx(0.987)
+
+    def test_picks_file_matching_pdb_stem(self, tmp_path: Path) -> None:
+        # Multi-PDB run: several .fa files; the one matching the stem wins.
+        out = tmp_path / "out"
+        seqs = self._make_seqs_dir(out)
+        (seqs / "other.fa").write_text(">native\nGGGG\n>d\nMKTV\n", encoding="utf-8")
+        (seqs / "target.fa").write_text(_SAMPLE_FASTA, encoding="utf-8")
+        designs = ProteinMPNN()._parse_outputs(out, "target")
+        assert len(designs) == 3
+
+    def test_accepts_fasta_extension(self, tmp_path: Path) -> None:
+        out = tmp_path / "out"
+        seqs = self._make_seqs_dir(out)
+        (seqs / "backbone.fasta").write_text(_SAMPLE_FASTA, encoding="utf-8")
+        assert len(ProteinMPNN()._parse_outputs(out, "backbone")) == 3
+
+    def test_no_output_raises(self, tmp_path: Path) -> None:
+        out = tmp_path / "out"
+        self._make_seqs_dir(out)  # empty seqs dir
+        with pytest.raises(RuntimeError, match="no FASTA output"):
+            ProteinMPNN()._parse_outputs(out, "backbone")
+
+
+class TestRunCli:
+    """`_run_cli` is the subprocess-driving seam — exercised with a
+    mocked ``subprocess.run`` so no real ProteinMPNN is needed."""
+
+    def _fake_install(self, tmp_path: Path) -> Path:
+        pmpnn = tmp_path / "ProteinMPNN"
+        pmpnn.mkdir()
+        (pmpnn / "protein_mpnn_run.py").write_text("# placeholder\n")
+        return pmpnn
+
+    def test_invokes_subprocess_and_parses(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pmpnn = self._fake_install(tmp_path)
+        pdb = tmp_path / "backbone.pdb"
+        pdb.write_text("ATOM\n")
+
+        captured: dict[str, object] = {}
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            # ProteinMPNN writes seqs/<stem>.fa under --out_folder.
+            captured["cmd"] = cmd
+            out_folder = Path(cmd[cmd.index("--out_folder") + 1])
+            seqs = out_folder / "seqs"
+            seqs.mkdir(parents=True, exist_ok=True)
+            (seqs / f"{pdb.stem}.fa").write_text(_SAMPLE_FASTA, encoding="utf-8")
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        designs = ProteinMPNN()._run_cli(
+            backbone=pdb,
+            pmpnn_dir=pmpnn,
+            chains_to_design=None,
+            fixed_positions=None,
+            timeout=None,
+        )
+        assert len(designs) == 3
+        cmd = captured["cmd"]
+        assert "--pdb_path" in cmd and str(pdb) in cmd
+
+    def test_chains_and_fixed_positions_passed_through(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pmpnn = self._fake_install(tmp_path)
+        pdb = tmp_path / "backbone.pdb"
+        pdb.write_text("ATOM\n")
+
+        captured: dict[str, object] = {}
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            captured["cmd"] = cmd
+            out_folder = Path(cmd[cmd.index("--out_folder") + 1])
+            seqs = out_folder / "seqs"
+            seqs.mkdir(parents=True, exist_ok=True)
+            (seqs / f"{pdb.stem}.fa").write_text(_SAMPLE_FASTA, encoding="utf-8")
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        ProteinMPNN()._run_cli(
+            backbone=pdb,
+            pmpnn_dir=pmpnn,
+            chains_to_design="A",
+            fixed_positions={"A": [1, 2, 3]},
+            timeout=None,
+        )
+        cmd = captured["cmd"]
+        assert "--pdb_path_chains" in cmd
+        assert cmd[cmd.index("--pdb_path_chains") + 1] == "A"
+        assert "--fixed_positions_jsonl" in cmd
+
+    def test_subprocess_failure_becomes_runtime_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        pmpnn = self._fake_install(tmp_path)
+        pdb = tmp_path / "backbone.pdb"
+        pdb.write_text("ATOM\n")
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            raise subprocess.CalledProcessError(returncode=1, cmd=cmd, stderr="boom")
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        with pytest.raises(RuntimeError, match="ProteinMPNN failed"):
+            ProteinMPNN()._run_cli(
+                backbone=pdb,
+                pmpnn_dir=pmpnn,
+                chains_to_design=None,
+                fixed_positions=None,
+                timeout=None,
+            )
+
+    def test_engine_flags_appear_in_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pmpnn = self._fake_install(tmp_path)
+        pdb = tmp_path / "backbone.pdb"
+        pdb.write_text("ATOM\n")
+
+        captured: dict[str, object] = {}
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            captured["cmd"] = cmd
+            out_folder = Path(cmd[cmd.index("--out_folder") + 1])
+            seqs = out_folder / "seqs"
+            seqs.mkdir(parents=True, exist_ok=True)
+            (seqs / f"{pdb.stem}.fa").write_text(_SAMPLE_FASTA, encoding="utf-8")
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        ProteinMPNN(ca_only=True, use_soluble_model=True)._run_cli(
+            backbone=pdb,
+            pmpnn_dir=pmpnn,
+            chains_to_design=None,
+            fixed_positions=None,
+            timeout=None,
+        )
+        cmd = captured["cmd"]
+        assert "--ca_only" in cmd
+        assert "--use_soluble_model" in cmd
+
+    def test_generate_resolves_install_then_runs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The public entry point: generate() resolves the install dir,
+        # then delegates to _run_cli.
+        pmpnn = self._fake_install(tmp_path)
+        monkeypatch.setenv("PROTEINMPNN_HOME", str(pmpnn))
+        pdb = tmp_path / "backbone.pdb"
+        pdb.write_text("ATOM\n")
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            out_folder = Path(cmd[cmd.index("--out_folder") + 1])
+            seqs = out_folder / "seqs"
+            seqs.mkdir(parents=True, exist_ok=True)
+            (seqs / f"{pdb.stem}.fa").write_text(_SAMPLE_FASTA, encoding="utf-8")
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        designs = ProteinMPNN().generate(pdb)
+        assert len(designs) == 3
+        assert designs[0].score == pytest.approx(0.987)

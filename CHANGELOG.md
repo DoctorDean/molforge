@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **ProteinMPNN wrapper test coverage raised from 69% to 96%.** The
+  two previously-untested seams of `wrappers.generative.proteinmpnn`
+  now have direct tests: `_parse_outputs` (FASTA-file discovery —
+  single file, multi-PDB stem matching, the `.fasta` extension, and
+  the no-output error path) and `_run_cli` (the subprocess-driving
+  seam, exercised with a mocked `subprocess.run` so neither
+  ProteinMPNN nor torch need be installed — covering command
+  assembly, `chains_to_design` / `fixed_positions` / `ca_only` /
+  `use_soluble_model` flag pass-through, the public `generate()`
+  entry point, and `CalledProcessError` → `RuntimeError` translation).
+  Edge-case tests for the `_parse_metadata` header parser (numeric vs.
+  string values, tokens without `=`) were also added. 12 new tests
+  (17 → 29 in the file).
 - **Performance benchmark suite (`tests/benchmarks/`).** Baseline
   timings for the five structural-analysis functions most likely to
   sit in a pipeline inner loop: RMSD (with and without Kabsch
