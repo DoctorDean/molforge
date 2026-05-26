@@ -42,7 +42,7 @@ classifiers = [
 # Heavy / optional deps go under [project.optional-dependencies].
 dependencies = [
     "numpy>=1.24",
-    "typing-extensions>=4.7",
+    "typing-extensions>=4.15.0",
 ]
 
 [project.optional-dependencies]
