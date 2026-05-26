@@ -82,9 +82,7 @@ def discover() -> list[str]:
         # (Unreachable on Python >= 3.10, the supported floor, but kept
         # defensively.) The legacy .entry_points() returns a dict; cast
         # the result so its static type matches the try branch above.
-        eps = cast(
-            "Any", metadata.entry_points()
-        ).get("molforge.plugins", [])
+        eps = cast("Any", metadata.entry_points()).get("molforge.plugins", [])
 
     for ep in eps:
         try:

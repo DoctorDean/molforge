@@ -187,10 +187,21 @@ ignore = [
     "E501",  # line too long (handled by formatter)
 ]
 
+# Characters that ruff's RUF001/RUF002/RUF003 flag as "ambiguous" but
+# that molforge uses deliberately as mathematical notation in
+# docstrings and comments: × for matrix dimensions (N×N), σ for the
+# standard deviation, and the en dash in prose. Allowing them keeps
+# the maths readable instead of forcing ASCII substitutes.
+allowed-confusables = ["×", "σ", "–"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["B011", "N802", "N803", "N806"]
 "__init__.py"   = ["F401"]
 "src/molforge/sequence/alignment.py" = ["N806"]  # uppercase DP-matrix variables match textbook notation
+# These two modules group __all__ by category with section comments,
+# which is more useful to readers than RUF022's flat alphabetical order.
+"src/molforge/core/metadata_keys.py" = ["RUF022"]
+"src/molforge/ensembles/__init__.py" = ["RUF022"]
 
 # -----------------------------------------------------------------------------
 # Mypy

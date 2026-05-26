@@ -26,9 +26,7 @@ from molforge.core import AtomArray, Protein
 _HERE = Path(__file__).resolve().parent
 
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip the benchmark suite cleanly when pytest-benchmark is absent.
 
     The benchmarks depend on the ``benchmark`` fixture, which only
@@ -41,9 +39,7 @@ def pytest_collection_modifyitems(
     """
     if config.pluginmanager.hasplugin("benchmark"):
         return
-    skip = pytest.mark.skip(
-        reason="pytest-benchmark not installed (in the [dev] extra)"
-    )
+    skip = pytest.mark.skip(reason="pytest-benchmark not installed (in the [dev] extra)")
     benchmark_dir = str(_HERE)
     for item in items:
         if str(item.fspath).startswith(benchmark_dir):
@@ -51,9 +47,9 @@ def pytest_collection_modifyitems(
 
 
 # Idealized alpha-helix parameters.
-_RISE_PER_RESIDUE = 1.5   # Angstrom along the helix axis
+_RISE_PER_RESIDUE = 1.5  # Angstrom along the helix axis
 _RESIDUES_PER_TURN = 3.6
-_HELIX_RADIUS = 2.3       # Angstrom, CA radius from the axis
+_HELIX_RADIUS = 2.3  # Angstrom, CA radius from the axis
 
 
 def make_helix_protein(n_residues: int, *, seed: int = 0) -> Protein:
@@ -82,11 +78,11 @@ def make_helix_protein(n_residues: int, *, seed: int = 0) -> Protein:
     # Order: N, CA, C, O, CB.
     offsets = np.array(
         [
-            [-1.20, 0.30, -0.40],   # N
-            [0.00, 0.00, 0.00],     # CA
-            [1.10, 0.60, 0.55],     # C
-            [1.35, 1.80, 0.60],     # O
-            [-0.55, -1.05, 1.25],   # CB
+            [-1.20, 0.30, -0.40],  # N
+            [0.00, 0.00, 0.00],  # CA
+            [1.10, 0.60, 0.55],  # C
+            [1.35, 1.80, 0.60],  # O
+            [-0.55, -1.05, 1.25],  # CB
         ],
         dtype=np.float32,
     )

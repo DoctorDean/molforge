@@ -112,8 +112,6 @@ def pose_clusters(
         raise ValueError("poses is empty")
 
     rmsd = pairwise_rmsd(poses, heavy_atoms_only=heavy_atoms_only)
-    n = rmsd.shape[0]
-
     labels = _agglomerative_average_linkage(rmsd, cutoff)
     clusters = _build_clusters(labels, rmsd)
 
@@ -203,7 +201,9 @@ def _agglomerative_average_linkage(
     # Build labels: each pose gets the index of its containing cluster.
     labels = np.full(n, -1, dtype=np.intp)
     for cluster_id, member_list in enumerate(
-        m for m in members if m  # filter out empty (merged-out) clusters
+        m
+        for m in members
+        if m  # filter out empty (merged-out) clusters
     ):
         for member in member_list:
             labels[member] = cluster_id

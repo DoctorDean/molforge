@@ -158,8 +158,7 @@ def _stack_pose_coords(
 
         if coords.shape[0] == 0:
             raise ValueError(
-                f"pose {i} has no atoms after filtering "
-                f"(heavy_atoms_only={heavy_atoms_only})"
+                f"pose {i} has no atoms after filtering (heavy_atoms_only={heavy_atoms_only})"
             )
         per_pose.append(np.asarray(coords, dtype=np.float32))
 

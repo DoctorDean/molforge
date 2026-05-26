@@ -164,6 +164,7 @@ class TestCrossValidateErrorHandling:
 
     def test_raise_is_the_default(self) -> None:
         """A validator exception propagates when on_error is not given."""
+
         def failing_validator(d: str) -> dict[str, float]:
             raise RuntimeError("kaboom")
 

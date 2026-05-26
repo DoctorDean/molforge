@@ -114,9 +114,7 @@ class Boltz(FoldingEngine):
         cache_dir: str | None = None,
     ) -> None:
         if model_version not in ("boltz1", "boltz2"):
-            raise ValueError(
-                f"model_version must be 'boltz1' or 'boltz2', got {model_version!r}"
-            )
+            raise ValueError(f"model_version must be 'boltz1' or 'boltz2', got {model_version!r}")
         self.model_version = model_version
         self.use_msa_server = use_msa_server
         self.recycling_steps = recycling_steps
@@ -218,13 +216,7 @@ class Boltz(FoldingEngine):
         ``--use_msa_server`` on the CLI (no per-entity MSA field).
         """
         # Hand-built YAML to avoid a PyYAML dependency for one trivial doc.
-        return (
-            "version: 1\n"
-            "sequences:\n"
-            "  - protein:\n"
-            "      id: A\n"
-            f"      sequence: {sequence}\n"
-        )
+        return f"version: 1\nsequences:\n  - protein:\n      id: A\n      sequence: {sequence}\n"
 
     def _build_command(
         self,
@@ -279,7 +271,7 @@ class Boltz(FoldingEngine):
         so users see what Boltz reported when something fails.
         """
         try:
-            subprocess.run(  # noqa: S603 - inputs are constructed internally
+            subprocess.run(
                 cmd,
                 check=True,
                 env=env,
@@ -313,15 +305,13 @@ class Boltz(FoldingEngine):
 
         # Confidence JSON lives alongside the CIF, named confidence_*.json.
         cif_path = cif_candidates[0]
-        json_candidates = sorted(
-            cif_path.parent.glob("confidence_*model_0.json")
-        ) or sorted(cif_path.parent.glob("confidence_*.json"))
+        json_candidates = sorted(cif_path.parent.glob("confidence_*model_0.json")) or sorted(
+            cif_path.parent.glob("confidence_*.json")
+        )
         confidence_json: dict[str, Any] = {}
         if json_candidates:
             try:
-                confidence_json = json.loads(
-                    json_candidates[0].read_text(encoding="utf-8")
-                )
+                confidence_json = json.loads(json_candidates[0].read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 # Confidence is nice-to-have, not blocking. The
                 # structure is still useful.
@@ -357,9 +347,7 @@ class Boltz(FoldingEngine):
         for sl in arr.iter_residue_slices():
             per_residue.append(float(plddt_per_atom[sl].mean()))
         per_residue_arr = np.asarray(per_residue, dtype=np.float32)
-        mean_conf = (
-            float(per_residue_arr.mean()) if per_residue_arr.size else 0.0
-        )
+        mean_conf = float(per_residue_arr.mean()) if per_residue_arr.size else 0.0
 
         # Prefer JSON-provided scalars where present (more precise than
         # column-derived means).

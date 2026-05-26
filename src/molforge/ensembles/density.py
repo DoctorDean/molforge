@@ -62,9 +62,7 @@ class DensityGrid:
             ``(3,)`` float32 Cartesian coordinate in Å.
         """
         i, j, k = ijk
-        return self.origin + self.spacing * (
-            np.asarray([i, j, k], dtype=np.float32) + 0.5
-        )
+        return self.origin + self.spacing * (np.asarray([i, j, k], dtype=np.float32) + 0.5)
 
 
 def binding_site_density(
@@ -140,9 +138,7 @@ def binding_site_density(
     else:
         w = np.asarray(weights, dtype=np.float64)
         if w.shape != (n,):
-            raise ValueError(
-                f"weights has shape {w.shape}, expected ({n},)"
-            )
+            raise ValueError(f"weights has shape {w.shape}, expected ({n},)")
 
     # Collect heavy ligand coordinates per pose.
     coords_per_pose: list[NDArray[np.float32]] = []
@@ -169,9 +165,7 @@ def binding_site_density(
     else:
         grid_origin = np.asarray(origin, dtype=np.float32).ravel()
         if grid_origin.shape != (3,):
-            raise ValueError(
-                f"origin must have shape (3,), got {grid_origin.shape}"
-            )
+            raise ValueError(f"origin must have shape (3,), got {grid_origin.shape}")
         grid_shape = (int(shape[0]), int(shape[1]), int(shape[2]))  # type: ignore[index]
 
     density = np.zeros(grid_shape, dtype=np.float64)
@@ -190,9 +184,12 @@ def binding_site_density(
         idx = np.floor((coords - grid_origin) / spacing).astype(int)
         # Mask atoms inside the grid.
         in_bounds = (
-            (idx[:, 0] >= 0) & (idx[:, 0] < nx)
-            & (idx[:, 1] >= 0) & (idx[:, 1] < ny)
-            & (idx[:, 2] >= 0) & (idx[:, 2] < nz)
+            (idx[:, 0] >= 0)
+            & (idx[:, 0] < nx)
+            & (idx[:, 1] >= 0)
+            & (idx[:, 1] < ny)
+            & (idx[:, 2] >= 0)
+            & (idx[:, 2] < nz)
         )
         idx = idx[in_bounds]
         if idx.shape[0] == 0:

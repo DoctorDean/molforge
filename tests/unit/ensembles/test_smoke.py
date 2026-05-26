@@ -33,9 +33,7 @@ class TestPublicSurface:
 class TestEndToEndPipeline:
     """Smoke test for the canonical ensembles workflow."""
 
-    def test_score_to_weights_to_clusters_to_consensus(
-        self, two_clusters_poses
-    ) -> None:
+    def test_score_to_weights_to_clusters_to_consensus(self, two_clusters_poses) -> None:
         """Full pipeline: docking output → Boltzmann weights → clusters → consensus."""
         # 1. Weight by score.
         weights = ens.boltzmann_weights(two_clusters_poses)

@@ -149,9 +149,7 @@ def resample(
     else:
         probs = np.asarray(weights, dtype=np.float64)
         if probs.shape != (n,):
-            raise ValueError(
-                f"weights has shape {probs.shape}, expected ({n},)"
-            )
+            raise ValueError(f"weights has shape {probs.shape}, expected ({n},)")
         total = probs.sum()
         if not np.isclose(total, 1.0, atol=1e-6):
             raise ValueError(
@@ -160,9 +158,7 @@ def resample(
             )
 
     if not replace and n_samples > n:
-        raise ValueError(
-            f"n_samples={n_samples} > n_poses={n} but replace=False"
-        )
+        raise ValueError(f"n_samples={n_samples} > n_poses={n} but replace=False")
 
     rng = rng if rng is not None else np.random.default_rng()
     indices = rng.choice(n, size=n_samples, replace=replace, p=probs)
@@ -190,9 +186,9 @@ def _coerce_to_score_array(
     first = seq[0]
     if hasattr(first, "score"):
         # Looks like a Pose (or anything with a .score attribute).
-        # mypy can't narrow `object` on a hasattr check; getattr keeps
-        # the access type-clean while preserving the runtime behaviour.
-        return np.array(
-            [float(getattr(p, "score")) for p in seq], dtype=np.float64  # noqa: B009
-        )
+        # The hasattr check establishes the duck type; cast lets mypy
+        # see the .score access directly instead of reaching for
+        # getattr with a string literal.
+        poses = cast("Sequence[Pose]", seq)
+        return np.array([float(p.score) for p in poses], dtype=np.float64)
     return np.asarray(seq, dtype=np.float64).ravel()

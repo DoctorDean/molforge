@@ -20,9 +20,7 @@ class TestConsensusMedoid:
         # Pose 1 (rank=1) is geometrically central.
         assert p is three_collinear_poses[1]
 
-    def test_medoid_returns_input_object_by_reference(
-        self, three_collinear_poses
-    ) -> None:
+    def test_medoid_returns_input_object_by_reference(self, three_collinear_poses) -> None:
         """Medoid mode should return one of the input poses unchanged."""
         p = consensus_pose(three_collinear_poses, method="medoid")
         assert p in three_collinear_poses
@@ -92,15 +90,13 @@ class TestConsensusMean:
 
     def test_mean_does_not_mutate_inputs(self, three_collinear_poses) -> None:
         """Sanity check: consensus_pose must not modify the input poses."""
-        original_coords = [
-            p.ligand.atom_array.coords.copy() for p in three_collinear_poses
-        ]
+        original_coords = [p.ligand.atom_array.coords.copy() for p in three_collinear_poses]
         original_scores = [p.score for p in three_collinear_poses]
 
         _ = consensus_pose(three_collinear_poses, method="mean")
 
         for p, orig_c, orig_s in zip(
-            three_collinear_poses, original_coords, original_scores
+            three_collinear_poses, original_coords, original_scores, strict=True
         ):
             np.testing.assert_array_equal(p.ligand.atom_array.coords, orig_c)
             assert p.score == orig_s
@@ -158,10 +154,8 @@ class TestConsensusErrors:
             consensus_pose(three_collinear_poses, weights=np.array([0.5, 0.5]))
 
     def test_weights_dont_sum_to_one_raises(self, three_collinear_poses) -> None:
-        with pytest.raises(ValueError, match="must sum to 1.0"):
-            consensus_pose(
-                three_collinear_poses, weights=np.array([0.5, 0.5, 0.5])
-            )
+        with pytest.raises(ValueError, match=r"must sum to 1\.0"):
+            consensus_pose(three_collinear_poses, weights=np.array([0.5, 0.5, 0.5]))
 
     def test_mean_with_mismatched_atom_counts_raises(
         self, three_collinear_poses, single_pose

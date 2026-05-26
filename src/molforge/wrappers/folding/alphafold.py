@@ -231,7 +231,9 @@ class AlphaFold(FoldingEngine):
                 "num_recycles": self.num_recycles,
                 mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
                 mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
-                mk.MEAN_CONFIDENCE: (float(per_residue_arr.mean()) if per_residue_arr.size else 0.0),
+                mk.MEAN_CONFIDENCE: (
+                    float(per_residue_arr.mean()) if per_residue_arr.size else 0.0
+                ),
             }
         )
         return protein

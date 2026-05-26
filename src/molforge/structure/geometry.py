@@ -66,9 +66,7 @@ def centroid(protein: Protein, *, mass_weighted: bool = False) -> NDArray[np.flo
         return np.zeros(3, dtype=np.float64)
     if mass_weighted:
         m = _masses(protein)
-        return cast(
-            "NDArray[np.float64]", (m[:, None] * coords).sum(axis=0) / m.sum()
-        )
+        return cast("NDArray[np.float64]", (m[:, None] * coords).sum(axis=0) / m.sum())
     return cast("NDArray[np.float64]", coords.mean(axis=0))
 
 

@@ -172,9 +172,7 @@ def fetch(
     pdb_id = pdb_id.strip()
 
     if source not in ("rcsb", "alphafold"):
-        raise ValueError(
-            f"source must be 'rcsb' or 'alphafold', got {source!r}"
-        )
+        raise ValueError(f"source must be 'rcsb' or 'alphafold', got {source!r}")
     if format not in ("pdb", "cif"):
         raise ValueError(f"format must be 'pdb' or 'cif', got {format!r}")
 
@@ -186,13 +184,10 @@ def fetch(
         # AlphaFold DB. v4 is the current model version; the filename
         # pattern is AF-<accession>-F1-model_v4.<ext>.
         ext = "cif" if format == "cif" else "pdb"
-        url = (
-            "https://alphafold.ebi.ac.uk/files/"
-            f"AF-{pdb_id.upper()}-F1-model_v4.{ext}"
-        )
+        url = f"https://alphafold.ebi.ac.uk/files/AF-{pdb_id.upper()}-F1-model_v4.{ext}"
 
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - https only, URL built internally
+        with urllib.request.urlopen(url, timeout=timeout) as response:
             text = response.read().decode("utf-8")
     except urllib.error.HTTPError as e:
         raise OSError(

@@ -58,7 +58,5 @@ def test_package_is_mypy_strict_clean() -> None:
 
     if result.returncode != 0:
         pytest.fail(
-            "mypy --strict found type errors in molforge:\n\n"
-            + result.stdout
-            + result.stderr
+            "mypy --strict found type errors in molforge:\n\n" + result.stdout + result.stderr
         )

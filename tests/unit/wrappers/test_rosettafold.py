@@ -238,9 +238,7 @@ class TestInvoke:
         repo = tmp_path / "RFAA"
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-            engine._invoke(
-                ["python"], cwd=tmp_path, env={}, repo_dir=repo
-            )
+            engine._invoke(["python"], cwd=tmp_path, env={}, repo_dir=repo)
             _, kwargs = mock_run.call_args
             assert str(repo) in kwargs["env"]["PYTHONPATH"]
 
@@ -273,10 +271,8 @@ class TestInvoke:
                 stderr="hydra: missing required key 'fasta_file'",
                 output="",
             )
-            with pytest.raises(RuntimeError, match="rf2aa.run_inference.*failed"):
-                engine._invoke(
-                    ["python"], cwd=tmp_path, env={}, repo_dir=tmp_path
-                )
+            with pytest.raises(RuntimeError, match=r"rf2aa\.run_inference.*failed"):
+                engine._invoke(["python"], cwd=tmp_path, env={}, repo_dir=tmp_path)
 
     def test_failure_message_contains_stderr(self, tmp_path: Path) -> None:
         import subprocess
@@ -290,9 +286,7 @@ class TestInvoke:
                 output="",
             )
             with pytest.raises(RuntimeError, match="UniRef30 not found"):
-                engine._invoke(
-                    ["python"], cwd=tmp_path, env={}, repo_dir=tmp_path
-                )
+                engine._invoke(["python"], cwd=tmp_path, env={}, repo_dir=tmp_path)
 
 
 # ----------------------------------------------------------------------
@@ -322,7 +316,7 @@ class TestOutputCollection:
 
     def test_no_pdb_raises(self, tmp_path: Path) -> None:
         engine = RoseTTAFold()
-        with pytest.raises(RuntimeError, match="no .pdb output"):
+        with pytest.raises(RuntimeError, match=r"no \.pdb output"):
             engine._collect_outputs(tmp_path)
 
     def test_aux_optional(self, tmp_path: Path) -> None:
@@ -398,34 +392,26 @@ _TINY_PDB = (
 class TestParseOutputs:
     def test_attaches_engine_metadata(self) -> None:
         engine = RoseTTAFold(job_name="my_job")
-        protein = engine._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={}, sequence="AG"
-        )
+        protein = engine._parse_outputs(pdb_text=_TINY_PDB, confidence={}, sequence="AG")
         assert protein.metadata["engine"] == "RoseTTAFold"
         assert protein.metadata["source_sequence"] == "AG"
         assert protein.metadata["job_name"] == "my_job"
 
     def test_per_residue_confidence(self) -> None:
         engine = RoseTTAFold()
-        protein = engine._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={}, sequence="AG"
-        )
+        protein = engine._parse_outputs(pdb_text=_TINY_PDB, confidence={}, sequence="AG")
         per_residue = protein.metadata["confidence_per_residue"]
         assert per_residue.shape == (2,)
         np.testing.assert_allclose(per_residue, [82.5, 78.2], atol=0.01)
 
     def test_mean_confidence(self) -> None:
         engine = RoseTTAFold()
-        protein = engine._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={}, sequence="AG"
-        )
+        protein = engine._parse_outputs(pdb_text=_TINY_PDB, confidence={}, sequence="AG")
         assert protein.metadata["mean_confidence"] == pytest.approx(80.35, abs=0.01)
 
     def test_per_atom_confidence(self) -> None:
         engine = RoseTTAFold()
-        protein = engine._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={}, sequence="AG"
-        )
+        protein = engine._parse_outputs(pdb_text=_TINY_PDB, confidence={}, sequence="AG")
         per_atom = protein.metadata["confidence_per_atom"]
         assert per_atom.shape == (4,)
         np.testing.assert_allclose(per_atom[:2], 82.5)
@@ -445,17 +431,13 @@ class TestParseOutputs:
     def test_pae_matrix_surfaced_when_present(self) -> None:
         engine = RoseTTAFold()
         pae = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
-        protein = engine._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={"pae": pae}, sequence="AG"
-        )
+        protein = engine._parse_outputs(pdb_text=_TINY_PDB, confidence={"pae": pae}, sequence="AG")
         np.testing.assert_array_equal(protein.metadata["pae"], pae)
 
     def test_missing_pae_does_not_crash(self) -> None:
         """No confidence keys → no PAE in metadata, but PDB-derived stuff still there."""
         engine = RoseTTAFold()
-        protein = engine._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={}, sequence="AG"
-        )
+        protein = engine._parse_outputs(pdb_text=_TINY_PDB, confidence={}, sequence="AG")
         assert "pae" not in protein.metadata
         assert "pae_inter" not in protein.metadata
         assert "confidence_per_residue" in protein.metadata
@@ -472,9 +454,9 @@ class TestUniformConfidenceConvention:
     def test_same_uniform_keys_as_other_folders(self) -> None:
         from molforge.wrappers.folding import AlphaFold, ESMFold
 
-        rf_meta = RoseTTAFold()._parse_outputs(
-            pdb_text=_TINY_PDB, confidence={}, sequence="AG"
-        ).metadata
+        rf_meta = (
+            RoseTTAFold()._parse_outputs(pdb_text=_TINY_PDB, confidence={}, sequence="AG").metadata
+        )
         af_meta = AlphaFold()._pdb_to_protein(_TINY_PDB, sequence="AG").metadata
         esm_meta = ESMFold()._pdb_to_protein(_TINY_PDB, sequence="AG").metadata
 

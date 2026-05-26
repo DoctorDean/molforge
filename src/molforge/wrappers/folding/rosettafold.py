@@ -45,7 +45,6 @@ Setup pointers (see the RFAA README for full details):
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -182,9 +181,7 @@ class RoseTTAFold(FoldingEngine):
 
             pdb_path, aux_path = self._collect_outputs(workdir)
             pdb_text = pdb_path.read_text(encoding="utf-8")
-            confidence = (
-                self._load_aux_file(aux_path) if aux_path is not None else {}
-            )
+            confidence = self._load_aux_file(aux_path) if aux_path is not None else {}
 
         return self._parse_outputs(
             pdb_text=pdb_text,
@@ -238,11 +235,13 @@ class RoseTTAFold(FoldingEngine):
             f"    fasta_file: {fasta_path}",
         ]
         if self.max_cycle is not None:
-            lines.extend([
-                "",
-                "loader_params:",
-                f"  MAXCYCLE: {self.max_cycle}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "loader_params:",
+                    f"  MAXCYCLE: {self.max_cycle}",
+                ]
+            )
         return "\n".join(lines) + "\n"
 
     def _build_command(self, *, config_dir: Path) -> list[str]:
@@ -289,11 +288,9 @@ class RoseTTAFold(FoldingEngine):
         """
         env = dict(env)
         existing = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = (
-            f"{repo_dir}{os.pathsep}{existing}" if existing else str(repo_dir)
-        )
+        env["PYTHONPATH"] = f"{repo_dir}{os.pathsep}{existing}" if existing else str(repo_dir)
         try:
-            subprocess.run(  # noqa: S603 - inputs are constructed internally
+            subprocess.run(
                 cmd,
                 check=True,
                 cwd=str(cwd),
@@ -384,9 +381,7 @@ class RoseTTAFold(FoldingEngine):
         for sl in arr.iter_residue_slices():
             per_residue.append(float(plddt_per_atom[sl].mean()))
         per_residue_arr = np.asarray(per_residue, dtype=np.float32)
-        mean_conf = (
-            float(per_residue_arr.mean()) if per_residue_arr.size else 0.0
-        )
+        mean_conf = float(per_residue_arr.mean()) if per_residue_arr.size else 0.0
 
         meta: dict[str, object] = {
             mk.ENGINE: "RoseTTAFold",

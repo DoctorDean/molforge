@@ -55,9 +55,7 @@ def make_pose(
 @pytest.fixture
 def two_identical_poses():
     """Two poses with identical coordinates (RMSD = 0 between them)."""
-    coords = np.array(
-        [[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=np.float32
-    )
+    coords = np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=np.float32)
     return [make_pose(coords, score=-9.0, rank=0), make_pose(coords, score=-8.0, rank=1)]
 
 
@@ -69,9 +67,7 @@ def three_collinear_poses():
     Pose 1: pose 0 shifted by +1 in x.
     Pose 2: pose 0 shifted by +2 in x.
     """
-    base = np.array(
-        [[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=np.float32
-    )
+    base = np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=np.float32)
     shift1 = base + np.array([1.0, 0.0, 0.0], dtype=np.float32)
     shift2 = base + np.array([2.0, 0.0, 0.0], dtype=np.float32)
     return [
@@ -89,19 +85,25 @@ def two_clusters_poses():
     Cluster B (2 poses far away): poses 1, 3 within ~0.5 Å.
     Order interleaves so clustering must actually do work.
     """
-    base_a = np.array(
-        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32
-    )
-    base_b = np.array(
-        [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0]], dtype=np.float32
-    )
+    base_a = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32)
+    base_b = np.array([[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [12.0, 0.0, 0.0]], dtype=np.float32)
     rng = np.random.default_rng(42)
     poses = [
-        make_pose(base_a + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-10.0, rank=0),
-        make_pose(base_b + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-9.5, rank=1),
-        make_pose(base_a + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-9.0, rank=2),
-        make_pose(base_b + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-8.5, rank=3),
-        make_pose(base_a + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-8.0, rank=4),
+        make_pose(
+            base_a + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-10.0, rank=0
+        ),
+        make_pose(
+            base_b + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-9.5, rank=1
+        ),
+        make_pose(
+            base_a + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-9.0, rank=2
+        ),
+        make_pose(
+            base_b + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-8.5, rank=3
+        ),
+        make_pose(
+            base_a + 0.1 * rng.standard_normal((3, 3)).astype(np.float32), score=-8.0, rank=4
+        ),
     ]
     return poses
 

@@ -67,7 +67,7 @@ class TestBoltzmannWeightsTemperature:
 
     def test_default_temperature_is_kt_at_room_temp(self) -> None:
         # Smoke check: room-temperature kT is approximately 0.593 kcal/mol.
-        assert KT_298K_KCAL_PER_MOL == pytest.approx(0.5925, abs=1e-3)
+        assert pytest.approx(0.5925, abs=1e-3) == KT_298K_KCAL_PER_MOL
 
     def test_default_temperature_gives_realistic_spread(self) -> None:
         """With kT=0.59 and a 1 kcal/mol gap, the spread should be ~5.4x.
@@ -216,7 +216,7 @@ class TestResampleErrors:
             resample(three_collinear_poses, n_samples=5, weights=np.array([0.5, 0.5]))
 
     def test_weights_dont_sum_to_one_raises(self, three_collinear_poses) -> None:
-        with pytest.raises(ValueError, match="must sum to 1.0"):
+        with pytest.raises(ValueError, match=r"must sum to 1\.0"):
             resample(
                 three_collinear_poses,
                 n_samples=5,

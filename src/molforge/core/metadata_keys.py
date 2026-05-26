@@ -169,8 +169,8 @@ class ProteinMetadata(TypedDict, total=False):
     # Uniform folding-engine keys.
     engine: str
     source_sequence: str
-    confidence_per_residue: "NDArray[Any]"
-    confidence_per_atom: "NDArray[Any]"
+    confidence_per_residue: NDArray[Any]
+    confidence_per_atom: NDArray[Any]
     mean_confidence: float
 
     # Engine-specific folding keys.
@@ -183,27 +183,50 @@ class ProteinMetadata(TypedDict, total=False):
     ptm: float
     iptm: float
     confidence_score: float
-    pae: "NDArray[Any]"
-    pde: "NDArray[Any]"
+    pae: NDArray[Any]
+    pde: NDArray[Any]
     pae_inter: float
     pae_prot: float
     mean_pae: float
     mean_plddt: float
-    plddt: "NDArray[Any]"
-    plddt_per_residue: "NDArray[Any]"
+    plddt: NDArray[Any]
+    plddt_per_residue: NDArray[Any]
 
 
 #: Every documented key, as a frozenset — useful for validation or tests
 #: that want to assert "this metadata dict uses only documented keys".
-DOCUMENTED_KEYS: frozenset[str] = frozenset({
-    PDB_ID, TITLE, CLASSIFICATION, DEPOSITION_DATE, EXPERIMENTAL_METHOD,
-    RESOLUTION,
-    ENGINE, SOURCE_SEQUENCE, CONFIDENCE_PER_RESIDUE, CONFIDENCE_PER_ATOM,
-    MEAN_CONFIDENCE,
-    SOURCE, MODEL_NAME, MODEL_TYPE, MODEL_VERSION, JOB_NAME, USE_MSA_SERVER,
-    PTM, IPTM, CONFIDENCE_SCORE, PAE, PDE, PAE_INTER, PAE_PROT, MEAN_PAE,
-    MEAN_PLDDT, PLDDT, PLDDT_PER_RESIDUE,
-})
+DOCUMENTED_KEYS: frozenset[str] = frozenset(
+    {
+        PDB_ID,
+        TITLE,
+        CLASSIFICATION,
+        DEPOSITION_DATE,
+        EXPERIMENTAL_METHOD,
+        RESOLUTION,
+        ENGINE,
+        SOURCE_SEQUENCE,
+        CONFIDENCE_PER_RESIDUE,
+        CONFIDENCE_PER_ATOM,
+        MEAN_CONFIDENCE,
+        SOURCE,
+        MODEL_NAME,
+        MODEL_TYPE,
+        MODEL_VERSION,
+        JOB_NAME,
+        USE_MSA_SERVER,
+        PTM,
+        IPTM,
+        CONFIDENCE_SCORE,
+        PAE,
+        PDE,
+        PAE_INTER,
+        PAE_PROT,
+        MEAN_PAE,
+        MEAN_PLDDT,
+        PLDDT,
+        PLDDT_PER_RESIDUE,
+    }
+)
 
 
 __all__ = [

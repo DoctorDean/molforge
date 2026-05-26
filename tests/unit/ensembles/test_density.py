@@ -69,9 +69,7 @@ class TestDensityValues:
         g = binding_site_density(three_collinear_poses)
         assert g.total_weight == pytest.approx(3.0, abs=1e-6)
 
-    def test_weighted_total_weight_respects_input_weights(
-        self, three_collinear_poses
-    ) -> None:
+    def test_weighted_total_weight_respects_input_weights(self, three_collinear_poses) -> None:
         """If pose 0 has weight 1.0 and others 0.0, only its 3 atoms count → total=3.0."""
         w = np.array([1.0, 0.0, 0.0])
         g = binding_site_density(three_collinear_poses, weights=w)
@@ -118,9 +116,7 @@ class TestDensityWeights:
 
     def test_wrong_weight_shape_raises(self, three_collinear_poses) -> None:
         with pytest.raises(ValueError, match=r"shape \(2,\), expected \(3,\)"):
-            binding_site_density(
-                three_collinear_poses, weights=np.array([0.5, 0.5])
-            )
+            binding_site_density(three_collinear_poses, weights=np.array([0.5, 0.5]))
 
 
 class TestDensityFixedGrid:
@@ -128,17 +124,13 @@ class TestDensityFixedGrid:
         """User provides explicit origin and shape; auto-sizing is bypassed."""
         origin = np.array([-10.0, -10.0, -10.0], dtype=np.float32)
         shape = (20, 20, 20)
-        g = binding_site_density(
-            three_collinear_poses, origin=origin, shape=shape, spacing=1.0
-        )
+        g = binding_site_density(three_collinear_poses, origin=origin, shape=shape, spacing=1.0)
         assert g.shape == shape
         np.testing.assert_array_equal(g.origin, origin)
 
     def test_only_origin_raises(self, three_collinear_poses) -> None:
         with pytest.raises(ValueError, match="both be provided together"):
-            binding_site_density(
-                three_collinear_poses, origin=np.array([0.0, 0.0, 0.0])
-            )
+            binding_site_density(three_collinear_poses, origin=np.array([0.0, 0.0, 0.0]))
 
     def test_only_shape_raises(self, three_collinear_poses) -> None:
         with pytest.raises(ValueError, match="both be provided together"):
@@ -147,9 +139,7 @@ class TestDensityFixedGrid:
     def test_atoms_outside_box_dropped_silently(self, three_collinear_poses) -> None:
         """Box that excludes all atoms → total_weight = 0."""
         origin = np.array([1000.0, 1000.0, 1000.0], dtype=np.float32)
-        g = binding_site_density(
-            three_collinear_poses, origin=origin, shape=(5, 5, 5), spacing=1.0
-        )
+        g = binding_site_density(three_collinear_poses, origin=origin, shape=(5, 5, 5), spacing=1.0)
         assert g.total_weight == 0.0
         assert g.density.sum() == 0.0
 

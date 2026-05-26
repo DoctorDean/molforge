@@ -83,6 +83,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NotImplementedError` carrying a clear message that points at the
   working alternative (`OpenMM` / `Vina`) and the tracking issue.
   10 new tests. Surfaced by the API audit.
+- - **Lint drift from a Ruff version bump cleared; CI lint job green
+  again.** `.pre-commit-config.yaml` pinned `ruff-pre-commit` at
+  `v0.5.0`, but the `[dev]` extra installs `ruff>=0.5` unpinned, so
+  CI resolved a much newer Ruff (0.15.x) whose added rules flagged
+  33 pre-existing issues — meaning the CI `lint` job was effectively
+  red. All 33 are now resolved: a genuine dead variable in
+  `ensembles.clustering` removed, an unused `shutil` import dropped,
+  five `pytest.raises(match=...)` patterns with unescaped regex
+  metacharacters made explicit (raw strings / escaped dots), a
+  `zip()` given an explicit `strict=`, four nested `with` statements
+  collapsed, a `getattr()` call with a string literal in
+  `ensembles.weighting` replaced by a `cast`-backed direct attribute
+  access (dropping a now-misplaced `# noqa`), and a Ruff-version
+  formatting refresh applied across 24 files (cosmetic line-joining
+  only). Two intentional-notation cases
+  are configured rather than rewritten: `allowed-confusables`
+  permits `×`, `σ`, and `–` in docstrings (matrix dimensions, the
+  standard deviation, prose dashes), and `RUF022` is per-file-ignored
+  for the two modules whose `__all__` is deliberately grouped by
+  category with section comments. The `ruff` and `mypy` pre-commit
+  pins are bumped to the versions CI resolves, so the two stay in
+  lock-step and this drift cannot silently recur. No source-behaviour
+  or test-count change (918 pass + 11 skipped, unchanged).
 
 ### Changed
 - **BREAKING: `cross_validate` now defaults to `on_error="raise"`.**

@@ -41,9 +41,7 @@ class TestRmsdBenchmark:
         result = benchmark(rmsd, helix_200, helix_200_perturbed)
         assert result >= 0.0
 
-    def test_rmsd_no_align_200_residues(
-        self, benchmark, helix_200, helix_200_perturbed
-    ) -> None:
+    def test_rmsd_no_align_200_residues(self, benchmark, helix_200, helix_200_perturbed) -> None:
         """RMSD without superposition — isolates the distance math from Kabsch."""
         result = benchmark(rmsd, helix_200, helix_200_perturbed, align=False)
         assert result >= 0.0
@@ -84,7 +82,7 @@ class TestAlignmentBenchmark:
     _SEQ_A = "ACDEFGHIKLMNPQRSTVWY" * 10
     _SEQ_B = (
         "ACDEFGHIKLMNPQRSTVWY" * 4
-        + "ACDEFGHIKLMNPQRSTVWA"   # final Y->A
+        + "ACDEFGHIKLMNPQRSTVWA"  # final Y->A
         + "ACDEFGHIKLMNPQRSTVWY" * 5
     )
 

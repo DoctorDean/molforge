@@ -33,8 +33,7 @@ class TestVocabularyConsistency:
     def test_documented_keys_count_matches_constants(self) -> None:
         """DOCUMENTED_KEYS should have exactly one entry per string constant."""
         n_constants = sum(
-            1 for name in mk.__all__
-            if name not in ("ProteinMetadata", "DOCUMENTED_KEYS")
+            1 for name in mk.__all__ if name not in ("ProteinMetadata", "DOCUMENTED_KEYS")
         )
         assert len(mk.DOCUMENTED_KEYS) == n_constants
 
@@ -84,9 +83,7 @@ class TestParsersUseDocumentedKeys:
         )
         protein = read_pdb_string(pdb)
         for key in protein.metadata:
-            assert key in mk.DOCUMENTED_KEYS, (
-                f"PDB parser wrote undocumented metadata key {key!r}"
-            )
+            assert key in mk.DOCUMENTED_KEYS, f"PDB parser wrote undocumented metadata key {key!r}"
 
     def test_pdb_parser_populates_expected_keys(self) -> None:
         from molforge.io import read_pdb_string
@@ -133,9 +130,7 @@ class TestParsersUseDocumentedKeys:
         )
         protein = read_cif_string(cif)
         for key in protein.metadata:
-            assert key in mk.DOCUMENTED_KEYS, (
-                f"CIF parser wrote undocumented metadata key {key!r}"
-            )
+            assert key in mk.DOCUMENTED_KEYS, f"CIF parser wrote undocumented metadata key {key!r}"
 
 
 class TestUniformConfidenceKeysAcrossEngines:
@@ -172,12 +167,8 @@ class TestUniformConfidenceKeysAcrossEngines:
 
         esm_meta = ESMFold()._pdb_to_protein(pdb, sequence="A").metadata
         af_meta = AlphaFold()._pdb_to_protein(pdb, sequence="A").metadata
-        boltz_meta = Boltz()._parse_outputs(
-            cif_text=cif, confidence_json={}, sequence="A"
-        ).metadata
-        rf_meta = RoseTTAFold()._parse_outputs(
-            pdb_text=pdb, confidence={}, sequence="A"
-        ).metadata
+        boltz_meta = Boltz()._parse_outputs(cif_text=cif, confidence_json={}, sequence="A").metadata
+        rf_meta = RoseTTAFold()._parse_outputs(pdb_text=pdb, confidence={}, sequence="A").metadata
 
         for engine_name, meta in [
             ("ESMFold", esm_meta),
@@ -230,7 +221,5 @@ class TestUniformConfidenceKeysAcrossEngines:
         m = protein.metadata
 
         np.testing.assert_array_equal(m[mk.PLDDT], m[mk.CONFIDENCE_PER_ATOM])
-        np.testing.assert_array_equal(
-            m[mk.PLDDT_PER_RESIDUE], m[mk.CONFIDENCE_PER_RESIDUE]
-        )
+        np.testing.assert_array_equal(m[mk.PLDDT_PER_RESIDUE], m[mk.CONFIDENCE_PER_RESIDUE])
         assert m[mk.MEAN_PLDDT] == m[mk.MEAN_CONFIDENCE]

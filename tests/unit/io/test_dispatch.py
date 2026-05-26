@@ -101,8 +101,7 @@ class TestFetch:
         from molforge.io import fetch
 
         pdb_text = (
-            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
-            "END\n"
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n"
         )
         mock_resp = MagicMock()
         mock_resp.read.return_value = pdb_text.encode("utf-8")
@@ -124,8 +123,7 @@ class TestFetch:
         from molforge.io import fetch
 
         pdb_text = (
-            "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 90.00           C\n"
-            "END\n"
+            "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 90.00           C\nEND\n"
         )
         mock_resp = MagicMock()
         mock_resp.read.return_value = pdb_text.encode("utf-8")
@@ -136,9 +134,7 @@ class TestFetch:
             fetch("P00520", source="alphafold")
 
         called_url = m.call_args[0][0]
-        assert called_url == (
-            "https://alphafold.ebi.ac.uk/files/AF-P00520-F1-model_v4.pdb"
-        )
+        assert called_url == ("https://alphafold.ebi.ac.uk/files/AF-P00520-F1-model_v4.pdb")
 
     def test_cif_format_builds_cif_url(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -179,9 +175,11 @@ class TestFetch:
             hdrs=None,  # type: ignore[arg-type]
             fp=None,
         )
-        with patch("urllib.request.urlopen", side_effect=err):
-            with pytest.raises(OSError, match="HTTP 404"):
-                fetch("ZZZZ")
+        with (
+            patch("urllib.request.urlopen", side_effect=err),
+            pytest.raises(OSError, match="HTTP 404"),
+        ):
+            fetch("ZZZZ")
 
     def test_network_error_becomes_oserror(self) -> None:
         """A connection failure surfaces as a clear OSError."""
@@ -191,6 +189,8 @@ class TestFetch:
         from molforge.io import fetch
 
         err = urllib.error.URLError("Name or service not known")
-        with patch("urllib.request.urlopen", side_effect=err):
-            with pytest.raises(OSError, match="could not reach"):
-                fetch("1UBQ")
+        with (
+            patch("urllib.request.urlopen", side_effect=err),
+            pytest.raises(OSError, match="could not reach"),
+        ):
+            fetch("1UBQ")

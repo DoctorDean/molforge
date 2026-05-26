@@ -85,9 +85,11 @@ class TestConstruction:
 class TestMissingDependency:
     def test_predict_without_boltz_raises_clear_error(self) -> None:
         engine = Boltz()
-        with patch("shutil.which", return_value=None):
-            with pytest.raises(FoldingEngineNotInstalledError, match="boltz"):
-                engine.predict("MKTV")
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(FoldingEngineNotInstalledError, match="boltz"),
+        ):
+            engine.predict("MKTV")
 
     def test_missing_executable_path_raises(self) -> None:
         """Explicit executable= that doesn't exist gives the same error.
@@ -98,9 +100,11 @@ class TestMissingDependency:
         is None, raise; if executable is set, trust the user.
         """
         engine = Boltz(executable=None)
-        with patch("shutil.which", return_value=None):
-            with pytest.raises(FoldingEngineNotInstalledError):
-                engine._require_boltz()
+        with (
+            patch("shutil.which", return_value=None),
+            pytest.raises(FoldingEngineNotInstalledError),
+        ):
+            engine._require_boltz()
 
 
 # ----------------------------------------------------------------------
@@ -182,88 +186,66 @@ class TestCommandConstruction:
 
     def test_model_version_passed(self, tmp_path: Path) -> None:
         engine = Boltz(model_version="boltz1")
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--model" in cmd
         i = cmd.index("--model")
         assert cmd[i + 1] == "boltz1"
 
     def test_msa_server_flag_when_enabled(self, tmp_path: Path) -> None:
         engine = Boltz(use_msa_server=True)
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--use_msa_server" in cmd
 
     def test_msa_server_flag_absent_when_disabled(self, tmp_path: Path) -> None:
         engine = Boltz(use_msa_server=False)
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--use_msa_server" not in cmd
 
     def test_recycling_steps_passed_when_set(self, tmp_path: Path) -> None:
         engine = Boltz(recycling_steps=5)
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--recycling_steps" in cmd
         i = cmd.index("--recycling_steps")
         assert cmd[i + 1] == "5"
 
     def test_recycling_steps_absent_when_unset(self, tmp_path: Path) -> None:
         engine = Boltz()  # recycling_steps default = None
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--recycling_steps" not in cmd
 
     def test_diffusion_samples_passed(self, tmp_path: Path) -> None:
         engine = Boltz(diffusion_samples=3)
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         i = cmd.index("--diffusion_samples")
         assert cmd[i + 1] == "3"
 
     def test_sampling_steps_passed(self, tmp_path: Path) -> None:
         engine = Boltz(sampling_steps=50)
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         i = cmd.index("--sampling_steps")
         assert cmd[i + 1] == "50"
 
     def test_cpu_device_routed_to_accelerator_flag(self, tmp_path: Path) -> None:
         engine = Boltz(device="cpu")
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         i = cmd.index("--accelerator")
         assert cmd[i + 1] == "cpu"
 
     def test_cuda_device_routed_to_gpu_accelerator(self, tmp_path: Path) -> None:
         engine = Boltz(device="cuda")
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         i = cmd.index("--accelerator")
         assert cmd[i + 1] == "gpu"
 
     def test_default_device_omits_accelerator_flag(self, tmp_path: Path) -> None:
         engine = Boltz()  # device=None
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--accelerator" not in cmd
 
     def test_override_flag_present(self, tmp_path: Path) -> None:
         """We always pass --override since we're working in a tempdir."""
         engine = Boltz()
-        cmd = engine._build_command(
-            "/bin/boltz", tmp_path / "i.yaml", tmp_path / "o"
-        )
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--override" in cmd
 
 
@@ -327,7 +309,7 @@ class TestOutputCollection:
 
     def test_no_cif_output_raises(self, tmp_path: Path) -> None:
         engine = Boltz()
-        with pytest.raises(RuntimeError, match="no .cif output"):
+        with pytest.raises(RuntimeError, match=r"no \.cif output"):
             engine._collect_outputs(tmp_path)
 
     def test_missing_confidence_json_returns_empty_dict(self, tmp_path: Path) -> None:
@@ -490,9 +472,7 @@ class TestParseOutputs:
 
     def test_boltz1_model_version_recorded(self) -> None:
         engine = Boltz(model_version="boltz1")
-        protein = engine._parse_outputs(
-            cif_text=_TINY_CIF, confidence_json={}, sequence="AG"
-        )
+        protein = engine._parse_outputs(cif_text=_TINY_CIF, confidence_json={}, sequence="AG")
         assert protein.metadata["model_version"] == "boltz1"
 
 
@@ -513,9 +493,9 @@ class TestUniformConfidenceConvention:
             "END\n"
         )
 
-        boltz_meta = Boltz()._parse_outputs(
-            cif_text=_TINY_CIF, confidence_json={}, sequence="AG"
-        ).metadata
+        boltz_meta = (
+            Boltz()._parse_outputs(cif_text=_TINY_CIF, confidence_json={}, sequence="AG").metadata
+        )
         af_meta = AlphaFold()._pdb_to_protein(pdb, sequence="A").metadata
         esm_meta = ESMFold()._pdb_to_protein(pdb, sequence="A").metadata
 

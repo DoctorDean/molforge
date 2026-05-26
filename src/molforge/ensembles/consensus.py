@@ -83,9 +83,7 @@ def consensus_pose(
     if not poses:
         raise ValueError("poses is empty")
     if method not in ("medoid", "mean"):
-        raise ValueError(
-            f"method must be 'medoid' or 'mean', got {method!r}"
-        )
+        raise ValueError(f"method must be 'medoid' or 'mean', got {method!r}")
 
     n = len(poses)
     if weights is None:
@@ -93,13 +91,9 @@ def consensus_pose(
     else:
         w = np.asarray(weights, dtype=np.float64)
         if w.shape != (n,):
-            raise ValueError(
-                f"weights has shape {w.shape}, expected ({n},)"
-            )
+            raise ValueError(f"weights has shape {w.shape}, expected ({n},)")
         if not np.isclose(w.sum(), 1.0, atol=1e-6):
-            raise ValueError(
-                f"weights must sum to 1.0, got {w.sum():.6f}"
-            )
+            raise ValueError(f"weights must sum to 1.0, got {w.sum():.6f}")
 
     if method == "medoid":
         return _medoid_pose(poses, w, heavy_atoms_only=heavy_atoms_only)
@@ -141,9 +135,7 @@ def _mean_pose(
             )
 
     # Stack coords (n, n_atoms, 3) and average over axis 0 weighted by w.
-    stacked = np.stack(
-        [p.ligand.atom_array.coords for p in poses], axis=0
-    )  # (n, n_atoms, 3)
+    stacked = np.stack([p.ligand.atom_array.coords for p in poses], axis=0)  # (n, n_atoms, 3)
     averaged = np.tensordot(weights, stacked, axes=(0, 0))  # (n_atoms, 3)
 
     # Build a new pose: deepcopy the first pose's structure to get an
