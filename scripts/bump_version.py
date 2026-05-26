@@ -10,7 +10,7 @@ import re
 import sys
 from pathlib import Path
 
-INIT = Path(__file__).resolve().parent.parent / "src" / "biocore" / "__init__.py"
+INIT = Path(__file__).resolve().parent.parent / "src" / "molforge" / "__init__.py"
 
 
 def main() -> int:
