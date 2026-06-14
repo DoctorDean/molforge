@@ -1,0 +1,26 @@
+HEADER    COMPLETE-HEAVY-ATOM ALA-ALA-ALA TRIPEPTIDE FOR MD TESTS
+REMARK    All standard heavy atoms present (N, CA, CB, C, O) plus the
+REMARK    C-terminal OXT, so OpenMM's AMBER force field can build a
+REMARK    system from it after Modeller.addHydrogens(). Unlike the
+REMARK    deliberately-minimal tripeptide.pdb fixture, every residue
+REMARK    here is chemically complete. Coordinates are a rough,
+REMARK    un-minimized extended conformation — fine for exercising the
+REMARK    OpenMM wrapper end to end.
+ATOM      1  N   ALA A   1      -1.500  -0.500   0.000  1.00  0.00           N
+ATOM      2  CA  ALA A   1       0.000   0.000   0.000  1.00  0.00           C
+ATOM      3  CB  ALA A   1       0.500  -0.500  -1.300  1.00  0.00           C
+ATOM      4  C   ALA A   1       1.000   0.500   1.000  1.00  0.00           C
+ATOM      5  O   ALA A   1       2.200   0.300   1.000  1.00  0.00           O
+ATOM      6  N   ALA A   2       0.400   1.300   1.900  1.00  0.00           N
+ATOM      7  CA  ALA A   2       1.200   2.000   2.900  1.00  0.00           C
+ATOM      8  CB  ALA A   2       0.400   2.500   4.100  1.00  0.00           C
+ATOM      9  C   ALA A   2       2.000   3.200   2.400  1.00  0.00           C
+ATOM     10  O   ALA A   2       3.100   3.500   2.900  1.00  0.00           O
+ATOM     11  N   ALA A   3       1.400   3.900   1.400  1.00  0.00           N
+ATOM     12  CA  ALA A   3       2.000   5.100   0.900  1.00  0.00           C
+ATOM     13  CB  ALA A   3       1.100   5.800  -0.100  1.00  0.00           C
+ATOM     14  C   ALA A   3       3.400   4.800   0.400  1.00  0.00           C
+ATOM     15  O   ALA A   3       3.600   3.900  -0.400  1.00  0.00           O
+ATOM     16  OXT ALA A   3       4.300   5.500   0.900  1.00  0.00           O
+TER      17      ALA A   3
+END

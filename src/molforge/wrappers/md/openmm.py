@@ -83,6 +83,16 @@ class OpenMM(MDEngine):
             (requires periodic box).
         constraints: ``"HBonds"`` (default — bonds to H are constrained,
             allowing 2-fs timestep), ``"AllBonds"``, or ``None``.
+        add_hydrogens: When ``True`` (default), missing hydrogens are
+            added with OpenMM's ``Modeller.addHydrogens`` during
+            :meth:`prepare`. This is what makes a heavy-atom structure
+            — the normal output of folding and docking engines —
+            usable as-is: a force field needs explicit hydrogens, and
+            without this step ``prepare`` fails with a cryptic
+            "no template found" error. The step is idempotent, so a
+            structure that already has hydrogens is unaffected. Set
+            ``False`` only if you have pre-protonated the structure
+            yourself and want OpenMM to use exactly those atoms.
 
     Example:
         >>> from molforge.wrappers.md import OpenMM
@@ -104,12 +114,14 @@ class OpenMM(MDEngine):
         nonbonded_cutoff: float = 1.0,
         nonbonded_method: str = "NoCutoff",
         constraints: str | None = "HBonds",
+        add_hydrogens: bool = True,
     ) -> None:
         self.platform = platform
         self.precision = precision
         self.nonbonded_cutoff = nonbonded_cutoff
         self.nonbonded_method = nonbonded_method
         self.constraints = constraints
+        self.add_hydrogens = add_hydrogens
 
     # ------------------------------------------------------------------
     # Lazy import
@@ -176,10 +188,44 @@ class OpenMM(MDEngine):
         # Build the System from the requested force field.
         ff_files = _FORCE_FIELD_FILES.get(force_field, [force_field])
         forcefield = app.ForceField(*ff_files)
+
+        # A force field needs explicit hydrogens. Heavy-atom structures
+        # — the normal output of folding and docking engines, and what
+        # most PDB files on disk contain — would otherwise fail
+        # createSystem() with a cryptic "no template found" error.
+        # Modeller.addHydrogens() places any missing H; it is
+        # idempotent, so an already-protonated structure is untouched.
+        #
+        # When hydrogens are added the atom count changes, so the
+        # molforge-side Protein attached to the returned Simulation is
+        # rebuilt from the protonated structure — otherwise its
+        # topology (heavy atoms) would disagree with the coordinate
+        # array (heavy + H).
+        topology = pdb.topology
+        positions = pdb.positions
+        sim_topology = protein
+        if self.add_hydrogens:
+            modeller = app.Modeller(pdb.topology, pdb.positions)
+            modeller.addHydrogens(forcefield)
+            topology = modeller.topology
+            positions = modeller.positions
+            if topology.getNumAtoms() != protein.atom_array.n_atoms:
+                # Hydrogens were actually added — rebuild the Protein so
+                # Simulation.topology matches the protonated coordinates.
+                with tempfile.NamedTemporaryFile(suffix=".pdb", mode="w", delete=False) as h_fh:
+                    protonated_pdb = Path(h_fh.name)
+                try:
+                    app.PDBFile.writeFile(topology, positions, str(protonated_pdb))
+                    from molforge.io import read_pdb
+
+                    sim_topology = read_pdb(protonated_pdb)
+                finally:
+                    protonated_pdb.unlink(missing_ok=True)
+
         nbm = getattr(app, self.nonbonded_method)
         constraints = getattr(app, self.constraints) if self.constraints else None
         system = forcefield.createSystem(
-            pdb.topology,
+            topology,
             nonbondedMethod=nbm,
             nonbondedCutoff=self.nonbonded_cutoff * unit.nanometer,
             constraints=constraints,
@@ -199,23 +245,23 @@ class OpenMM(MDEngine):
                 sim_kwargs["platformProperties"] = {"Precision": self.precision}
 
         omm_simulation = app.Simulation(
-            pdb.topology,
+            topology,
             system,
             integrator,
             **sim_kwargs,
         )
-        omm_simulation.context.setPositions(pdb.positions)
+        omm_simulation.context.setPositions(positions)
         omm_simulation.context.setVelocitiesToTemperature(temperature * unit.kelvin)
 
         # Build the molforge-side Simulation snapshot.
-        positions = (
+        snapshot_coords = (
             omm_simulation.context.getState(getPositions=True)
             .getPositions(asNumpy=True)
             .value_in_unit(unit.angstrom)
         )
         return Simulation(
-            topology=protein,
-            coordinates=np.asarray(positions, dtype=np.float32),
+            topology=sim_topology,
+            coordinates=np.asarray(snapshot_coords, dtype=np.float32),
             time=0.0,
             force_field=force_field,
             temperature=temperature,

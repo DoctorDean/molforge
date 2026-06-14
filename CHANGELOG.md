@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OpenMM wrapper test coverage raised from 24% to 95%.** The
+  OpenMM tests previously gated every real path behind
+  `skipif(openmm installed)` — so `prepare` / `minimize` / `run`
+  were exercised by *nothing*: when openmm was absent they couldn't
+  run, and when present the negative-path tests skipped. The file is
+  restructured into a dependency-free half (construction, the
+  force-field registry, the missing-dependency errors) and a new
+  `TestRealOpenMM` class that runs `prepare` / `minimize` / `run`
+  end to end against a real OpenMM install — system building,
+  hydrogen addition, the minimizer, the integration loop, trajectory
+  assembly, and argument validation. A new chemically complete
+  heavy-atom fixture, `tests/fixtures/pdb/ala_tripeptide_heavy.pdb`
+  (ALA-ALA-ALA with all standard heavy atoms plus the C-terminal
+  OXT), gives the force field something it can template. The
+  real-engine tests are deliberately *not* marked `slow` — the
+  tripeptide is tiny and a 20-step run is sub-second — so they run
+  in the normal suite wherever openmm is installed, and skip cleanly
+  (9 skips) where it isn't. A new CI job, `md-openmm`, installs the
+  `[md]` extra and runs the MD wrapper tests on every push so
+  `TestRealOpenMM` is actually exercised.
 - **RFdiffusion wrapper test coverage raised from 84% to 99%.** The
   `_run_cli` subprocess seam of `wrappers.generative.rfdiffusion` —
   previously untested — now has direct tests via a mocked
@@ -34,6 +54,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PyRosetta's surface is far wider than the `FoldingEngine`
   contract. The 3 alias tests are removed (folding-engine count
   unchanged: ESMFold, AlphaFold, Boltz, RoseTTAFold).
+
+ ### Fixed
++- **`OpenMM.prepare()` now adds missing hydrogens, so heavy-atom
+  structures are usable.** A force field needs explicit hydrogens,
+  but `prepare()` called `ForceField.createSystem()` directly on
+  whatever atoms the input had. Heavy-atom structures — the normal
+  output of every folding and docking engine, and what most PDB
+  files on disk contain — therefore failed with a cryptic
+  OpenMM "no template found for residue" error, making the wrapper
+  effectively unusable on exactly the structures molforge produces.
+  `prepare()` now runs `Modeller.addHydrogens()` before building the
+  system; the step is idempotent, so an already-protonated structure
+  is unaffected. Because adding hydrogens changes the atom count, the
+  molforge `Protein` attached to the returned `Simulation` is rebuilt
+  from the protonated structure, so its topology and the coordinate
+  array agree (previously a heavy-atom topology could be paired with
+  a protonated coordinate array). A new `add_hydrogens` constructor
+  flag (default `True`) lets callers who have pre-protonated their
+  structure opt out.
 
 ## [v0.2.0] 2026-05-26 
 

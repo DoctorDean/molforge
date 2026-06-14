@@ -95,6 +95,26 @@ jobs:
       - name: Run benchmarks
         run: pytest -m benchmark --benchmark-columns=min,mean,stddev,rounds
 
+  md-openmm:
+    name: MD wrapper tests (OpenMM installed)
+    runs-on: ubuntu-latest
+    # The OpenMM wrapper's prepare / minimize / run paths only execute
+    # when openmm is importable. The default `test` matrix does not
+    # install the heavy [md] extra, so this dedicated job installs it
+    # and runs the MD wrapper tests — exercising TestRealOpenMM, which
+    # is otherwise skipped everywhere.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install with the md extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,md]"
+      - name: Run MD wrapper tests
+        run: pytest tests/unit/wrappers/test_openmm.py -v
+
   build:
     name: Build sdist & wheel
     runs-on: ubuntu-latest
