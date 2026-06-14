@@ -7,6 +7,6 @@ abstract base class and one or more concrete engines; see the
 | Subpackage                                                  | Engines                                                  |
 | ----------------------------------------------------------- | -------------------------------------------------------- |
 | [`molforge.wrappers.folding`](wrappers/folding.md)          | `ESMFold`, `AlphaFold`, `Boltz`, `RoseTTAFold` (`Rosetta` is a deprecated alias) |
-| [`molforge.wrappers.docking`](wrappers/docking.md)          | `Vina`, `DiffDock` (stub) + receptor/ligand prep         |
+| [`molforge.wrappers.docking`](wrappers/docking.md)          | `Vina`, `DiffDock` + receptor/ligand prep                 |
 | [`molforge.wrappers.md`](wrappers/md.md)                    | `OpenMM`, `GROMACS` (stub)                               |
 | [`molforge.wrappers.generative`](wrappers/generative.md)    | `RFdiffusion`, `ProteinMPNN`                             |

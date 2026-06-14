@@ -10,7 +10,7 @@ one or more concrete engines:
 | Category    | Base class           | Engines                                    |
 | ----------- | -------------------- | ------------------------------------------ |
 | Folding     | `FoldingEngine`      | `ESMFold`, `AlphaFold`, `Boltz`, `RoseTTAFold` |
-| Docking     | `DockingEngine`      | `Vina` *(stub: DiffDock)*                  |
+| Docking     | `DockingEngine`      | `Vina`, `DiffDock`                          |
 | MD          | `MDEngine`           | `OpenMM` *(stub: GROMACS)*                 |
 | Generative  | `GenerativeEngine`   | `RFdiffusion`, `ProteinMPNN`               |
 

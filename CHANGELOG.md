@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`DiffDock` is now a real docking engine.** `DiffDock`
+  (`molforge.wrappers.docking`) was a coherent stub whose `dock()`
+  raised `NotImplementedError`; it is now fully implemented.
+  [DiffDock](https://github.com/gcorso/DiffDock) is a
+  diffusion-generative model for *blind* protein-ligand docking — it
+  needs no search box, sampling poses over the whole receptor and
+  ranking them with a learned confidence model. Like the
+  `RoseTTAFold` wrapper, DiffDock ships as a research repository
+  rather than a pip package, so the wrapper drives it as a
+  subprocess: it locates the cloned repo (`$DIFFDOCK_HOME` or an
+  explicit `repo_dir`), materializes the receptor to PDB, accepts the
+  ligand as a SMILES string or a path to an SDF/MOL2 file, runs
+  `python -m inference`, and parses the ranked
+  `rank{N}_confidence{C}.sdf` output into a `DockingResult`. DiffDock
+  reports a *confidence* (higher = better), the opposite of Vina's
+  affinity convention; the wrapper stores the raw value in
+  `Pose.metadata["confidence"]` and sets `Pose.score` to its
+  negation, so `score` ascending is best-first for every engine. SDF
+  poses are parsed by reading the V2000 atom block directly (molforge's
+  RDKit-backed SDF reader is still a stub, and the atom block —
+  3D coordinates plus element symbols — needs no chemistry toolkit).
+  A constructor flag covers `samples_per_complex`, `inference_steps`,
+  and `batch_size`. 30 tests (a new `test_diffdock.py`), covering
+  construction and validation, install resolution, SDF and
+  confidence-from-filename parsing, and the `_run_cli` subprocess seam
+  via a mocked `subprocess.run`; the wrapper module is at 100%
+  coverage. The 4 obsolete `TestDiffDockStub` tests are removed.
 - **OpenMM wrapper test coverage raised from 24% to 95%.** The
   OpenMM tests previously gated every real path behind
   `skipif(openmm installed)` — so `prepare` / `minimize` / `run`

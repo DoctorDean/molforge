@@ -49,7 +49,7 @@ The following are considered stable and ready to freeze for 1.0:
 ## Type checking
 
 The **entire `molforge` package** is verified under `mypy --strict` —
-all 77 source modules, every subpackage. CI enforces it: the
+all 76 source modules, every subpackage. CI enforces it: the
 `typecheck` job's `Mypy (strict)` step runs `mypy src` (the
 `[tool.mypy]` config sets `strict = true`) and fails the build on any
 new type error. A `slow`-marked regression test
@@ -70,12 +70,6 @@ change:
 - **Unimplemented format stubs** — `read`/`write` for SDF, MOL2,
   PDBQT, and PQR raise `NotImplementedError` with a clear pointer.
   The *import paths* are committed; the implementations are planned.
-- **`DiffDock`** (`molforge.wrappers.docking`) — committed import
-  path and `DockingEngine` contract, but `dock()` raises
-  `NotImplementedError`. Use `Vina` for working docking.
-- **`GROMACS`** (`molforge.wrappers.md`) — committed import path and
-  `MDEngine` contract, but all methods raise `NotImplementedError`.
-  Use `OpenMM` for working MD.
 - **`Simulation.engine_handle`** — see "Engine-private fields" below.
 
 ## Audit-driven changes

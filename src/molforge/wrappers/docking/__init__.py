@@ -2,7 +2,7 @@
 
 Concrete engines:
     - :class:`Vina` — implemented (AutoDock Vina; small-molecule docking)
-    - :class:`DiffDock` — stub (diffusion-based docking)
+    - :class:`DiffDock` — implemented (diffusion-based blind docking)
 
 Shared:
     - :class:`DockingEngine` — abstract base for the engine contract

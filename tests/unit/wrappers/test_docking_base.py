@@ -80,33 +80,3 @@ class TestEngineContract:
 
     def test_repr(self) -> None:
         assert repr(_DummyEngine()) == "_DummyEngine()"
-
-
-class TestDiffDockStub:
-    """DiffDock is a committed-but-unimplemented stub. It must be a
-    coherent stub: instantiable, satisfying the DockingEngine ABC, and
-    failing loud with a clear message that points at Vina."""
-
-    def test_instantiates(self) -> None:
-        from molforge.wrappers.docking import DiffDock
-
-        engine = DiffDock()
-        assert isinstance(engine, DockingEngine)
-
-    def test_name(self) -> None:
-        from molforge.wrappers.docking import DiffDock
-
-        assert DiffDock().name == "DiffDock"
-
-    def test_dock_raises_with_hint(self) -> None:
-        from molforge.wrappers.docking import DiffDock
-
-        with pytest.raises(NotImplementedError, match="not yet implemented"):
-            DiffDock().dock(_empty_protein(), None)
-
-    def test_error_points_at_vina(self) -> None:
-        """The error message should steer users to the working engine."""
-        from molforge.wrappers.docking import DiffDock
-
-        with pytest.raises(NotImplementedError, match="Vina"):
-            DiffDock().dock(_empty_protein(), None)
