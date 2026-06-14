@@ -182,3 +182,149 @@ class TestOutputParsing:
             assert d.metadata["engine"] == "RFdiffusion"
             assert d.metadata["design_index"] == i
             assert d.metadata["source_args"]["length"] == 1
+
+
+# Minimal valid PDB used by the mocked-subprocess tests below.
+_MINI_PDB = (
+    "ATOM      1  N   GLY A   1       0.000   0.000   0.000  1.00 50.00           N\n"
+    "ATOM      2  CA  GLY A   1       1.000   0.000   0.000  1.00 50.00           C\n"
+    "ATOM      3  C   GLY A   1       2.000   0.000   0.000  1.00 50.00           C\n"
+    "END\n"
+)
+
+
+class TestRunCli:
+    """`_run_cli` is the subprocess-driving seam — exercised with a
+    mocked ``subprocess.run`` so neither RFdiffusion nor torch is
+    needed."""
+
+    @staticmethod
+    def _fake_install(tmp_path: Path) -> Path:
+        rfdir = tmp_path / "RFdiffusion"
+        (rfdir / "scripts").mkdir(parents=True)
+        (rfdir / "scripts" / "run_inference.py").write_text("# placeholder\n")
+        return rfdir
+
+    @staticmethod
+    def _output_dir_from_cmd(cmd: list[str]) -> Path:
+        """RFdiffusion's `inference.output_prefix=<dir>/design` Hydra
+        arg tells the mock where the wrapper expects the PDBs."""
+        for tok in cmd:
+            if tok.startswith("inference.output_prefix="):
+                return Path(tok.split("=", 1)[1]).parent
+        raise AssertionError("output_prefix not found in command")
+
+    def test_invokes_subprocess_and_parses(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        rfdir = self._fake_install(tmp_path)
+        captured: dict[str, object] = {}
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            captured["cmd"] = cmd
+            out_dir = self._output_dir_from_cmd(cmd)
+            (out_dir / "design_0.pdb").write_text(_MINI_PDB)
+            (out_dir / "design_1.pdb").write_text(_MINI_PDB)
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        designs = RFdiffusion(num_designs=2)._run_cli(
+            rfdiffusion_dir=rfdir,
+            length=40,
+            target_pdb=None,
+            contigs=None,
+            hotspot_residues=None,
+            symmetry=None,
+            extra_hydra_args=None,
+            timeout=None,
+        )
+        assert len(designs) == 2
+        for i, d in enumerate(designs):
+            assert d.metadata["engine"] == "RFdiffusion"
+            assert d.metadata["design_index"] == i
+        cmd = captured["cmd"]
+        assert str(rfdir / "scripts" / "run_inference.py") in cmd
+        # length=40 becomes a contigmap.contigs Hydra arg
+        assert any("contigmap.contigs=[40-40]" in tok for tok in cmd)
+
+    def test_no_pdb_output_raises(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        rfdir = self._fake_install(tmp_path)
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            return None  # writes nothing — RFdiffusion silently failed
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        with pytest.raises(RuntimeError, match="no PDB output"):
+            RFdiffusion()._run_cli(
+                rfdiffusion_dir=rfdir,
+                length=40,
+                target_pdb=None,
+                contigs=None,
+                hotspot_residues=None,
+                symmetry=None,
+                extra_hydra_args=None,
+                timeout=None,
+            )
+
+    def test_subprocess_failure_becomes_runtime_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import subprocess
+
+        rfdir = self._fake_install(tmp_path)
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            raise subprocess.CalledProcessError(returncode=1, cmd=cmd, stderr="diffusion blew up")
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        with pytest.raises(RuntimeError, match="RFdiffusion failed"):
+            RFdiffusion()._run_cli(
+                rfdiffusion_dir=rfdir,
+                length=40,
+                target_pdb=None,
+                contigs=None,
+                hotspot_residues=None,
+                symmetry=None,
+                extra_hydra_args=None,
+                timeout=None,
+            )
+
+    def test_generate_resolves_install_then_runs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The public entry point: generate() resolves the install dir
+        # from RFDIFFUSION_HOME, then delegates to _run_cli.
+        rfdir = self._fake_install(tmp_path)
+        monkeypatch.setenv("RFDIFFUSION_HOME", str(rfdir))
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            out_dir = self._output_dir_from_cmd(cmd)
+            (out_dir / "design_0.pdb").write_text(_MINI_PDB)
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        designs = RFdiffusion().generate(length=40)
+        assert len(designs) == 1
+        assert designs[0].metadata["engine"] == "RFdiffusion"
+
+    def test_generate_passes_contigs_and_symmetry_through(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        rfdir = self._fake_install(tmp_path)
+        monkeypatch.setenv("RFDIFFUSION_HOME", str(rfdir))
+        captured: dict[str, object] = {}
+
+        def fake_run(cmd, **kwargs):  # type: ignore[no-untyped-def]
+            captured["cmd"] = cmd
+            out_dir = self._output_dir_from_cmd(cmd)
+            (out_dir / "design_0.pdb").write_text(_MINI_PDB)
+            return None
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        RFdiffusion().generate(
+            contigs=["10-40/A20-35/10-40"],
+            symmetry="c2",
+        )
+        cmd = captured["cmd"]
+        assert any("contigmap.contigs=" in tok for tok in cmd)
+        assert any("inference.symmetry=c2" in tok for tok in cmd)

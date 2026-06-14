@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **RFdiffusion wrapper test coverage raised from 84% to 99%.** The
+  `_run_cli` subprocess seam of `wrappers.generative.rfdiffusion` —
+  previously untested — now has direct tests via a mocked
+  `subprocess.run` (no RFdiffusion or torch needed): command and
+  Hydra-arg assembly, the `design_*.pdb` output-parsing path, the
+  no-output `RuntimeError`, `CalledProcessError` → `RuntimeError`
+  translation, the public `generate()` entry point, and
+  `contigs` / `symmetry` pass-through. 5 new tests (16 → 21 in the
+  file). Mirrors the ProteinMPNN coverage work from the previous
+  cycle.
+
 ### Removed
 - **BREAKING `molforge.wrappers.folding.Rosetta` removed.** The `Rosetta`
   name was a placeholder from the `0.0.x` series whose meaning was
