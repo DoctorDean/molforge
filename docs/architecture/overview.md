@@ -26,7 +26,7 @@ molforge
 ├── metrics       # Task-level scoring: TM-score, lDDT, GDT-TS
 ├── plugins       # Plugin registry and entry-point discovery
 └── wrappers      # Thin wrappers around external engines
-    ├── folding   # AlphaFold, ESMFold, Boltz, (Py)Rosetta
+    ├── folding   # AlphaFold, ESMFold, Boltz, RoseTTAFold
     ├── docking   # AutoDock Vina, DiffDock
     └── md        # OpenMM, GROMACS
 ```

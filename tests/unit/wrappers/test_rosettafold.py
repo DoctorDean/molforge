@@ -473,32 +473,6 @@ class TestUniformConfidenceConvention:
 
 
 # ----------------------------------------------------------------------
-# Deprecated Rosetta alias
-# ----------------------------------------------------------------------
-
-
-class TestDeprecatedRosettaAlias:
-    def test_rosetta_is_subclass_of_rosettafold(self) -> None:
-        from molforge.wrappers.folding import Rosetta
-
-        assert issubclass(Rosetta, RoseTTAFold)
-
-    def test_rosetta_emits_deprecation_warning(self) -> None:
-        from molforge.wrappers.folding import Rosetta
-
-        with pytest.warns(DeprecationWarning, match="RoseTTAFold"):
-            Rosetta(repo_dir="/tmp/anything")
-
-    def test_rosetta_name_attribute(self) -> None:
-        from molforge.wrappers.folding import Rosetta
-
-        with pytest.warns(DeprecationWarning):
-            engine = Rosetta()
-        # Name distinguishes it from the non-deprecated class.
-        assert engine.name == "Rosetta"
-
-
-# ----------------------------------------------------------------------
 # End-to-end (skipped unless RFAA is set up)
 # ----------------------------------------------------------------------
 

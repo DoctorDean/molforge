@@ -76,10 +76,6 @@ change:
 - **`GROMACS`** (`molforge.wrappers.md`) — committed import path and
   `MDEngine` contract, but all methods raise `NotImplementedError`.
   Use `OpenMM` for working MD.
-- **`Rosetta`** (`molforge.wrappers.folding`) — a deprecated alias
-  for `RoseTTAFold`, retained for backward compatibility. It emits
-  `DeprecationWarning` and will be removed in a future minor
-  release.
 - **`Simulation.engine_handle`** — see "Engine-private fields" below.
 
 ## Audit-driven changes
@@ -114,6 +110,16 @@ guarantee.
 The audit also fixed a real inconsistency: `load_alphafold` wrote
 only AlphaFold-specific keys while the AlphaFold *wrapper* wrote the
 cross-engine-uniform keys. `load_alphafold` now writes both.
+
+### `Rosetta` removed
+
+`molforge.wrappers.folding.Rosetta` — a deprecated alias for
+`RoseTTAFold`, left over from an early placeholder whose name was
+ambiguous between PyRosetta and RoseTTAFold — has been removed.
+Removing it before 1.0 keeps the stable surface free of a
+deprecation that would otherwise ship on day one. Use `RoseTTAFold`.
+A PyRosetta wrapper, if added later, would be a separate class
+(`PyRosetta`) in its own module.
 
 ### `fetch`
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING `molforge.wrappers.folding.Rosetta` removed.** The `Rosetta`
+  name was a placeholder from the `0.0.x` series whose meaning was
+  ambiguous — it could read as PyRosetta (the classical
+  sequence-design library) or RoseTTAFold (the deep-learning
+  model). The real wrapper now lives at `RoseTTAFold`. `Rosetta`
+  had been kept this cycle as a `DeprecationWarning`-emitting alias,
+  but since it never appeared in a tagged release, carrying it —
+  and the day-one deprecation it implies — into the 1.0 stable
+  surface added nothing. It is removed outright: import
+  `RoseTTAFold` instead. A PyRosetta wrapper, if ever added, would
+  be a separate class (`PyRosetta`) in its own module, since
+  PyRosetta's surface is far wider than the `FoldingEngine`
+  contract. The 3 alias tests are removed (folding-engine count
+  unchanged: ESMFold, AlphaFold, Boltz, RoseTTAFold).
+
+## [v0.2.0] 2026-05-26 
+
 ### Added
 - **ProteinMPNN wrapper test coverage raised from 69% to 96%.** The
   two previously-untested seams of `wrappers.generative.proteinmpnn`
@@ -72,148 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still permitted but carry no cross-version stability guarantee. 15
   new tests, including consistency checks that the parsers only emit
   documented keys and that the TypedDict matches `DOCUMENTED_KEYS`.
-
-### Fixed
-- **`load_alphafold` now emits the uniform confidence metadata keys.**
-  `molforge.io.load_alphafold` previously wrote only AlphaFold-specific
-  keys (`plddt`, `plddt_per_residue`, `mean_plddt`, `source`), while
-  the AlphaFold *wrapper* wrote the cross-engine-uniform keys
-  (`confidence_per_atom`, `confidence_per_residue`, `mean_confidence`,
-  `engine`). Downstream code reading confidence uniformly across
-  engines silently missed AlphaFold structures loaded from disk.
-  `load_alphafold` now populates both sets (uniform keys preferred,
-  legacy keys retained for backward compatibility); the two carry
-  identical values. Surfaced by the API audit.
-- **`GROMACS` and `DiffDock` are now coherent stubs.** Both are
-  exported (committed import paths) but unimplemented. Previously
-  they were *incoherent*: `GROMACS` didn't implement its `MDEngine`
-  abstract methods at all, so `GROMACS()` failed with a cryptic
-  "Can't instantiate abstract class" `TypeError` rather than a
-  meaningful message; both engines' methods raised a bare
-  `NotImplementedError` with no text. They are now coherent stubs —
-  instantiable, satisfying their respective engine ABCs
-  (`MDEngine` / `DockingEngine`), with every method raising
-  `NotImplementedError` carrying a clear message that points at the
-  working alternative (`OpenMM` / `Vina`) and the tracking issue.
-  10 new tests. Surfaced by the API audit.
-- - **Lint drift from a Ruff version bump cleared; CI lint job green
-  again.** `.pre-commit-config.yaml` pinned `ruff-pre-commit` at
-  `v0.5.0`, but the `[dev]` extra installs `ruff>=0.5` unpinned, so
-  CI resolved a much newer Ruff (0.15.x) whose added rules flagged
-  33 pre-existing issues — meaning the CI `lint` job was effectively
-  red. All 33 are now resolved: a genuine dead variable in
-  `ensembles.clustering` removed, an unused `shutil` import dropped,
-  five `pytest.raises(match=...)` patterns with unescaped regex
-  metacharacters made explicit (raw strings / escaped dots), a
-  `zip()` given an explicit `strict=`, four nested `with` statements
-  collapsed, a `getattr()` call with a string literal in
-  `ensembles.weighting` replaced by a `cast`-backed direct attribute
-  access (dropping a now-misplaced `# noqa`), and a Ruff-version
-  formatting refresh applied across 24 files (cosmetic line-joining
-  only). Two intentional-notation cases
-  are configured rather than rewritten: `allowed-confusables`
-  permits `×`, `σ`, and `–` in docstrings (matrix dimensions, the
-  standard deviation, prose dashes), and `RUF022` is per-file-ignored
-  for the two modules whose `__all__` is deliberately grouped by
-  category with section comments. The `ruff` and `mypy` pre-commit
-  pins are bumped to the versions CI resolves, so the two stay in
-  lock-step and this drift cannot silently recur. No source-behaviour
-  or test-count change (918 pass + 11 skipped, unchanged).
-
-### Changed
-- **BREAKING: `cross_validate` now defaults to `on_error="raise"`.**
-  Previously `cross_validate` defaulted to `on_error="record"` —
-  exceptions raised by individual validators were silently caught,
-  recorded in verdict metadata, and the verdict marked
-  `passed=False`. The problem: a validator that throws on every
-  design (a misconfigured engine, a missing dependency, a bad
-  input) produced a full list of `passed=False` verdicts that
-  *looked* like a real result, hiding the bug. The new default
-  fails loud. Code that genuinely wants a batch to survive
-  individual validator failures must now pass `on_error="record"`
-  explicitly. Flagged and resolved by the API audit.
-- **The entire `molforge` package is now `mypy --strict` clean.**
-  With `wrappers` and `plugins` brought up to strict, all 77 source
-  modules across every subpackage pass `mypy --strict` with zero
-  errors. The CI `typecheck` job is correspondingly simplified: the
-  previous two-step arrangement (a strict gate on the clean
-  subpackages plus a non-blocking informational full-tree run)
-  collapses to a single `mypy src` gate that fails the build on any
-  type error. The `tests/unit/test_typing.py` regression test is
-  likewise simplified to one whole-package check. 31 errors fixed in
-  this final tranche: 20 stale `# type: ignore` comments (made
-  redundant when the optional heavy dependencies were added to the
-  mypy `ignore_missing_imports` override), four deliberate engine-
-  method `# type: ignore[override]` annotations (the concrete
-  engine wrappers refine the permissive `**kwargs` signatures of
-  their `DockingEngine` / `MDEngine` / `GenerativeEngine` abstract
-  bases — an intentional, documented refinement that mypy's strict
-  Liskov check cannot model), `cast`s for the opaque
-  `Simulation.engine_handle` inside the OpenMM wrapper and for the
-  unstubbed-dependency return values, and `Vina.dock`'s receptor
-  narrowing switched from `hasattr` to `isinstance` (a more correct
-  check that mypy can also narrow on).
-- **`molforge.ml` is now `mypy --strict` clean.** The ML subpackage
-  (sequence/structure featurization, protein-language-model
-  embeddings) joins the strict gate — eight strict-clean
-  subpackages in total, 51 source files. Six errors fixed: the four
-  numpy-widening `no-any-return`s in `embeddings.py` (resolved with
-  `cast`s), and two real type bugs in `structure_features.py` —
-  `pair_distances` and `pair_distance_features` declared
-  `atom_choice: str` but pass it to `distance_map`, which requires
-  the `Literal["ca","cb","heavy","all"]` the docstrings already
-  specify, and a coordinate feature array silently upcast to
-  float64 by a division. The `torch` and `transformers` (and
-  `colabfold`, `meeko`, `vina`) optional heavy dependencies, which
-  ship no type stubs, are added to the mypy `ignore_missing_imports`
-  override alongside the existing `Bio` / `biotite` / `mdtraj` /
-  `openmm` / `rdkit` entries. CI strict gate and the
-  `tests/unit/test_typing.py` regression test updated; only
-  `plugins` and `wrappers` remain outside the gate.
-- **Six more subpackages are now `mypy --strict` clean.**
-  `molforge.io`, `molforge.sequence`, `molforge.structure`,
-  `molforge.metrics`, `molforge.ensembles`, and
-  `molforge.validation` now pass `mypy --strict` with zero errors,
-  joining `molforge.core` — seven strict-clean subpackages in total,
-  46 source files. The 12 errors fixed were mostly numpy operations
-  mypy widens to `Any` (resolved with explicit `cast`s that document
-  the known array dtype) and two stale `type: ignore` comments; two
-  were genuine annotation bugs — `_place_hydrogens` in `dssp.py` was
-  declared to return a single array but actually returns a
-  `(coords, mask)` tuple, and `_score` in `alignment.py` was
-  declared `NDArray[np.int_]` but builds an `int32` array (`np.int_`
-  is `int64` on 64-bit platforms). The CI strict gate now covers all
-  seven subpackages; the regression test
-  (`tests/unit/test_typing.py`, moved up from `tests/unit/core/` and
-  parametrized) checks each one in-suite. The remaining subpackages
-  (`ml`, `plugins`, `wrappers`) are still tracked by the
-  non-blocking informational `mypy src` CI step.
-- **`molforge.core` is now `mypy --strict` clean, and CI enforces
-  it.** The `core` subpackage — the data model the rest of the
-  library is built on — now passes `mypy --strict` with zero
-  errors (fixed: two missing `NDArray` type arguments in
-  `AtomArray`, an `Any`-return in `Atom.coord`, and an untyped
-  `Chain.__iter__` that was suppressed with a `type: ignore`). The
-  CI `typecheck` job now runs `mypy --strict src/molforge/core/`
-  as a hard gate, with a separate non-blocking full-tree `mypy src`
-  step that keeps the remaining (out-of-`core`) type errors visible
-  while they're worked through. A new `slow`-marked regression test
-  (`tests/unit/core/test_typing.py`) runs the strict check in-suite
-  so a `core` type regression is caught locally too.
-
-### Documented
-- **`Simulation.engine_handle` contract clarified.** The attribute
-  type (`object | None`) is correct — it really is an opaque,
-  engine-specific handle — but the contract was under-specified.
-  The docstring now states explicitly that `engine_handle` is
-  engine-private (callers must not inspect it or set it), is **not
-  serialized** (it typically wraps unpicklable C-extension state;
-  persistence layers must drop it and let the engine wrapper
-  rebuild it on resume), and carries **no semver guarantee**. For
-  inspectable per-simulation data, `Simulation.metadata` is the
-  supported field. No code change. Flagged by the API audit.
-
-### Added 
 - **RoseTTAFold All-Atom folding wrapper.** New file
   `src/molforge/wrappers/folding/rosettafold.py` implements a real
   wrapper around the Baker lab's RoseTTAFold-All-Atom (Krishna et
@@ -241,25 +117,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prediction matching the rest of the folding wrappers; protein-
   ligand and covalent-modification co-folding (RFAA's headline
   capability) need a separate `predict_complex()` surface and
-  remain planned. 47 new tests (45 passing + 2 correctly skipped:
+  remain planned. 
+- 47 new tests (45 passing + 2 correctly skipped:
   one for the torch tensor conversion when torch isn't installed,
   one @slow end-to-end requiring `$RFAA_HOME`). Total test count:
   830 → 875 passed + 11 skipped.
-
-### Deprecated
-- **`molforge.wrappers.folding.Rosetta` is now a deprecated alias
-  for `RoseTTAFold`.** The original `rosetta.py` placeholder was
-  ambiguous about whether it referred to PyRosetta (the Baker lab's
-  classical sequence-design library) or RoseTTAFold (the deep-
-  learning model). The new real wrapper lives at
-  `RoseTTAFold` for clarity. `Rosetta` is retained as a thin
-  subclass that emits `DeprecationWarning` on construction so
-  existing imports / isinstance checks keep working through the
-  next minor release. A PyRosetta wrapper, if added, would live in
-  a separate module (`pyrosetta.py`) since PyRosetta's surface is
-  much wider than the `FoldingEngine` contract.
-
-### Added 
 - **Boltz / Boltz-2 folding wrapper.** Real implementation replacing
   the `boltz.py` stub. Drives the `boltz predict` CLI via subprocess
   against a temporary directory and parses the resulting mmCIF +
@@ -275,7 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata follows the uniform folding-engine convention
   (`confidence_per_residue`, `confidence_per_atom`, `mean_confidence`)
   and additionally surfaces Boltz-specific `ptm`, `iptm`, and
-  `confidence_score` from the JSON sidecar. 47 new tests (46 passing
+  `confidence_score` from the JSON sidecar. 
+- 47 new tests (46 passing
   + 1 correctly skipped @slow end-to-end), structured as a series of
   testable seams: construction, sequence validation, YAML input
   construction, command-line assembly, environment setup, output
@@ -477,6 +340,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the empty-entry-points fallthrough.
 
 ### Fixed
+- **`load_alphafold` now emits the uniform confidence metadata keys.**
+  `molforge.io.load_alphafold` previously wrote only AlphaFold-specific
+  keys (`plddt`, `plddt_per_residue`, `mean_plddt`, `source`), while
+  the AlphaFold *wrapper* wrote the cross-engine-uniform keys
+  (`confidence_per_atom`, `confidence_per_residue`, `mean_confidence`,
+  `engine`). Downstream code reading confidence uniformly across
+  engines silently missed AlphaFold structures loaded from disk.
+  `load_alphafold` now populates both sets (uniform keys preferred,
+  legacy keys retained for backward compatibility); the two carry
+  identical values. Surfaced by the API audit.
+- **`GROMACS` and `DiffDock` are now coherent stubs.** Both are
+  exported (committed import paths) but unimplemented. Previously
+  they were *incoherent*: `GROMACS` didn't implement its `MDEngine`
+  abstract methods at all, so `GROMACS()` failed with a cryptic
+  "Can't instantiate abstract class" `TypeError` rather than a
+  meaningful message; both engines' methods raised a bare
+  `NotImplementedError` with no text. They are now coherent stubs —
+  instantiable, satisfying their respective engine ABCs
+  (`MDEngine` / `DockingEngine`), with every method raising
+  `NotImplementedError` carrying a clear message that points at the
+  working alternative (`OpenMM` / `Vina`) and the tracking issue.
+  10 new tests. Surfaced by the API audit.
+- - **Lint drift from a Ruff version bump cleared; CI lint job green
+  again.** `.pre-commit-config.yaml` pinned `ruff-pre-commit` at
+  `v0.5.0`, but the `[dev]` extra installs `ruff>=0.5` unpinned, so
+  CI resolved a much newer Ruff (0.15.x) whose added rules flagged
+  33 pre-existing issues — meaning the CI `lint` job was effectively
+  red. All 33 are now resolved: a genuine dead variable in
+  `ensembles.clustering` removed, an unused `shutil` import dropped,
+  five `pytest.raises(match=...)` patterns with unescaped regex
+  metacharacters made explicit (raw strings / escaped dots), a
+  `zip()` given an explicit `strict=`, four nested `with` statements
+  collapsed, a `getattr()` call with a string literal in
+  `ensembles.weighting` replaced by a `cast`-backed direct attribute
+  access (dropping a now-misplaced `# noqa`), and a Ruff-version
+  formatting refresh applied across 24 files (cosmetic line-joining
+  only). Two intentional-notation cases
+  are configured rather than rewritten: `allowed-confusables`
+  permits `×`, `σ`, and `–` in docstrings (matrix dimensions, the
+  standard deviation, prose dashes), and `RUF022` is per-file-ignored
+  for the two modules whose `__all__` is deliberately grouped by
+  category with section comments. The `ruff` and `mypy` pre-commit
+  pins are bumped to the versions CI resolves, so the two stay in
+  lock-step and this drift cannot silently recur. No source-behaviour
+  or test-count change (918 pass + 11 skipped, unchanged).
 - **Docs notebooks no longer use symlinks.** The walkthrough and
   example notebooks were previously symlinked from `docs/` into the
   canonical `notebooks/` directory. Symlinks broke two things: (1)
@@ -498,6 +406,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `res_id`); corrected to `residue_name`, `residue_id` to match
   the actual public attributes. Discovered while writing ensemble
   test fixtures.
+
+### Changed
+- **BREAKING: `cross_validate` now defaults to `on_error="raise"`.**
+  Previously `cross_validate` defaulted to `on_error="record"` —
+  exceptions raised by individual validators were silently caught,
+  recorded in verdict metadata, and the verdict marked
+  `passed=False`. The problem: a validator that throws on every
+  design (a misconfigured engine, a missing dependency, a bad
+  input) produced a full list of `passed=False` verdicts that
+  *looked* like a real result, hiding the bug. The new default
+  fails loud. Code that genuinely wants a batch to survive
+  individual validator failures must now pass `on_error="record"`
+  explicitly. Flagged and resolved by the API audit.
+- **The entire `molforge` package is now `mypy --strict` clean.**
+  With `wrappers` and `plugins` brought up to strict, all 77 source
+  modules across every subpackage pass `mypy --strict` with zero
+  errors. The CI `typecheck` job is correspondingly simplified: the
+  previous two-step arrangement (a strict gate on the clean
+  subpackages plus a non-blocking informational full-tree run)
+  collapses to a single `mypy src` gate that fails the build on any
+  type error. The `tests/unit/test_typing.py` regression test is
+  likewise simplified to one whole-package check. 31 errors fixed in
+  this final tranche: 20 stale `# type: ignore` comments (made
+  redundant when the optional heavy dependencies were added to the
+  mypy `ignore_missing_imports` override), four deliberate engine-
+  method `# type: ignore[override]` annotations (the concrete
+  engine wrappers refine the permissive `**kwargs` signatures of
+  their `DockingEngine` / `MDEngine` / `GenerativeEngine` abstract
+  bases — an intentional, documented refinement that mypy's strict
+  Liskov check cannot model), `cast`s for the opaque
+  `Simulation.engine_handle` inside the OpenMM wrapper and for the
+  unstubbed-dependency return values, and `Vina.dock`'s receptor
+  narrowing switched from `hasattr` to `isinstance` (a more correct
+  check that mypy can also narrow on).
+- **`molforge.ml` is now `mypy --strict` clean.** The ML subpackage
+  (sequence/structure featurization, protein-language-model
+  embeddings) joins the strict gate — eight strict-clean
+  subpackages in total, 51 source files. Six errors fixed: the four
+  numpy-widening `no-any-return`s in `embeddings.py` (resolved with
+  `cast`s), and two real type bugs in `structure_features.py` —
+  `pair_distances` and `pair_distance_features` declared
+  `atom_choice: str` but pass it to `distance_map`, which requires
+  the `Literal["ca","cb","heavy","all"]` the docstrings already
+  specify, and a coordinate feature array silently upcast to
+  float64 by a division. The `torch` and `transformers` (and
+  `colabfold`, `meeko`, `vina`) optional heavy dependencies, which
+  ship no type stubs, are added to the mypy `ignore_missing_imports`
+  override alongside the existing `Bio` / `biotite` / `mdtraj` /
+  `openmm` / `rdkit` entries. CI strict gate and the
+  `tests/unit/test_typing.py` regression test updated; only
+  `plugins` and `wrappers` remain outside the gate.
+- **Six more subpackages are now `mypy --strict` clean.**
+  `molforge.io`, `molforge.sequence`, `molforge.structure`,
+  `molforge.metrics`, `molforge.ensembles`, and
+  `molforge.validation` now pass `mypy --strict` with zero errors,
+  joining `molforge.core` — seven strict-clean subpackages in total,
+  46 source files. The 12 errors fixed were mostly numpy operations
+  mypy widens to `Any` (resolved with explicit `cast`s that document
+  the known array dtype) and two stale `type: ignore` comments; two
+  were genuine annotation bugs — `_place_hydrogens` in `dssp.py` was
+  declared to return a single array but actually returns a
+  `(coords, mask)` tuple, and `_score` in `alignment.py` was
+  declared `NDArray[np.int_]` but builds an `int32` array (`np.int_`
+  is `int64` on 64-bit platforms). The CI strict gate now covers all
+  seven subpackages; the regression test
+  (`tests/unit/test_typing.py`, moved up from `tests/unit/core/` and
+  parametrized) checks each one in-suite. The remaining subpackages
+  (`ml`, `plugins`, `wrappers`) are still tracked by the
+  non-blocking informational `mypy src` CI step.
+- **`molforge.core` is now `mypy --strict` clean, and CI enforces
+  it.** The `core` subpackage — the data model the rest of the
+  library is built on — now passes `mypy --strict` with zero
+  errors (fixed: two missing `NDArray` type arguments in
+  `AtomArray`, an `Any`-return in `Atom.coord`, and an untyped
+  `Chain.__iter__` that was suppressed with a `type: ignore`). The
+  CI `typecheck` job now runs `mypy --strict src/molforge/core/`
+  as a hard gate, with a separate non-blocking full-tree `mypy src`
+  step that keeps the remaining (out-of-`core`) type errors visible
+  while they're worked through. A new `slow`-marked regression test
+  (`tests/unit/core/test_typing.py`) runs the strict check in-suite
+  so a `core` type regression is caught locally too.
+
+### Documented
+- **`Simulation.engine_handle` contract clarified.** The attribute
+  type (`object | None`) is correct — it really is an opaque,
+  engine-specific handle — but the contract was under-specified.
+  The docstring now states explicitly that `engine_handle` is
+  engine-private (callers must not inspect it or set it), is **not
+  serialized** (it typically wraps unpicklable C-extension state;
+  persistence layers must drop it and let the engine wrapper
+  rebuild it on resume), and carries **no semver guarantee**. For
+  inspectable per-simulation data, `Simulation.metadata` is the
+  supported field. No code change. Flagged by the API audit.
+
+### Deprecated
+- **`molforge.wrappers.folding.Rosetta` is now a deprecated alias
+  for `RoseTTAFold`.** The original `rosetta.py` placeholder was
+  ambiguous about whether it referred to PyRosetta (the Baker lab's
+  classical sequence-design library) or RoseTTAFold (the deep-
+  learning model). The new real wrapper lives at
+  `RoseTTAFold` for clarity. `Rosetta` is retained as a thin
+  subclass that emits `DeprecationWarning` on construction so
+  existing imports / isinstance checks keep working through the
+  next minor release. A PyRosetta wrapper, if added, would live in
+  a separate module (`pyrosetta.py`) since PyRosetta's surface is
+  much wider than the `FoldingEngine` contract.
 
 ### Removed
 - **`tests/unit/core/test_core_types.py`.** A pre-existing fossil

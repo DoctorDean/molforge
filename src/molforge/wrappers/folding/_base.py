@@ -6,8 +6,8 @@ objects. The interface is intentionally narrow:
 
     sequence(s) -> Protein with model-specific confidence in metadata
 
-Concrete engines (ESMFold, AlphaFold, Boltz, Rosetta, ...) inherit from
-:class:`FoldingEngine` and implement :meth:`predict` plus the
+Concrete engines (ESMFold, AlphaFold, Boltz, RoseTTAFold, ...) inherit
+from :class:`FoldingEngine` and implement :meth:`predict` plus the
 ``_predict_single`` and ``_predict_batch`` hooks as appropriate.
 
 By convention, every folding engine that produces a per-residue
