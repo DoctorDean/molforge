@@ -2,11 +2,12 @@
 
 Concrete engines:
     - :class:`OpenMM` — implemented (Python-first MD, GPU-accelerated)
-    - :class:`GROMACS` — stub (CLI-based; the classic MD workhorse)
+    - :class:`GROMACS` — implemented (CLI-based; the classic MD workhorse)
 
 Shared:
     - :class:`MDEngine` — abstract base for the engine contract
-    - :class:`MDEngineNotInstalledError` — raised when OpenMM isn't installed.
+    - :class:`MDEngineNotInstalledError` — raised when an engine's
+      dependencies (OpenMM, or the ``gmx`` executable) aren't found.
 
 All engines expose the same `prepare -> minimize -> run` flow so users
 can swap engines without rewriting their pipeline.

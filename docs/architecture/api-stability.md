@@ -125,10 +125,14 @@ exported. It is now implemented (RCSB and AlphaFold DB, over stdlib
 
 `GROMACS` and `DiffDock` were exported but incoherent — `GROMACS`
 couldn't even be instantiated (it didn't implement its ABC), and
-both raised bare `NotImplementedError` with no message. They are now
-*coherent* stubs: instantiable, satisfying their engine ABCs, and
-raising `NotImplementedError` with a message that points at the
-working alternative (`OpenMM` / `Vina`).
+both raised bare `NotImplementedError` with no message. The audit
+first made them *coherent* stubs (instantiable, satisfying their
+engine ABCs, raising `NotImplementedError` with a message pointing
+at the working alternative). Both have since been **fully
+implemented**: `DiffDock` drives the cloned DiffDock repo as a
+subprocess, and `GROMACS` drives the `gmx` command-line pipeline.
+Every engine ABC — `FoldingEngine`, `MDEngine`, `DockingEngine` —
+now has at least two real implementations.
 
 ## Engine-private fields
 

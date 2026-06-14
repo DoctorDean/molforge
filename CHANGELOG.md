@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`GROMACS` is now a real MD engine.** `GROMACS`
+  (`molforge.wrappers.md`) was a coherent stub whose `prepare` /
+  `minimize` / `run` all raised `NotImplementedError`; it is now
+  fully implemented. [GROMACS](https://www.gromacs.org/) is a
+  command-line program (`gmx`), not a Python library, so the wrapper
+  drives it as a subprocess. One `prepare` / `minimize` / `run` cycle
+  maps onto the standard GROMACS workflow: `prepare` runs
+  `pdb2gmx` → `editconf` → (optionally) `solvate`; `minimize` writes
+  a steepest-descent `.mdp`, then `grompp` → `mdrun`; `run` writes a
+  production `.mdp`, runs `grompp` → `mdrun`, then reads the frames
+  back with `trjconv` and per-frame energies with `gmx energy`. All
+  state for a simulation lives in one run directory whose path is
+  carried on `Simulation.engine_handle` (and mirrored in
+  `metadata["run_dir"]`), so `minimize` and `run` continue from
+  whatever `prepare` produced. Trajectory frames are read back by
+  asking GROMACS itself (`gmx trjconv`) to convert its binary `.xtc`
+  to a multi-model PDB, which molforge's own PDB reader then parses —
+  the wrapper deliberately takes no dependency on a third-party
+  binary-trajectory library. Three small fixed-layout parsers
+  (`.gro` coordinates, multi-model PDB, `.xvg` columns) handle the
+  GROMACS outputs directly. `gmx` is resolved lazily via
+  `shutil.which`, so construction never touches the filesystem; a
+  clear `MDEngineNotInstalledError` (pointing at OpenMM) is raised
+  when it is absent. A constructor flag covers the water model, box
+  margin/type, and a `verbose` pass-through. 36 tests (a new
+  `test_gromacs.py`), covering construction and validation, `gmx`
+  resolution, the three parsers and their error paths, and the full
+  `prepare` / `minimize` / `run` pipeline driven by a mocked
+  `subprocess.run` that writes the files each `gmx` step would
+  produce; the wrapper module is at 94% coverage (the residual
+  misses are defensive `except` branches for corrupt output GROMACS
+  would never actually emit). The 6 obsolete `TestGROMACSStub` tests
+  are removed.
 - **`DiffDock` is now a real docking engine.** `DiffDock`
   (`molforge.wrappers.docking`) was a coherent stub whose `dock()`
   raised `NotImplementedError`; it is now fully implemented.
