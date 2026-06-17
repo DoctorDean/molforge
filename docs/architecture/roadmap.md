@@ -1,0 +1,241 @@
+# Roadmap
+
+This document captures the post-`0.2.0` direction for molforge. 
+
+The goal: molforge as the layer that lets a researcher, a startup, or a
+big-enterprise pipeline glue together folding, docking, MD, and
+generative design across many engines without rewriting the boilerplate
+each time.
+
+## Audience and assumptions
+
+- **Heavy deps are acceptable as opt-in extras.** Users who want
+  GROMACS, AMBER, RDKit, torch, or PyTorch-Geometric pull them in
+  through the appropriate extra; molforge itself stays light.
+- **GPUs are assumed for "serious" work** but every feature that
+  requires one carries a clear runtime warning and documentation note,
+  and every CPU-feasible path has a CPU fallback.
+- **Interop over reimplementation.** Where Biotite, ProDy, BioPython,
+  MDAnalysis, or RDKit already solve a problem well, molforge reads
+  and writes their formats rather than competing.
+
+## Snapshot at this point
+
+The skeleton is solid: six engine wrappers across three modalities,
+ML featurizers, metrics with cross-validation, ensemble analysis, a
+plugin registry. The whole tree is `mypy --strict` clean across 76
+modules; ~988 tests passing. What's missing is mostly horizontal
+expansion (more engines, more formats, more workflows) plus a few
+vertical investments that compound.
+
+---
+
+## A. Fill in the obvious gaps
+
+Small-to-medium items where the import path already exists and a real
+implementation closes a visible hole.
+
+- **Format I/O completion.** `read_sdf`, `read_mol2`, `read_pdbqt`,
+  `read_pqr` are still `NotImplementedError` stubs. SDF is the most
+  pressing — DiffDock currently parses SDF inline rather than going
+  through `molforge.io`. Real implementations should follow the
+  wrapper pattern: a high-quality path when RDKit is available, a
+  pure-Python fallback otherwise. MOL2 and PDBQT have the same shape.
+  PQR completes the matrix.
+- **mmCIF write support.** Confirm round-trip mmCIF; it's the modern
+  archival format and the PDB org is gradually deprecating legacy PDB
+  for new entries.
+- **Automatic system preparation.** A higher-level
+  `molforge.prep.prepare_for_md` that handles capping, missing-atom
+  completion, protonation at pH, and ion neutralization in one call.
+  Saves users from "I have an AlphaFold PDB, now I want to simulate
+  it."
+- **Trajectory I/O.** `Trajectory` is currently in-memory. Real MD
+  produces gigabytes. Reading/writing `.xtc`, `.dcd`, `.trr`, `.nc`
+  — at minimum chunked iteration so a 100 GB trajectory doesn't OOM.
+
+## B. Round out the engine matrix
+
+The engine ABCs all have ≥2 real implementations now. A few more in
+each modality would solidify molforge as *the* swap-engines abstraction
+layer.
+
+- **Folding.** Chai-1 (actively used, clean CLI), ESM3, Boltz-2 once
+  released. AlphaFold 3 when its license permits.
+- **Docking.** Gnina (Vina with CNN scoring — common modern choice),
+  Smina, AutoDock-GPU, Uni-Dock (GPU-accelerated Vina variant).
+- **MD.** AMBER (via `pmemd`/`sander` CLI) is the biggest gap; many
+  older labs run AMBER, not OpenMM. NAMD and LAMMPS for non-bio
+  workloads later.
+- **Generative.** ESM-IF1 (inverse folding, natural companion to
+  ProteinMPNN), LigandMPNN (handles ligand context), Chroma,
+  Protpardelle.
+- **MSA / sequence search.** Wrap `mmseqs2`, `hmmer`, `jackhmmer`.
+  Most folding wrappers currently dodge this via ColabFold's MSA
+  server; a local MSA path is what serious users need.
+
+## C. Workflow primitives — the "pipeline" part
+
+Right now molforge has good *components* but users have to
+stitch them together.
+
+- **A `Pipeline` / DAG builder.** Chain `fold → dock → md → score`
+  declaratively, with checkpointing so a partial run resumes. Open
+  design question: build our own, or just provide `@cached`
+  decorators and let users compose with Prefect/Hydra/Snakemake?
+  Default answer probably the latter — fight that battle only if no
+  existing tool fits.
+- **Provenance tracking.** Every `Protein`, `DockingResult`,
+  `Trajectory` should carry a record of how it was produced (engine,
+  version, args, input hashes). The `metadata` dicts are already a
+  start; promote some of that to first-class provenance so an
+  ensemble of "20 designs from ProteinMPNN, docked with Vina,
+  refined with OpenMM" is fully traceable.
+- **Parallelism primitives.** `dock_many`, `fold_many`, `run_many`
+  taking a list of inputs and a parallelism level. Every user ends
+  up writing the same `multiprocessing.Pool` loop. Tie this to the
+  wrappers so each engine declares whether it parallelizes across
+  processes (CPU engines) or within one process (GPU engines).
+- **Caching layer.** The single biggest "real-user pain" item. Folding
+  200 proteins overnight is common; if 30 crash, redoing the other
+  170 is wasted compute. A content-addressed cache keyed on (engine,
+  args, input hash), even just file-based, would change the user
+  experience dramatically.
+
+## D. Quality and correctness depth
+
+Where existing functionality could be deeper, not wider.
+
+- **Structure validation.** `molforge.validation` exists but is
+  design-validator-focused. Real biology validation — Ramachandran
+  checks, clash detection, chirality, bond-length sanity — would let
+  users gate folding output on quality. A `validate.molprobity(protein)`
+  wrapper would be high-value.
+- **Unified scoring.** A `molforge.scoring` layer exposing Vina,
+  Smina, AutoDock-GPU, plus learned scorers (ESM perplexity,
+  ProteinMPNN confidence, Gnina's CNN affinity). Pulling scoring out
+  of the docking wrappers lets users score docking results with
+  multiple scorers, or score AlphaFold-folded structures with a
+  scorer.
+- **Active-site / pocket detection.** `fpocket`, `P2Rank`, `SiteHound`
+  wrappers. Docking needs a pocket; right now the user specifies
+  coordinates by hand.
+- **Free energy / binding affinity.** A wrapper for `gmx_MMPBSA` (the
+  GROMACS-based MM-PBSA / MM-GBSA workflow) or AmberTools'
+  `MMPBSA.py` would put molforge somewhere only a handful of unified
+  packages live.
+- **Enhanced sampling.** PLUMED metadynamics, Replica Exchange,
+  MELD-style sampling. Heavy items but what serious MD users do.
+
+## E. ML and data layers
+
+- **Pre-trained embedding access.** A single
+  `molforge.ml.embed(protein, model="esm2-3b")` API for ESM-2 / ESM-3
+  / ProtT5 / Ankh embeddings. Lazy-load weights, cache them. Lots of
+  people write the same 30 lines to get ESM embeddings.
+- **Inverse-folding inference.** ESM-IF1 (Meta), LigandMPNN —
+  alongside ProteinMPNN which is already wrapped.
+- **Structure tokenizers / discrete-structure models.** FoldSeek's 3Di
+  alphabet, ESM-3's structure tokens. These let you do sequence-style
+  ML on structures and are the basis of every recent paper.
+- **Diffusion / flow-matching infrastructure.** RFdiffusion is wrapped.
+  Chroma, FrameDiff, FoldFlow do similar things differently. A shared
+  `GenerativeBackbone` interface above `GenerativeEngine` would let a
+  user say "give me 20 backbones via X" without caring which X.
+- **Dataset utilities.** PDB / AlphaFold-DB / CATH / SCOP loaders,
+  train/val/test splits that respect sequence-identity clusters (this
+  is non-trivial and people get it wrong constantly), MMseqs2-clustered
+  splits, on-the-fly augmentation.
+
+## F. Performance and infrastructure
+
+- **Numba / Cython / Rust hotpaths.** The benchmark suite already
+  identifies the candidates; rewriting the top 3-5 (DSSP, pairwise
+  RMSD, contact map) in Numba would be a measurable speedup at modest
+  cost.
+- **GPU acceleration where it fits.** Distance maps, RMSD, contact
+  maps over an ensemble are embarrassingly parallel and PyTorch-
+  friendly. Optional `torch`-backed paths that activate when `torch`
+  is importable and the input is large.
+- **Async engine calls.** `async` versions of long-running engine
+  calls let users pipeline `fold(seq1) | dock(...)` without explicit
+  threading.
+- **Better error taxonomy.** Each wrapper currently raises
+  `RuntimeError` with subprocess stderr. A taxonomy —
+  `EngineConfigError`, `ResourceError`, `ConvergenceError`,
+  `OutOfMemoryError` — lets users catch the failures they actually
+  want to retry on.
+
+## G. Documentation and onboarding
+
+- **A cookbook.** Not API reference, not tutorials, but "how do I do
+  X" recipes. "Dock a library of 1000 SMILES against a protein",
+  "MD-refine an AlphaFold model", "Cross-validate a ProteinMPNN
+  design with folding". Each recipe is one runnable notebook.
+- **Performance benchmarks page.** Publish the numbers from the
+  benchmark suite — "molforge X takes Y ms on Z input" — so users
+  know what to expect.
+- **Engine comparison tables.** "Which folding engine should I use
+  for this case" with rows = engines, columns = (accuracy, speed,
+  license, install difficulty, memory). High value, low effort, often
+  missing in similar packages.
+- **Migration guides.** "Coming from BioPython", "Coming from
+  Biotite", "Coming from MDAnalysis". Lower the cost of switching.
+
+## H. Distinguishing identity
+
+These are the long-horizon items.
+
+- **Engine-agnostic comparison.** "Fold this with ESMFold, AlphaFold,
+  Boltz, and RoseTTAFold; show me the ensemble." Nobody does this
+  well — it's always "pick one and run." If molforge makes cross-engine
+  ensembles trivial, it has an identity nobody else owns.
+- **Design loop tooling.** The protein-engineering loop (generate →
+  fold → dock → score → iterate) is what real labs do, and nothing
+  glues the parts cleanly. molforge has every individual piece. A
+  `DesignLoop` class with sane defaults, logging, and a ranked design
+  table would be unique.
+- **Reproducibility.** Most papers in this space don't ship
+  reproducible code. If molforge can run a workflow and emit a
+  `pipeline.yaml` that fully describes what it did, including engine
+  versions and weight hashes, that becomes the citable thing.
+- **Plugin ecosystem.** `molforge.plugins` already exists. Documenting
+  it well, providing a template repo, and writing one or two example
+  third-party plugins would seed an ecosystem. Compare with `napari`:
+  its plugin system is most of its value.
+
+---
+
+## Working order toward `1.0`
+
+A rough sequencing:
+
+1. **Finish the format I/O stubs.** SDF, MOL2, PDBQT, PQR. Removes
+   embarrassments and lets DiffDock's inline SDF parser become a
+   one-line call. *1–2 sessions.* **← starting here.**
+2. **Trajectory I/O.** `.xtc`, `.dcd`, `.trr`, chunked iteration.
+   Real users hit this immediately. *2–3 sessions.*
+3. **The 1.0 version cut.** Version bump, classifier flip,
+   changelog reorganization, README test-count refresh, fresh
+   `dist/` build. *1 session.*
+4. **Caching layer + provenance tracking.** Compounds everywhere
+   downstream. *2–3 sessions.*
+5. **Cookbook + engine comparison tables.** Turn the existing surface
+   into something people can find. *2–3 sessions.*
+6. **Horizontal engine expansion.** Gnina, ESM-IF1, AMBER, pocket
+   detection, MMPBSA. One session per engine.
+
+Post-1.0, the identity items (cross-engine ensembles, design loop,
+plugin ecosystem) become the 1.x roadmap and the long-term
+differentiation work.
+
+## Open questions
+
+- **`Pipeline` class — build our own or compose with Prefect/Hydra?**
+  Default answer: compose. Revisit only if the friction is real.
+- **Plugin ecosystem strategy.** Seed it ourselves, or wait for organic
+  contributors before investing? Seeding is cheaper than it looks if
+  one good example exists.
+- **Reproducibility format.** YAML? JSON? The
+  ecosystem hasn't converged. Watch what Chai/Boltz/AlphaFold settle
+  on.
