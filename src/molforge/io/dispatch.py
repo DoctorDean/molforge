@@ -21,6 +21,7 @@ from molforge.io.fasta import read_fasta, write_fasta
 from molforge.io.mmcif import read_cif, read_cif_string, write_cif
 from molforge.io.mol2 import read_mol2, write_mol2
 from molforge.io.pdb import read_pdb, read_pdb_string, write_pdb
+from molforge.io.pdbqt import read_pdbqt, write_pdbqt
 from molforge.io.sdf import read_sdf, write_sdf
 
 if TYPE_CHECKING:
@@ -54,6 +55,7 @@ _READERS: dict[str, Callable[..., object]] = {
     "fasta": read_fasta,
     "sdf": read_sdf,
     "mol2": read_mol2,
+    "pdbqt": read_pdbqt,
 }
 _WRITERS: dict[str, Callable[..., None]] = {
     "pdb": write_pdb,
@@ -61,10 +63,10 @@ _WRITERS: dict[str, Callable[..., None]] = {
     "fasta": write_fasta,
     "sdf": write_sdf,
     "mol2": write_mol2,
+    "pdbqt": write_pdbqt,
 }
 
 _PLANNED_READERS: dict[str, str] = {
-    "pdbqt": "PDBQT reader is planned; see molforge.io.pdbqt",
     "pqr": "PQR reader is planned; see molforge.io.pqr",
 }
 _PLANNED_WRITERS = dict(_PLANNED_READERS)  # same coverage

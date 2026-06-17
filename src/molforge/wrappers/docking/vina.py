@@ -284,7 +284,7 @@ class Vina(DockingEngine):
         PDB-compatible for fields 1-66; the extra atom-type column at
         77-80 is ignored by our PDB parser).
         """
-        from molforge.io import read_pdb_string
+        from molforge.io.pdbqt import read_pdbqt_string
 
         poses: list[Pose] = []
         current_lines: list[str] = []
@@ -304,8 +304,11 @@ class Vina(DockingEngine):
                 continue
             if raw_line.startswith("ENDMDL"):
                 if in_model and current_score is not None and current_lines:
-                    pdb_text = "\n".join(current_lines) + "\nEND\n"
-                    ligand = read_pdb_string(pdb_text)
+                    # Parse via the canonical PDBQT reader so per-atom
+                    # charges and AutoDock atom types make it onto the
+                    # ligand Protein, not just coordinates.
+                    pdbqt_text = "\n".join(current_lines) + "\nEND\n"
+                    ligand = read_pdbqt_string(pdbqt_text)
                     poses.append(
                         Pose(
                             ligand=ligand,
@@ -330,22 +333,22 @@ class Vina(DockingEngine):
                 if len(parts) >= 3:
                     current_rmsd_ub = float(parts[2])
                 continue
-            # ATOM / HETATM lines: take the first 66 cols (Vina-specific
-            # cols 67-80 hold atom types & charges; our PDB parser ignores them).
+            # ATOM / HETATM lines: PDBQT keeps charge + AutoDock atom
+            # type in cols 67-80, which read_pdbqt_string captures.
             if raw_line.startswith(("ATOM", "HETATM")):
-                current_lines.append(raw_line[:66])
+                current_lines.append(raw_line)
 
         # If file didn't have explicit MODEL records, treat the whole
         # thing as a single pose (Vina does this when n_poses=1 in
         # some versions).
         if not poses and "REMARK VINA RESULT" in text:
-            atom_lines = [ln[:66] for ln in text.splitlines() if ln.startswith(("ATOM", "HETATM"))]
+            atom_lines = [ln for ln in text.splitlines() if ln.startswith(("ATOM", "HETATM"))]
             score_line = next(
                 ln for ln in text.splitlines() if ln.startswith("REMARK VINA RESULT:")
             )
             parts = score_line.split(":", 1)[1].split()
             score = float(parts[0])
-            ligand = read_pdb_string("\n".join(atom_lines) + "\nEND\n")
+            ligand = read_pdbqt_string("\n".join(atom_lines) + "\nEND\n")
             poses.append(Pose(ligand=ligand, score=score, rank=0))
 
         poses.sort(key=lambda p: p.score)

@@ -67,10 +67,10 @@ The following are intentionally **not** frozen yet. They are exported
 so the import path is stable, but the behavior or signature may still
 change:
 
-- **Unimplemented format stubs** — `read`/`write` for PDBQT and PQR
-  raise `NotImplementedError` with a clear pointer. The *import
-  paths* are committed; the implementations are planned. (SDF and
-  MOL2 are now implemented.)
+- **Unimplemented format stubs** — `read`/`write` for PQR raise
+  `NotImplementedError` with a clear pointer. The *import path* is
+  committed; the implementation is planned. (SDF, MOL2, and PDBQT
+  are now implemented.)
 - **`Simulation.engine_handle`** — see "Engine-private fields" below.
 
 ## Audit-driven changes

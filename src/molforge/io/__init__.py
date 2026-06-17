@@ -17,7 +17,11 @@ Supported formats:
 - **MOL2** (``.mol2``) — Tripos small-molecule exchange; full read/write
   of the ATOM section (coordinates, elements via Tripos type prefix,
   atom names, partial charges, substructure info).
-- **PDBQT** (``.pdbqt``) — AutoDock Vina format; read/write planned.
+- **PDBQT** (``.pdbqt``) — AutoDock / Vina format; full read/write of
+  ATOM records with per-atom partial charges and AutoDock atom types,
+  reusing the PDB reader for the leading columns. ROOT / BRANCH /
+  TORSDOF rotatable-bond markers are read-tolerated; round-tripping
+  preserves coordinates, charges, and types.
 - **PQR** (``.pqr``) — APBS / PDB2PQR with explicit charges and radii;
   read/write planned.
 

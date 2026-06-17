@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.io.read_pdbqt` / `write_pdbqt` are implemented.** PDBQT
+  (AutoDock / Vina) was a committed import path but a
+  `NotImplementedError` stub; it now parses and writes PDBQT files.
+  PDBQT is a thin extension of PDB — columns 1-66 are PDB-compatible,
+  columns 71-76 hold the per-atom partial charge, and columns 78-79
+  hold the AutoDock atom type (`C`, `OA`, `HD`, `NA`, ...). The
+  reader reuses `molforge.io.read_pdb_string` for the heavy lifting
+  (atom-array construction, altloc handling, entity classification,
+  multi-MODEL parsing) and post-processes each atom line to pick up
+  the extra columns: charges are written to `AtomArray.charge`,
+  AutoDock types land on `protein.metadata["autodock_types"]` as a
+  per-atom list. `ROOT` / `BRANCH` / `TORSDOF` rotatable-bond markers
+  are read-tolerated (recognised and skipped — `AtomArray` doesn't
+  carry bond topology). The writer is the symmetric operation: it
+  calls `write_pdb_string`, then rewrites each `ATOM` / `HETATM` line
+  to append the charge and AutoDock-type columns; when no AutoDock
+  type is recorded in metadata, the element is used as a documented
+  best-effort fallback. Round-tripping preserves coordinates,
+  charges, and types. The Vina wrapper's pose parser is refactored to
+  go through `read_pdbqt_string` rather than its previous "truncate
+  every atom line to 66 columns and feed to the PDB reader" hack — so
+  per-atom charges now propagate to `Pose.ligand` instead of being
+  silently discarded. 23 new tests in `tests/unit/io/test_pdbqt.py`
+  covering the column extractors (charge and AutoDock type, including
+  the whitespace-split fallback), reading from string and from disk,
+  the dispatcher routes, the full round-trip (coordinates, charges,
+  types), the element-fallback writer path, multi-MODEL handling
+  (Vina pose output), and `ROOT` / `BRANCH` / `TORSDOF` tolerance;
+  `pdbqt.py` is at 93.8% coverage. The `test_dispatch.py` stub-format
+  tests are updated to use `.pqr` (the only remaining stub format).
 - **`molforge.io.read_mol2` / `write_mol2` are implemented.** MOL2
   (Tripos) was a committed import path but a `NotImplementedError`
   stub; it now parses and writes Tripos MOL2 files. Like the SDF
