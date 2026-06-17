@@ -22,6 +22,7 @@ from molforge.io.mmcif import read_cif, read_cif_string, write_cif
 from molforge.io.mol2 import read_mol2, write_mol2
 from molforge.io.pdb import read_pdb, read_pdb_string, write_pdb
 from molforge.io.pdbqt import read_pdbqt, write_pdbqt
+from molforge.io.pqr import read_pqr, write_pqr
 from molforge.io.sdf import read_sdf, write_sdf
 
 if TYPE_CHECKING:
@@ -56,6 +57,7 @@ _READERS: dict[str, Callable[..., object]] = {
     "sdf": read_sdf,
     "mol2": read_mol2,
     "pdbqt": read_pdbqt,
+    "pqr": read_pqr,
 }
 _WRITERS: dict[str, Callable[..., None]] = {
     "pdb": write_pdb,
@@ -64,11 +66,13 @@ _WRITERS: dict[str, Callable[..., None]] = {
     "sdf": write_sdf,
     "mol2": write_mol2,
     "pdbqt": write_pdbqt,
+    "pqr": write_pqr,
 }
 
-_PLANNED_READERS: dict[str, str] = {
-    "pqr": "PQR reader is planned; see molforge.io.pqr",
-}
+# No planned readers remain — every format the dispatcher knows about
+# is now implemented. Keeping the empty dict around as the stable shape
+# for any future stubs.
+_PLANNED_READERS: dict[str, str] = {}
 _PLANNED_WRITERS = dict(_PLANNED_READERS)  # same coverage
 
 

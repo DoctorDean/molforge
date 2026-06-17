@@ -22,8 +22,11 @@ Supported formats:
   reusing the PDB reader for the leading columns. ROOT / BRANCH /
   TORSDOF rotatable-bond markers are read-tolerated; round-tripping
   preserves coordinates, charges, and types.
-- **PQR** (``.pqr``) — APBS / PDB2PQR with explicit charges and radii;
-  read/write planned.
+- **PQR** (``.pqr``) — APBS / PDB2PQR with explicit per-atom charges
+  and radii. The leading PDB-compatible columns are parsed as
+  fixed-position; the charge and radius are whitespace-split from the
+  trailing fields (PQR is not strictly fixed-column past the
+  coordinates). Radii are attached to ``protein.metadata["radii"]``.
 
 Convenience helpers:
 

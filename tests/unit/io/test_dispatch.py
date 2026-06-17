@@ -37,10 +37,26 @@ class TestLoadDispatch:
         with pytest.raises(ValueError, match="could not infer format"):
             load(bogus)
 
-    def test_stub_format_raises_not_implemented(self, tmp_path: Path) -> None:
-        bogus = tmp_path / "x.pqr"
+    def test_planned_format_raises_not_implemented(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The dispatcher's planned-but-not-yet-implemented fallback
+        path raises ``NotImplementedError`` with the planning hint.
+        Exercised by monkeypatching a synthetic planned format —
+        every format the dispatcher actually knows about is now
+        implemented, so this guards the machinery, not any particular
+        format."""
+        from molforge.io import dispatch as dispatch_module
+
+        monkeypatch.setitem(dispatch_module._EXT_TO_FORMAT, ".futurefmt", "futurefmt")
+        monkeypatch.setitem(
+            dispatch_module._PLANNED_READERS,
+            "futurefmt",
+            "FUTUREFMT reader is planned; see molforge.io.futurefmt",
+        )
+        bogus = tmp_path / "x.futurefmt"
         bogus.write_text("")
-        with pytest.raises(NotImplementedError, match="PQR"):
+        with pytest.raises(NotImplementedError, match="FUTUREFMT"):
             load(bogus)
 
 
@@ -60,10 +76,19 @@ class TestSaveDispatch:
         text = out.read_text()
         assert text.startswith(">")
 
-    def test_save_stub_format_raises(self, tmp_path: Path) -> None:
+    def test_save_unknown_format_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Writing a format with no registered writer raises
+        ``NotImplementedError``. Like the load-side equivalent, this
+        is exercised with a synthetic format since every format the
+        dispatcher recognises is now implemented."""
+        from molforge.io import dispatch as dispatch_module
+
+        monkeypatch.setitem(dispatch_module._EXT_TO_FORMAT, ".futurefmt", "futurefmt")
         p = load(FIXTURES / "pdb" / "dipeptide.pdb")
         with pytest.raises(NotImplementedError):
-            save(p, tmp_path / "out.pqr")
+            save(p, tmp_path / "out.futurefmt")
 
 
 class TestFetch:

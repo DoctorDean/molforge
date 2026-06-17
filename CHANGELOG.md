@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.io.read_pqr` / `write_pqr` are implemented.** PQR
+  (PDB2PQR / APBS) was a committed import path but a
+  `NotImplementedError` stub; it now parses and writes PQR files,
+  completing the format-I/O backlog (SDF, MOL2, PDBQT, PQR all real).
+  PQR is a PDB-like format that appends per-atom partial charge and
+  atomic radius as whitespace-separated trailing fields. Unlike PDB
+  or PDBQT, PQR is **not** strictly fixed-column past the
+  coordinates — different generators (PDB2PQR, AMBER, CHARMM, APBS)
+  emit different widths. The reader handles all of them by parsing
+  columns 1-54 as fixed (the atom record through coordinates,
+  PDB-compatible) and whitespace-splitting the remainder for charge
+  and radius. Charges land on `AtomArray.charge`; radii land on
+  `protein.metadata["radii"]` as a per-atom list (no native
+  `radius` field on `AtomArray` — electrostatics is a small enough
+  slice of the surface that this didn't warrant a core-type change).
+  The writer is the symmetric operation: it calls `write_pdb_string`,
+  truncates each atom line at column 54, then appends
+  `charge radius`. When no radii are recorded in metadata, a default
+  1.5 Å is used (a reasonable middle-of-the-road heavy-atom radius
+  that lets a charge-only Protein still be written as PQR). 19 new
+  tests in `tests/unit/io/test_pqr.py` covering the charge/radius
+  extractor (clean tokens, trailing garbage, defaults), reading from
+  string and from disk, the dispatcher routes, two variant-width
+  tails seen in real-world PDB2PQR / AMBER output, the full
+  round-trip (coordinates, charges, radii), and the default-radius
+  writer path; `pqr.py` is at 92.0% coverage.
+  `test_dispatch.py`: the two stub-format tests (load and save) now
+  monkeypatch a synthetic planned format rather than depending on
+  any real format being unimplemented — the dispatcher's
+  planned-readers fallback machinery still exists for future use, so
+  the tests are still meaningful. The `_PLANNED_READERS` dict in
+  `dispatch.py` is now empty.
 - **`molforge.io.read_pdbqt` / `write_pdbqt` are implemented.** PDBQT
   (AutoDock / Vina) was a committed import path but a
   `NotImplementedError` stub; it now parses and writes PDBQT files.
