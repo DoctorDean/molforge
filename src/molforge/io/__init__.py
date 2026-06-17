@@ -14,11 +14,12 @@ Supported formats:
 - **SDF** (``.sdf``, ``.mol``) — small-molecule exchange; full read/write
   of V2000 (coordinates, elements, title, property block). V3000 is not
   yet supported.
+- **MOL2** (``.mol2``) — Tripos small-molecule exchange; full read/write
+  of the ATOM section (coordinates, elements via Tripos type prefix,
+  atom names, partial charges, substructure info).
 - **PDBQT** (``.pdbqt``) — AutoDock Vina format; read/write planned.
 - **PQR** (``.pqr``) — APBS / PDB2PQR with explicit charges and radii;
   read/write planned.
-- **MOL2** (``.mol2``) — Tripos small-molecule exchange; read/write
-  planned.
 
 Convenience helpers:
 

@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.io.read_mol2` / `write_mol2` are implemented.** MOL2
+  (Tripos) was a committed import path but a `NotImplementedError`
+  stub; it now parses and writes Tripos MOL2 files. Like the SDF
+  reader, `read_mol2` is multi-molecule by default and returns
+  `list[Protein]` (the format supports multi-molecule files via
+  repeated `@<TRIPOS>MOLECULE` markers, common in docking output
+  libraries). The reader populates coordinates, elements (extracted
+  from the prefix of the Tripos atom type — `C.ar` → `C`, `N.am` →
+  `N`, two-letter `Cl`/`Br` preserved), atom names, per-atom partial
+  charges from the atom line's last column, and substructure info
+  (residue id / name from the MOL2 `subst_id` / `subst_name`
+  columns). Short atom lines (optional trailing columns omitted) and
+  non-conforming writers that emit `***` for the subst_id or a
+  non-numeric charge are tolerated with silent fallbacks rather
+  than crashing the whole molecule. Bond orders, ring information,
+  stereochemistry, and the `@<TRIPOS>SUBSTRUCTURE` /
+  `@<TRIPOS>CRYSIN` / `@<TRIPOS>UNITY` sections are intentionally
+  dropped — those need a chemistry toolkit. The writer emits a
+  minimal, spec-conformant MOL2 with an empty `@<TRIPOS>BOND` section
+  (some downstream tools error without the tag). The MOLECULE header
+  declares the atom count; a mismatch between that and the ATOM
+  section raises a clear error. `read_mol2` is wired into
+  `molforge.io.load`. 34 new tests in `tests/unit/io/test_mol2.py`
+  covering single/multi-molecule reading, Tripos atom-type element
+  extraction, two-letter elements, partial charges, optional-column
+  fallbacks, blank-line tolerance, every error path, dispatcher
+  integration, and the full round-trip; mol2.py is at 94.4% coverage
+  (the residual misses are unreachable defensive branches).
 - **`molforge.io.read_sdf` / `write_sdf` are implemented.** SDF was a
   committed import path but a `NotImplementedError` stub; it now
   parses and writes V2000 SDF / MOL files. The reader is multi-
