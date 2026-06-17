@@ -52,15 +52,14 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
-
-from molforge.core import AtomArray, Protein
+from molforge.core import Protein
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
     DockingResult,
     Pose,
 )
+from molforge.io.sdf import read_sdf_string
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -316,7 +315,10 @@ class DiffDock(DockingEngine):
         poses: list[Pose] = []
         for sdf in sdfs:
             confidence = _confidence_from_filename(sdf.name)
-            ligand = _ligand_from_sdf(sdf.read_text(encoding="utf-8"))
+            mols = read_sdf_string(sdf.read_text(encoding="utf-8"))
+            if not mols:
+                continue
+            ligand = mols[0]
             # DiffDock confidence is higher = better; negate it so
             # `score` ascending is best-first like every other engine.
             score = -confidence if confidence is not None else 0.0
@@ -368,63 +370,3 @@ def _confidence_from_filename(name: str) -> float | None:
         return float(value)
     except ValueError:
         return None
-
-
-def _ligand_from_sdf(text: str) -> Protein:
-    """Build a ligand :class:`Protein` from SDF text.
-
-    Parses the SDF V2000 atom block directly — molforge's RDKit-backed
-    SDF reader is not yet implemented, and the atom block (3D
-    coordinates + element symbols) is a simple fixed-layout format that
-    needs no chemistry toolkit. Bond orders are intentionally dropped:
-    pose comparison and ranking only need coordinates.
-
-    Raises:
-        ValueError: If the text is not a parseable V2000 molfile.
-    """
-    lines = text.splitlines()
-    # SDF layout: 3 header lines, then the counts line (line index 3).
-    if len(lines) < 4:
-        raise ValueError("SDF text too short to contain a molfile")
-    counts = lines[3]
-    try:
-        n_atoms = int(counts[:3])
-    except ValueError as e:
-        raise ValueError(f"could not parse atom count from SDF counts line: {counts!r}") from e
-
-    coords = np.zeros((n_atoms, 3), dtype=np.float32)
-    elements = np.empty(n_atoms, dtype="U2")
-    atom_names = np.empty(n_atoms, dtype="U4")
-    first_atom = 4
-    if len(lines) < first_atom + n_atoms:
-        raise ValueError(f"SDF declares {n_atoms} atoms but the atom block is truncated")
-    element_counts: dict[str, int] = {}
-    for i in range(n_atoms):
-        atom_line = lines[first_atom + i]
-        try:
-            x = float(atom_line[0:10])
-            y = float(atom_line[10:20])
-            z = float(atom_line[20:30])
-        except ValueError as e:
-            raise ValueError(f"malformed SDF atom line: {atom_line!r}") from e
-        element = atom_line[31:34].strip()
-        coords[i] = (x, y, z)
-        elements[i] = element
-        # Give each atom a unique, element-derived name (C1, C2, N1, ...).
-        element_counts[element] = element_counts.get(element, 0) + 1
-        atom_names[i] = f"{element}{element_counts[element]}"[:4]
-
-    n = n_atoms
-    arr = AtomArray.from_dict(
-        {
-            "coords": coords,
-            "element": elements,
-            "atom_name": atom_names,
-            "residue_name": np.full(n, "LIG", dtype="U3"),
-            "residue_id": np.ones(n, dtype=np.int32),
-            "chain_id": np.full(n, "L", dtype="U4"),
-            "record_type": np.full(n, "HETATM", dtype="U6"),
-            "entity_type": np.full(n, "ligand", dtype="U8"),
-        }
-    )
-    return Protein(arr)

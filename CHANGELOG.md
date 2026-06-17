@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.io.read_sdf` / `write_sdf` are implemented.** SDF was a
+  committed import path but a `NotImplementedError` stub; it now
+  parses and writes V2000 SDF / MOL files. The reader is multi-
+  molecule by default, returning a `list[Protein]` (a single-molecule
+  `.mol` file still returns a one-element list, keeping the return
+  type uniform across callers). The atom block, title line, and the
+  ``> <Name>`` / value property block all round-trip; properties land
+  on `Protein.metadata["properties"]`. The implementation uses no
+  chemistry toolkit — the V2000 atom block has a fixed positional
+  layout that's enough for everything molforge does downstream
+  (coordinates, pose ranking, distance calculations). Bond orders,
+  aromaticity, and stereochemistry are intentionally dropped; users
+  who need them should call RDKit directly. V3000 files are detected
+  and raise a clear error pointing at conversion paths. `read_sdf` is
+  wired into `molforge.io.load`, so `load("foo.sdf")` works. The
+  DiffDock wrapper, which previously parsed SDF inline, now goes
+  through `molforge.io.sdf.read_sdf_string` — the inline
+  `_ligand_from_sdf` helper is removed (-1 duplicated parser).
+  `api-stability.md` is updated; MOL2, PDBQT, and PQR remain
+  tentative. 26 new tests in `tests/unit/io/test_sdf.py` covering
+  single/multi-molecule reading, the title and property block,
+  round-trip writing, dispatcher integration, and every error path;
+  the eight DiffDock tests that exercised the inline parser are
+  removed (now subsumed by the SDF tests).
 - **`GROMACS` is now a real MD engine.** `GROMACS`
   (`molforge.wrappers.md`) was a coherent stub whose `prepare` /
   `minimize` / `run` all raised `NotImplementedError`; it is now

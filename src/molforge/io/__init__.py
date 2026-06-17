@@ -11,11 +11,14 @@ Supported formats:
 - **mmCIF / PDBx** (``.cif``, ``.mmcif``) — full read/write; recommended
   for structures with >99,999 atoms (PDB's hard limit).
 - **FASTA** (``.fasta``, ``.fa``, ``.faa``, ``.fna``) — sequence read/write.
+- **SDF** (``.sdf``, ``.mol``) — small-molecule exchange; full read/write
+  of V2000 (coordinates, elements, title, property block). V3000 is not
+  yet supported.
 - **PDBQT** (``.pdbqt``) — AutoDock Vina format; read/write planned.
 - **PQR** (``.pqr``) — APBS / PDB2PQR with explicit charges and radii;
   read/write planned.
-- **SDF** (``.sdf``, ``.mol``) and **MOL2** (``.mol2``) — small-molecule
-  exchange; read/write planned via RDKit.
+- **MOL2** (``.mol2``) — Tripos small-molecule exchange; read/write
+  planned.
 
 Convenience helpers:
 

@@ -17,12 +17,10 @@ from pathlib import Path
 
 import pytest
 
-from molforge.core import Protein
 from molforge.docking import DockingEngineNotInstalledError, DockingResult
 from molforge.wrappers.docking import DiffDock
 from molforge.wrappers.docking.diffdock import (
     _confidence_from_filename,
-    _ligand_from_sdf,
 )
 
 # A minimal valid V2000 SDF — a 3-atom molecule, enough to parse.
@@ -127,51 +125,6 @@ class TestConfidenceFromFilename:
 
     def test_unparseable_confidence_returns_none(self) -> None:
         assert _confidence_from_filename("rank1_confidenceXYZ.sdf") is None
-
-
-class TestSdfParsing:
-    def test_parses_atom_block(self) -> None:
-        ligand = _ligand_from_sdf(_SAMPLE_SDF)
-        assert isinstance(ligand, Protein)
-        assert ligand.atom_array.n_atoms == 3
-        assert list(ligand.atom_array.element) == ["O", "H", "H"]
-
-    def test_atoms_marked_as_ligand(self) -> None:
-        ligand = _ligand_from_sdf(_SAMPLE_SDF)
-        assert all(et == "ligand" for et in ligand.atom_array.entity_type)
-        assert all(rt == "HETATM" for rt in ligand.atom_array.record_type)
-
-    def test_atom_names_are_unique(self) -> None:
-        ligand = _ligand_from_sdf(_SAMPLE_SDF)
-        names = list(ligand.atom_array.atom_name)
-        assert names == ["O1", "H1", "H2"]
-
-    def test_coordinates_extracted(self) -> None:
-        ligand = _ligand_from_sdf(_SAMPLE_SDF)
-        assert tuple(ligand.atom_array.coords[1]) == pytest.approx((0.9572, 0.0, 0.0))
-
-    def test_truncated_sdf_raises(self) -> None:
-        with pytest.raises(ValueError, match="too short"):
-            _ligand_from_sdf("just\ntwo\nlines\n")
-
-    def test_truncated_atom_block_raises(self) -> None:
-        # Counts line declares 5 atoms but the block has none.
-        bad = "name\n\n\n  5  0  0  0  0  0  0  0  0  0999 V2000\n"
-        with pytest.raises(ValueError, match="truncated"):
-            _ligand_from_sdf(bad)
-
-    def test_unparseable_counts_line_raises(self) -> None:
-        bad = "name\n\n\n  XX  0  0  0  0  0  0  0  0  0999 V2000\n"
-        with pytest.raises(ValueError, match="atom count"):
-            _ligand_from_sdf(bad)
-
-    def test_malformed_atom_line_raises(self) -> None:
-        bad = (
-            "name\n\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n"
-            "  not-a-number here       O   0  0  0\n"
-        )
-        with pytest.raises(ValueError, match="malformed SDF atom line"):
-            _ligand_from_sdf(bad)
 
 
 class TestRunCli:
