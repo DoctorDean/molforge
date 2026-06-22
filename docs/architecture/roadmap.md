@@ -35,13 +35,13 @@ vertical investments that compound.
 Small-to-medium items where the import path already exists and a real
 implementation closes a visible hole.
 
-- **Format I/O completion.** `read_sdf`, `read_mol2`, `read_pdbqt`,
+- ~~**Format I/O completion.** `read_sdf`, `read_mol2`, `read_pdbqt`,
   `read_pqr` are still `NotImplementedError` stubs. SDF is the most
   pressing — DiffDock currently parses SDF inline rather than going
   through `molforge.io`. Real implementations should follow the
   wrapper pattern: a high-quality path when RDKit is available, a
   pure-Python fallback otherwise. MOL2 and PDBQT have the same shape.
-  PQR completes the matrix.
+  PQR completes the matrix.~~
 - **mmCIF write support.** Confirm round-trip mmCIF; it's the modern
   archival format and the PDB org is gradually deprecating legacy PDB
   for new entries.
@@ -210,18 +210,18 @@ These are the long-horizon items.
 
 A rough sequencing:
 
-1. **Finish the format I/O stubs.** SDF, MOL2, PDBQT, PQR. Removes
+1. ~~**Finish the format I/O stubs.** SDF, MOL2, PDBQT, PQR. Removes
    embarrassments and lets DiffDock's inline SDF parser become a
-   one-line call. *1–2 sessions.* **← starting here.**
+   one-line call.**~~
 2. **Trajectory I/O.** `.xtc`, `.dcd`, `.trr`, chunked iteration.
-   Real users hit this immediately. *2–3 sessions.*
+   Real users hit this immediately.
 3. **The 1.0 version cut.** Version bump, classifier flip,
    changelog reorganization, README test-count refresh, fresh
-   `dist/` build. *1 session.*
+   `dist/` build.
 4. **Caching layer + provenance tracking.** Compounds everywhere
-   downstream. *2–3 sessions.*
+   downstream.
 5. **Cookbook + engine comparison tables.** Turn the existing surface
-   into something people can find. *2–3 sessions.*
+   into something people can find.
 6. **Horizontal engine expansion.** Gnina, ESM-IF1, AMBER, pocket
    detection, MMPBSA. One session per engine.
 
