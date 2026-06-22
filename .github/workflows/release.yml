@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -59,7 +59,7 @@ jobs:
           /tmp/release-smoke/bin/pip install dist/*.whl
           /tmp/release-smoke/bin/python -c "import molforge; print(f'Smoke-test OK: molforge {molforge.__version__}')"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -74,7 +74,7 @@ jobs:
       name: pypi
       url: https://pypi.org/p/molforge
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
