@@ -58,6 +58,10 @@ md = [
     "mdtraj>=1.10",
     "openmm>=8.1; platform_system != 'Windows'",
 ]
+prep = [
+    "openmm>=8.1; platform_system != 'Windows'",
+    "pdbfixer>=1.9; platform_system != 'Windows'",
+]
 docking = [
     "rdkit>=2023.9",
 ]
@@ -70,7 +74,7 @@ io = [
     "biotite>=0.40",
 ]
 all = [
-    "molforge[structure,sequence,md,docking,ml,io]",
+    "molforge[structure,sequence,md,prep,docking,ml,io]",
 ]
 dev = [
     "pytest>=7.4",
@@ -229,6 +233,7 @@ module = [
     "mdtraj.*",
     "meeko.*",
     "openmm.*",
+    "pdbfixer.*",
     "rdkit.*",
     "torch.*",
     "transformers.*",

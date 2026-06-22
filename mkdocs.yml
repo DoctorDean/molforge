@@ -76,6 +76,7 @@ nav:
       - molforge.validation: reference/validation.md
       - molforge.ensembles: reference/ensembles.md
       - molforge.md: reference/md.md
+      - molforge.prep: reference/prep.md
       - molforge.docking: reference/docking.md
       - molforge.plugins: reference/plugins.md
       - molforge.wrappers:

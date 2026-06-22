@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **New subpackage: `molforge.prep` for MD-system preparation.** A
+  raw PDB from AlphaFold, RoseTTAFold, the RCSB, or a docking engine
+  almost always needs the same clean-up before MD: drop
+  crystallographic clutter (waters, buffer salts, sometimes the
+  ligand), rebuild missing heavy atoms, cap free termini with ACE /
+  NME, and add explicit hydrogens at the right pH. The new
+  `molforge.prep` subpackage exposes one composable function per
+  step plus a convenience pipeline:
+    - `remove_heterogens(protein)` — pure-Python residue-name filter.
+      By default drops waters, ions, ligands, and everything outside
+      the 20 canonical amino acids + standard nucleotides. `keep_water`
+      / `keep_ions` / `keep_ligands` toggles plus an explicit `keep`
+      allow-list for cofactors. Recognises multiple water aliases
+      (HOH, WAT, H2O, SOL, TIP*) and the common monatomic ions.
+    - `fix_missing_atoms(protein)` — wraps PDBFixer's rotamer-library
+      rebuild for incomplete side chains. `fix_missing_residues=False`
+      by default (de-novo loop modelling is risky);
+      `replace_nonstandard=True` by default (MSE → MET, etc.).
+    - `add_caps(protein)` — wraps PDBFixer to add ACE / NME caps at
+      free termini of every protein chain. Multi-chain aware;
+      non-protein chains (ligands, DNA) skipped. Either cap can be
+      disabled with an empty string.
+    - `add_hydrogens(protein, pH=7.4)` — wraps OpenMM
+      `Modeller.addHydrogens` for pH-aware protonation. Idempotent on
+      already-protonated input. The `force_field` kwarg accepts both
+      registered aliases (`"amber14"`, `"charmm36"`) and bare XML
+      filenames.
+    - `prepare_for_md(protein)` — convenience entry point that chains
+      the four steps with sensible defaults for an
+      AlphaFold-PDB-to-OpenMM workflow. Each step's options are
+      forwarded; individual steps can be turned off
+      (`add_caps_to_termini=False`, `add_explicit_hydrogens=False`).
+
+## [v0.3.0] 2026-06-22
 
 ### Added
 - **`molforge.io.read_pqr` / `write_pqr` are implemented.** PQR

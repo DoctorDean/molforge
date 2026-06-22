@@ -45,11 +45,11 @@ implementation closes a visible hole.
 - **mmCIF write support.** Confirm round-trip mmCIF; it's the modern
   archival format and the PDB org is gradually deprecating legacy PDB
   for new entries.
-- **Automatic system preparation.** A higher-level
+- ~~**Automatic system preparation.** A higher-level
   `molforge.prep.prepare_for_md` that handles capping, missing-atom
   completion, protonation at pH, and ion neutralization in one call.
   Saves users from "I have an AlphaFold PDB, now I want to simulate
-  it."
+  it."~~
 - **Trajectory I/O.** `Trajectory` is currently in-memory. Real MD
   produces gigabytes. Reading/writing `.xtc`, `.dcd`, `.trr`, `.nc`
   — at minimum chunked iteration so a 100 GB trajectory doesn't OOM.
