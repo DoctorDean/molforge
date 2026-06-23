@@ -17,18 +17,22 @@ This document describes the high-level architecture of `molforge`.
 ```
 molforge
 ├── core          # Data model: Protein, Chain, Residue, Atom, AtomArray
-├── io            # Parsers/writers: PDB, mmCIF, FASTA, MOL2, SDF, trajectories
+├── io            # Parsers/writers: PDB, mmCIF, FASTA, SDF, MOL2, PDBQT, PQR, trajectories
 ├── sequence      # Sequence-level ops: align, mutate, composition
 ├── structure     # Geometry & analysis: RMSD, SASA, contacts, DSSP
-├── md            # Trajectory I/O and simulation interface
-├── docking       # Pose handling and engine-agnostic docking abstractions
 ├── ml            # Featurizers and tensor views
-├── metrics       # Task-level scoring: TM-score, lDDT, GDT-TS
+├── metrics       # Task-level scoring: TM-score, lDDT, GDT-TS, DockQ
+├── validation    # Composable acceptance criteria
+├── ensembles     # Cross-engine ensembling and consensus
+├── md            # Trajectory and Simulation containers, MDEngine interface
+├── prep          # MD system preparation: heterogen removal, capping, protonation
+├── docking       # Pose handling and engine-agnostic docking abstractions
 ├── plugins       # Plugin registry and entry-point discovery
 └── wrappers      # Thin wrappers around external engines
-    ├── folding   # AlphaFold, ESMFold, Boltz, RoseTTAFold
-    ├── docking   # AutoDock Vina, DiffDock
-    └── md        # OpenMM, GROMACS
+    ├── folding    # AlphaFold, ESMFold, Boltz, RoseTTAFold
+    ├── docking    # AutoDock Vina, DiffDock
+    ├── md         # OpenMM, GROMACS
+    └── generative # RFdiffusion, ProteinMPNN
 ```
 
 ## Data model

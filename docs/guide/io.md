@@ -19,15 +19,40 @@ from molforge.io import load, save, fetch
 
 ## Supported formats
 
-| Extension | Load | Save | Notes                                              |
-| --------- | :--: | :--: | -------------------------------------------------- |
-| `.pdb`    |  ✓   |  ✓   | Full PDB parser including altlocs, multi-model.    |
-| `.cif`    |  ✓   |  ✓   | mmCIF; biotite backend with `[io]` extra.          |
-| `.mmcif`  |  ✓   |  ✓   | Alias for `.cif`.                                  |
-| `.fasta`  |  ✓   |  ✓   | One record per chain.                              |
-| `.fa`     |  ✓   |  ✓   | Alias for `.fasta`.                                |
-| `.mol2`   |  ✓   |  —   | Small molecules, ligands.                          |
-| `.sdf`    |  ✓   |  —   | Small molecules, ligands.                          |
+### Structure formats
+
+| Extension | Load | Save | Notes                                                              |
+| --------- | :--: | :--: | ------------------------------------------------------------------ |
+| `.pdb`    |  ✓   |  ✓   | Full PDB parser including altlocs, multi-model.                    |
+| `.cif`    |  ✓   |  ✓   | mmCIF; hand-written pure-Python parser, no extra deps.             |
+| `.mmcif`  |  ✓   |  ✓   | Alias for `.cif`.                                                  |
+| `.fasta`  |  ✓   |  ✓   | One record per chain.                                              |
+| `.fa`     |  ✓   |  ✓   | Alias for `.fasta`.                                                |
+| `.sdf`    |  ✓   |  ✓   | Small molecules; V2000, multi-molecule.                            |
+| `.mol`    |  ✓   |  ✓   | Single-molecule SDF (V2000).                                       |
+| `.mol2`   |  ✓   |  ✓   | Tripos MOL2; atom-section coords, elements via type prefix, charges. |
+| `.pdbqt`  |  ✓   |  ✓   | AutoDock / Vina; PDB body + charge / AutoDock-type tail.           |
+| `.pqr`    |  ✓   |  ✓   | APBS / PDB2PQR; PDB body + whitespace charge / radius tail.        |
+
+### Trajectory formats
+
+Trajectory I/O uses dedicated entry points
+([`read_trajectory`](../reference/io.md),
+[`iter_trajectory`](../reference/io.md),
+[`write_trajectory`](../reference/io.md)) rather than the
+`load` / `save` dispatcher — trajectories need an explicit
+`topology` argument and return a `molforge.md.Trajectory` rather
+than a `Protein`. Backed by [mdtraj](https://www.mdtraj.org/),
+available with the `[md]` extra.
+
+| Extension       | Read | Write | Notes                                                |
+| --------------- | :--: | :---: | ---------------------------------------------------- |
+| `.xtc`          |  ✓   |   ✓   | GROMACS lossy (int16 × 0.001 nm); the common case.   |
+| `.trr`          |  ✓   |   ✓   | GROMACS lossless. Velocities / forces dropped.       |
+| `.dcd`          |  ✓   |   ✓   | CHARMM / NAMD / OpenMM.                              |
+| `.nc`, `.netcdf`|  ✓   |   ✓   | AMBER NetCDF.                                        |
+| `.h5`, `.h5md`  |  ✓   |   ✓   | HDF5-based; can carry topology.                      |
+| `.pdb` (multi-MODEL) |  ✓   |   ✓   | Text; large and slow, for tiny trajectories only. |
 
 ## AlphaFold-aware loading
 

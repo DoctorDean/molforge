@@ -14,8 +14,8 @@ The public API is everything reachable from a module's `__all__`,
 across the package: `molforge.core`, `molforge.io`,
 `molforge.sequence`, `molforge.structure`, `molforge.ml`,
 `molforge.metrics`, `molforge.validation`, `molforge.md`,
-`molforge.docking`, `molforge.ensembles`, `molforge.plugins`, and the
-`molforge.wrappers.*` subpackages.
+`molforge.prep`, `molforge.docking`, `molforge.ensembles`,
+`molforge.plugins`, and the `molforge.wrappers.*` subpackages.
 
 Names prefixed with an underscore are private and may change at any
 time, with no deprecation cycle.
@@ -32,8 +32,11 @@ The following are considered stable and ready to freeze for 1.0:
   [`molforge.core.metadata_keys`](../reference/core.md) are a stable
   contract. See "Metadata" below.
 - **I/O** — `load`, `save`, `fetch`, and the format-specific
-  `read_*` / `write_*` functions for PDB, mmCIF, and FASTA. The
-  `FastaRecord` type.
+  `read_*` / `write_*` functions for PDB, mmCIF, FASTA, SDF, MOL2,
+  PDBQT, and PQR. The `FastaRecord` type. (Trajectory I/O —
+  `read_trajectory`, `iter_trajectory`, `write_trajectory` — is on
+  main but not yet shipped on PyPI; it'll move into this list when
+  the next release cuts.)
 - **Sequence, structure, metrics, ML featurization** — the analysis
   functions (alignment, RMSD, contacts, SASA, dihedrals, DSSP, lDDT,
   GDT, graph and structure featurization) have stable signatures.
@@ -49,7 +52,7 @@ The following are considered stable and ready to freeze for 1.0:
 ## Type checking
 
 The **entire `molforge` package** is verified under `mypy --strict` —
-all 76 source modules, every subpackage. CI enforces it: the
+all 83 source modules, every subpackage. CI enforces it: the
 `typecheck` job's `Mypy (strict)` step runs `mypy src` (the
 `[tool.mypy]` config sets `strict = true`) and fails the build on any
 new type error. A `slow`-marked regression test

@@ -51,7 +51,7 @@ The `dev` extra includes pytest, ruff, mypy, pre-commit, and the
 build/publish tooling. With `[dev,all]` installed, run the test suite:
 
 ```bash
-pytest                          # full suite (~664 tests)
+pytest                          # full suite (1,100+ tests)
 pytest -m "not slow"            # skip slow tests
 pytest -n auto                  # parallel (uses pytest-xdist)
 ```

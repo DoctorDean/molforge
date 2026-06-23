@@ -23,19 +23,20 @@ shell script — `molforge` is just imports.
 
 ## What's in the box
 
-| Subpackage          | What it does                                                                  |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `molforge.core`     | Canonical data model: `Protein`, `Chain`, `Residue`, `Atom`, `AtomArray`.     |
-| `molforge.io`       | Parsers and writers for PDB, mmCIF, FASTA, MOL2, SDF.                         |
-| `molforge.sequence` | Alignment, mutations, composition, substitution matrices.                     |
-| `molforge.structure`| RMSD, SASA, contacts, DSSP, dihedrals, superposition.                         |
-| `molforge.ml`       | Sequence/structure featurization, graph construction, ESM-2 embeddings.       |
-| `molforge.metrics`  | TM-score, GDT-TS/HA, lDDT, DockQ.                                             |
-| `molforge.validation`| Composable acceptance criteria for protein design candidates.                |
-| `molforge.md`       | Trajectory containers and simulation interface.                               |
-| `molforge.docking`  | Pose handling and engine-agnostic docking abstractions.                       |
-| `molforge.plugins`  | Entry-point discovery for third-party engines, parsers, and scorers.          |
-| `molforge.wrappers` | Thin wrappers around external engines (folding, docking, MD, generative).    |
+| Subpackage          | What it does                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `molforge.core`     | Canonical data model: `Protein`, `Chain`, `Residue`, `Atom`, `AtomArray`.                                 |
+| `molforge.io`       | Structure I/O (PDB, mmCIF, FASTA, SDF, MOL2, PDBQT, PQR) and trajectory I/O (XTC, TRR, DCD, NetCDF, HDF5). |
+| `molforge.sequence` | Alignment, mutations, composition, substitution matrices.                                                 |
+| `molforge.structure`| RMSD, SASA, contacts, DSSP, dihedrals, superposition.                                                     |
+| `molforge.ml`       | Sequence/structure featurization, graph construction, ESM-2 embeddings.                                   |
+| `molforge.metrics`  | TM-score, GDT-TS/HA, lDDT, DockQ.                                                                         |
+| `molforge.validation`| Composable acceptance criteria for protein design candidates.                                            |
+| `molforge.md`       | `Trajectory` and `Simulation` containers, plus the `MDEngine` interface for engine wrappers.              |
+| `molforge.prep`     | MD system preparation: heterogen removal, missing-atom completion, ACE/NME capping, pH-aware protonation. |
+| `molforge.docking`  | Pose handling and engine-agnostic docking abstractions.                                                   |
+| `molforge.plugins`  | Entry-point discovery for third-party engines, parsers, and scorers.                                      |
+| `molforge.wrappers` | Thin wrappers around external engines (folding, docking, MD, generative).                                 |
 
 ## Design principles
 
@@ -50,7 +51,7 @@ shell script — `molforge` is just imports.
    Drug targets have ligands and ions. Membrane proteins have lipids.
    The data model handles all of it without an awkward special case
    for *"non-protein."*
-5. **Typed, tested, documented.** Strict mypy, ruff-clean, ~664 tests
+5. **Typed, tested, documented.** Strict mypy, ruff-clean, 1,100+ tests
    in CI, every public symbol has a Google-style docstring.
 
 ## Where to go next

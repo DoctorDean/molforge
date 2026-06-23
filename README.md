@@ -53,6 +53,9 @@ pip install "molforge[ml]"
 # with MD support (openmm, mdtraj)
 pip install "molforge[md]"
 
+# with structure prep for MD (pdbfixer + openmm)
+pip install "molforge[prep]"
+
 # with docking (rdkit for small molecules)
 pip install "molforge[docking]"
 
@@ -128,7 +131,7 @@ molforge/
 │   ├── plugins/              # Plugin registry and entry-point discovery
 │   ├── metrics/              # TM-score, lDDT, GDT-TS, docking metrics
 │   └── wrappers/             # Thin interfaces to external engines
-│       ├── folding/          # AlphaFold, ESMFold, Boltz, Rosetta
+│       ├── folding/          # AlphaFold, ESMFold, Boltz, RoseTTAFold
 │       ├── docking/          # AutoDock Vina, DiffDock
 │       └── md/               # OpenMM, GROMACS
 ├── tests/                    # pytest suite (909 passing + skips)
