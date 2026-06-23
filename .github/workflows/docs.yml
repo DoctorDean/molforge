@@ -49,7 +49,7 @@ jobs:
         # Only the main-branch push needs the deploy artifact. Skipping
         # on PRs saves a few seconds per build.
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
