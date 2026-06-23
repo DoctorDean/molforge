@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **mmCIF writer round-trip audit and fidelity fixes.** A systematic
+  audit of `write_cif_string` against every PDB fixture in the repo
+  surfaced five concrete fidelity bugs in the pre-audit writer; all
+  five are now fixed.
+    1. **`model_id == 0` was clobbered to 1.** The old writer used
+       `int(model_id) or 1`, which turned every single-model PDB's
+       `model_id=0` (the `read_pdb` convention for files without
+       MODEL records) into 1 on write. The reader's matching
+       `or 1` default reinforced the change — every PDB → CIF
+       round-trip silently lost the convention. Writer now emits
+       the value verbatim; reader's default flipped from 1 to 0.
+       *Affected every PDB fixture (19/19) before the fix.*
+    2. **Partial / non-integer charges were truncated to int.** The
+       old writer emitted `f"{int(charge):d}"`, turning typical
+       PDBQT / PQR partial charges like `-0.297` into `0` and
+       `-1.5` into `-1`. Writer now emits `f"{charge:.4f}"` (4
+       decimal places preserves enough precision for typical
+       force-field partial charges); zero still emits the `?`
+       sentinel so "no charge information" round-trips cleanly.
+    3. **`metadata['classification']` and `metadata['deposition_date']`
+       not emitted at all.** Both PDB HEADER fields were captured
+       by `read_pdb` and dropped by `write_cif`. Writer now emits
+       `_struct_keywords.text` for classification and
+       `_pdbx_database_status.recvd_initial_deposition_date` for
+       the deposition date; reader picks them up symmetrically.
+    4. **`_entry.id` and `data_<id>` block name could disagree.**
+       The old writer used `protein.name` for the block name but
+       `metadata[pdb_id]` for `_entry.id`. When those differed, the
+       reader's `_entry.id` won and silently rewrote both fields on
+       round-trip (e.g. dipeptide.pdb's `name='dipeptide'` became
+       `'TEST'` because the HEADER's PDB id was `TEST`). The fix
+       uses one chosen identifier — preferring `metadata[pdb_id]`,
+       falling back to `protein.name`, then `"molforge"` — for both.
+       Identifiers with embedded whitespace (which `read_pdb`
+       tolerates from malformed HEADER lines) are now quoted in
+       `_entry.id` even though the block name has to substitute
+       underscores, so `pdb_id` whitespace survives round-trip.
+       When no `pdb_id` exists at all, the writer emits the
+       `_entry.id .` mmCIF sentinel and the reader knows to leave
+       `metadata[pdb_id]` absent rather than manufacturing one from
+       the block name.
+    5. **`serial == 0` was clobbered to `i+1`.** Latent twin of #1;
+       no fixture triggered it but the bug was there. Same fix
+       pattern: only synthesize a default when `serial <= 0`.
+  38 new tests in `tests/unit/io/test_mmcif.py` codify each fix as
+  a regression guard. The `TestFixtureSweep` parametrized test
+  iterates every PDB fixture in the repo and asserts that
+  coordinates, residue/chain/atom-name fields, residue_id, model_id,
+  serial, insertion_code, altloc, record_type, entity_type, and the
+  six tracked metadata keys all survive a PDB → CIF → in-memory
+  round-trip. Three classes — `TestEntryIdAndBlockNameConsistency`,
+  `TestAltlocRoundTrip`, and `TestFixtureSweep` — explicitly
+  document the two structural mmCIF limitations: (a) `Protein.name`
+  is recovered from `metadata[pdb_id]` on round-trip because mmCIF
+  carries only one identifier slot, and (b) altloc round-trip
+  requires the caller to pass `altloc="all"` (the default strategy
+  collapses to highest-occupancy and drops the label). Module
+  coverage at 82.9%; the residual misses are defensive error
+  branches in the tokenizer and reader.
 - **Trajectory I/O: `read_trajectory`, `iter_trajectory`,
   `write_trajectory`.** `Trajectory` was previously in-memory only —
   any real MD trajectory bigger than RAM had no way into molforge.

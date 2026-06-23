@@ -218,15 +218,26 @@ def read_cif_string(
     pos = 0
     n = len(tokens)
 
+    # data_<id> gives the block name; we hold it separately from
+    # metadata[pdb_id] until parsing is done. The conflict-resolution
+    # rule (applied after parse) is:
+    #   - If _entry.id was seen with a real value, that wins.
+    #   - If _entry.id was the "." sentinel, metadata[pdb_id] stays absent.
+    #   - If _entry.id wasn't seen at all, the block name is used.
+    # This makes the round-trip stable for proteins that had no real
+    # pdb_id to begin with.
+    block_data_id: str | None = None
+    saw_entry_sentinel = False
+
     while pos < n:
         tok = tokens[pos]
 
         # data_<block> — first block header. We don't currently support
         # multi-block files (we'd return only the first block's atoms).
         if tok.startswith("data_"):
-            pdb_id = tok[5:].strip()
-            if pdb_id and pdb_id.lower() != "unknown":
-                metadata[mk.PDB_ID] = pdb_id
+            candidate = tok[5:].strip()
+            if candidate and candidate.lower() != "unknown":
+                block_data_id = candidate
             pos += 1
             continue
 
@@ -236,7 +247,12 @@ def read_cif_string(
             # In practice we hit the loop_ branch first because loop_ comes before its headers.
             key = tok
             value = tokens[pos + 1]
-            _maybe_capture_metadata(key, value, metadata)
+            if key == "_entry.id" and value in (".", "?"):
+                # The writer's sentinel meaning "no real pdb_id"; record
+                # the fact so we don't fall back to the block name.
+                saw_entry_sentinel = True
+            else:
+                _maybe_capture_metadata(key, value, metadata)
             pos += 2
             continue
 
@@ -273,6 +289,14 @@ def read_cif_string(
         # Unknown / unhandled token — advance.
         pos += 1
 
+    # Reconcile pdb_id: _entry.id (when present and non-sentinel) wins
+    # over the block name; the block name is only used when no
+    # _entry.id was provided. The "." sentinel explicitly suppresses
+    # the block-name fallback so a Protein with no real pdb_id
+    # round-trips with metadata[pdb_id] still absent.
+    if mk.PDB_ID not in metadata and block_data_id and not saw_entry_sentinel:
+        metadata[mk.PDB_ID] = block_data_id
+
     if not atom_rows:
         return Protein(AtomArray(0), metadata=metadata)
 
@@ -292,7 +316,9 @@ def _maybe_capture_metadata(key: str, value: str, metadata: dict[str, object]) -
     mapping = {
         "_entry.id": mk.PDB_ID,
         "_struct.title": mk.TITLE,
+        "_struct_keywords.text": mk.CLASSIFICATION,
         "_exptl.method": mk.EXPERIMENTAL_METHOD,
+        "_pdbx_database_status.recvd_initial_deposition_date": mk.DEPOSITION_DATE,
         "_refine.ls_d_res_high": mk.RESOLUTION,
         "_reflns.d_resolution_high": mk.RESOLUTION,
     }
@@ -410,9 +436,12 @@ def _atom_site_rows_to_protein(
         arr.record_type[i] = rec if rec else "ATOM"
         arr.altloc[i] = _get(row, altloc_i)
         try:
-            arr.model_id[i] = int(_get(row, model_i, "1") or 1)
+            # Default to 0 to match read_pdb's convention for files
+            # without explicit MODEL records — keeps the PDB <-> CIF
+            # round-trip stable.
+            arr.model_id[i] = int(_get(row, model_i, "0") or 0)
         except ValueError:
-            arr.model_id[i] = 1
+            arr.model_id[i] = 0
 
     # Classify entity_type per residue, same logic as the PDB parser.
     from molforge.io.pdb import _classify_entity
@@ -459,21 +488,64 @@ def write_cif_string(protein: Protein) -> str:
     cleanly through :func:`read_cif_string`.
     """
     arr = protein.atom_array
-    block_id = (protein.name or str(protein.metadata.get(mk.PDB_ID, "")) or "molforge").strip()
-    # Block IDs must not contain whitespace; replace any with underscore.
-    block_id = "".join(c if not c.isspace() else "_" for c in block_id) or "molforge"
+    # Pick a single identifier and use it for BOTH the data_<id>
+    # block header AND _entry.id. If the two disagree, the reader's
+    # later _entry.id wins and overwrites the block-derived pdb_id,
+    # which silently changes Protein.name on round-trip. Resolving
+    # both to one value keeps the identity stable.
+    #
+    # Preference order:
+    #   1. metadata[PDB_ID] — the explicit identifier when one exists
+    #      (set by read_pdb from the HEADER record, by read_cif from
+    #      _entry.id, etc.).
+    #   2. protein.name — a fallback when no metadata identifier is
+    #      set (used by tooling that constructs Proteins by hand).
+    #   3. "molforge" — last-ditch sentinel.
+    identifier = str(protein.metadata.get(mk.PDB_ID, "")).strip()
+    has_pdb_id = bool(identifier)
+    if not identifier:
+        identifier = (protein.name or "").strip()
+    if not identifier:
+        identifier = "molforge"
+    # Block IDs must not contain whitespace; replace any with
+    # underscore. The _entry.id below preserves the original value
+    # (quoted if necessary) so a pdb_id containing whitespace —
+    # which read_pdb tolerates from malformed HEADER lines — survives
+    # the round-trip in metadata even though the block name can't.
+    block_id = "".join(c if not c.isspace() else "_" for c in identifier)
 
     lines: list[str] = [f"data_{block_id}", "#"]
-    pdb_id = str(protein.metadata.get(mk.PDB_ID, "")).strip()
-    if pdb_id:
-        lines.append(f"_entry.id  {pdb_id}")
+    # Emit _entry.id only when we have a real pdb_id metadata value.
+    # When we fell back to protein.name or "molforge", emitting the
+    # sentinel "." tells the reader "no _entry.id available" — so
+    # the round-trip doesn't manufacture a pdb_id from nothing.
+    if has_pdb_id:
+        # Quote if the identifier contains characters that would
+        # otherwise split tokens (whitespace).
+        entry_token = f"'{identifier}'" if any(c.isspace() for c in identifier) else identifier
+        lines.append(f"_entry.id  {entry_token}")
+    else:
+        lines.append("_entry.id  .")
     title = str(protein.metadata.get(mk.TITLE, "")).strip()
     if title:
         # Quote the title to safely include spaces.
         lines.append(f"_struct.title  '{title}'")
+    # Classification (the PDB HEADER's classification field) lives in
+    # _struct_keywords.text in mmCIF. Always quote to safely include
+    # spaces — most classifications are multi-word ("OXIDOREDUCTASE").
+    classification = str(protein.metadata.get(mk.CLASSIFICATION, "")).strip()
+    if classification:
+        lines.append(f"_struct_keywords.text  '{classification}'")
     method = str(protein.metadata.get(mk.EXPERIMENTAL_METHOD, "")).strip()
     if method:
         lines.append(f"_exptl.method  '{method}'")
+    # Deposition date round-trips through
+    # _pdbx_database_status.recvd_initial_deposition_date — the
+    # standard mmCIF home for the date that PDB stores in cols 51-59
+    # of the HEADER record.
+    dep_date = str(protein.metadata.get(mk.DEPOSITION_DATE, "")).strip()
+    if dep_date:
+        lines.append(f"_pdbx_database_status.recvd_initial_deposition_date  '{dep_date}'")
     resolution = protein.metadata.get(mk.RESOLUTION)
     if isinstance(resolution, (int, float)):
         lines.append(f"_refine.ls_d_res_high  {float(resolution):.2f}")
@@ -515,7 +587,11 @@ def write_cif_string(protein: Protein) -> str:
 
     for i in range(len(arr)):
         rec = str(arr.record_type[i]) or "ATOM"
-        serial = int(arr.serial[i]) or (i + 1)
+        # serial is 1-based in PDB convention but the AtomArray may
+        # legitimately carry 0 (synthetic data); only synthesize a
+        # default when serial is non-positive.
+        raw_serial = int(arr.serial[i])
+        serial = raw_serial if raw_serial > 0 else (i + 1)
         elem = str(arr.element[i]) or "X"
         atom_name = str(arr.atom_name[i])
         altloc = str(arr.altloc[i]) or "."
@@ -527,8 +603,20 @@ def write_cif_string(protein: Protein) -> str:
         occ = float(arr.occupancy[i])
         b = float(arr.b_factor[i])
         charge = float(arr.charge[i])
-        charge_str = f"{int(charge):d}" if charge != 0 else "?"
-        model = int(arr.model_id[i]) or 1
+        # Charge can be a partial (non-integer) value when the structure
+        # came from PDBQT, PQR, or a force-field-typed source. Emit
+        # 4-decimal precision; only fall back to "?" when truly zero
+        # (the AtomArray default) so the absence of charge information
+        # round-trips as "absent" rather than as 0.0000.
+        charge_str = f"{charge:.4f}" if charge != 0.0 else "?"
+        # model_id is preserved verbatim, including 0. molforge's
+        # read_pdb uses model_id=0 as the implicit value for files
+        # without MODEL records — this is non-canonical relative to
+        # mmCIF (which is 1-based), but emitting it verbatim is the
+        # only way the CIF round-trip preserves the in-memory state.
+        # A future change to read_pdb's convention would let this
+        # become a strict 1-based emit.
+        model = int(arr.model_id[i])
 
         lines.append(
             " ".join(

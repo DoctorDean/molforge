@@ -35,16 +35,15 @@ vertical investments that compound.
 Small-to-medium items where the import path already exists and a real
 implementation closes a visible hole.
 
-- ~~**Format I/O completion.** `read_sdf`, `read_mol2`, `read_pdbqt`,
-  `read_pqr` are still `NotImplementedError` stubs. SDF is the most
-  pressing — DiffDock currently parses SDF inline rather than going
-  through `molforge.io`. Real implementations should follow the
-  wrapper pattern: a high-quality path when RDKit is available, a
-  pure-Python fallback otherwise. MOL2 and PDBQT have the same shape.
-  PQR completes the matrix.~~
-- **mmCIF write support.** Confirm round-trip mmCIF; it's the modern
-  archival format and the PDB org is gradually deprecating legacy PDB
-  for new entries.
+- **Format I/O completion.** **Done** `read_sdf`, `read_mol2`, `read_pdbqt`,
+  `read_pqr` are all real.
+- **mmCIF write support.** **Audited and hardened.** The existing
+  `write_cif` shipped in v0.3 was audited against every PDB fixture in
+  the repo; five concrete fidelity bugs were fixed (model_id, partial
+  charges, classification / deposition_date, _entry.id / block-name
+  divergence, serial). 38 new round-trip regression tests; the
+  parametrized `TestFixtureSweep` guards future regressions across the
+  whole corpus.
 - **Automatic system preparation.** **Done in `molforge.prep`.**
   `remove_heterogens`, `fix_missing_atoms`, `add_caps`,
   `add_hydrogens`, and a `prepare_for_md` convenience pipeline let a
