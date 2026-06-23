@@ -28,6 +28,16 @@ Supported formats:
   trailing fields (PQR is not strictly fixed-column past the
   coordinates). Radii are attached to ``protein.metadata["radii"]``.
 
+For MD trajectories:
+
+- :func:`read_trajectory` / :func:`iter_trajectory` /
+  :func:`write_trajectory` — eager and streaming I/O for binary MD
+  trajectories (``.xtc``, ``.trr``, ``.dcd``, ``.nc``, ``.h5``, plus
+  multi-MODEL PDB). Trajectories are kept off the :func:`load` /
+  :func:`save` dispatcher because they need an explicit ``topology``
+  argument and return :class:`molforge.md.Trajectory` rather than
+  :class:`molforge.core.Protein`.
+
 Convenience helpers:
 
 - :func:`fetch` — pull a structure by PDB ID from RCSB or AlphaFold.
@@ -67,6 +77,11 @@ from molforge.io.pdb import (
     write_pdb_string,
 )
 from molforge.io.pdb_alphafold import is_alphafold_pdb, load_alphafold
+from molforge.io.trajectory import (
+    iter_trajectory,
+    read_trajectory,
+    write_trajectory,
+)
 
 __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     # Top-level dispatch
@@ -96,4 +111,8 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     # AlphaFold helpers
     "load_alphafold",
     "is_alphafold_pdb",
+    # Trajectory I/O
+    "read_trajectory",
+    "iter_trajectory",
+    "write_trajectory",
 ]

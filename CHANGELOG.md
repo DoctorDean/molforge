@@ -6,6 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Trajectory I/O: `read_trajectory`, `iter_trajectory`,
+  `write_trajectory`.** `Trajectory` was previously in-memory only —
+  any real MD trajectory bigger than RAM had no way into molforge.
+  This commit adds binary-trajectory I/O wrapping mdtraj, exposed
+  from `molforge.io`. Supported formats are everything mdtraj
+  handles: `.xtc` (GROMACS lossy, the common case), `.trr` (GROMACS
+  lossless), `.dcd` (CHARMM / NAMD / OpenMM), `.nc` / `.netcdf`
+  (AMBER), `.h5` / `.h5md` (HDF5-based), and multi-MODEL PDB. Three
+  functions: `read_trajectory(path, topology=..., stride=1,
+  atom_indices=None)` loads a whole file into a
+  `molforge.md.Trajectory` (use when it fits in memory);
+  `iter_trajectory(path, topology=..., chunk_size=100, stride=1,
+  atom_indices=None)` yields chunks of frames as `Trajectory` objects
+  with bounded memory; `write_trajectory(trajectory, path)` writes
+  out, format inferred from the extension. Coordinates are converted
+  nm ↔ Å automatically (molforge convention is Å throughout; mdtraj's
+  is nm), times in picoseconds either side. The `topology` argument
+  is required for binary formats that don't embed it (XTC, TRR, DCD,
+  NetCDF); it accepts either a `molforge.core.Protein` (reused
+  directly — no PDB round-trip when the caller passes a Protein in)
+  or a path to a PDB. PDB-format trajectories can pass
+  `topology=None`. The `atom_indices` parameter slices both the
+  coordinate array AND the returned topology, so callers analyzing
+  a subset (e.g. backbone atoms only) get a self-consistent
+  Trajectory rather than coords-and-topology mismatched. Lazy mdtraj
+  import: importing `molforge.io` does not import mdtraj; only the
+  trajectory functions do, and they raise
+  `MDEngineNotInstalledError` with install instructions when mdtraj
+  is absent. NOT wired into `load()` / `save()`: trajectories return
+  a different type than the dispatcher's `Protein` / `list[Protein]`
+  contract, and the topology argument is something the dispatcher
+  has no way to supply. Kept as dedicated entry points. 21 new tests
+  in `tests/unit/io/test_trajectory.py` covering reading from PDB,
+  the Å unit conversion, Protein-topology reuse identity, path-string
+  topology, no-topology PDB, atom-indices subset (including the
+  metadata-preserving Protein-slice path), stride, time-array
+  carry-through, the "source: mdtraj" metadata marker, the streaming
+  chunk count (3+3+3+1 from 10 frames), chunk validation, the
+  stride-plus-chunking compose case, the DCD / XTC / PDB write paths
+  (XTC round-trip with the documented 0.001-nm precision), and the
+  missing-mdtraj error path; mdtraj-using tests are
+  `pytest.importorskip` gated. The new module is at high coverage
+  (the few uncovered branches are unreachable error-handling
+  fallbacks). `pdbfixer.*` was added to mypy's missing-stubs override
+  list when `molforge.prep` shipped; no new mypy override is needed
+  here since mdtraj is already there.
 - **New subpackage: `molforge.prep` for MD-system preparation.** A
   raw PDB from AlphaFold, RoseTTAFold, the RCSB, or a docking engine
   almost always needs the same clean-up before MD: drop

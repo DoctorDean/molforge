@@ -1,6 +1,6 @@
 # Roadmap
 
-This document captures the post-`0.2.0` direction for molforge. 
+This document captures the post-`0.2.0` direction for molforge.
 
 The goal: molforge as the layer that lets a researcher, a startup, or a
 big-enterprise pipeline glue together folding, docking, MD, and
@@ -45,14 +45,16 @@ implementation closes a visible hole.
 - **mmCIF write support.** Confirm round-trip mmCIF; it's the modern
   archival format and the PDB org is gradually deprecating legacy PDB
   for new entries.
-- ~~**Automatic system preparation.** A higher-level
-  `molforge.prep.prepare_for_md` that handles capping, missing-atom
-  completion, protonation at pH, and ion neutralization in one call.
-  Saves users from "I have an AlphaFold PDB, now I want to simulate
-  it."~~
-- **Trajectory I/O.** `Trajectory` is currently in-memory. Real MD
-  produces gigabytes. Reading/writing `.xtc`, `.dcd`, `.trr`, `.nc`
-  — at minimum chunked iteration so a 100 GB trajectory doesn't OOM.
+- **Automatic system preparation.** **Done in `molforge.prep`.**
+  `remove_heterogens`, `fix_missing_atoms`, `add_caps`,
+  `add_hydrogens`, and a `prepare_for_md` convenience pipeline let a
+  user go from an AlphaFold-or-RCSB PDB to an MD-ready structure in
+  one call. Ion neutralization remains future work — it belongs with
+  explicit solvation, which is its own item.
+- **Trajectory I/O.** **Done via `molforge.io.read_trajectory` /
+  `iter_trajectory` / `write_trajectory`.** Wraps mdtraj for `.xtc`,
+  `.trr`, `.dcd`, `.nc`, `.h5`, multi-MODEL PDB; chunked iteration
+  via `iter_trajectory` bounds memory for large files.
 
 ## B. Round out the engine matrix
 
@@ -210,19 +212,23 @@ These are the long-horizon items.
 
 A rough sequencing:
 
-1. ~~**Finish the format I/O stubs.** SDF, MOL2, PDBQT, PQR. Removes
-   embarrassments and lets DiffDock's inline SDF parser become a
-   one-line call.**~~
-2. **Trajectory I/O.** `.xtc`, `.dcd`, `.trr`, chunked iteration.
-   Real users hit this immediately.
-3. **The 1.0 version cut.** Version bump, classifier flip,
+1. ~~**Finish the format I/O stubs.** SDF, MOL2, PDBQT,
+   PQR all real; DiffDock parses through `molforge.io.sdf` and Vina
+   through `molforge.io.pdbqt`.~~
+2. ~~**Automatic system preparation.** `molforge.prep` —
+   `remove_heterogens` / `fix_missing_atoms` / `add_caps` /
+   `add_hydrogens` / `prepare_for_md`.~~
+3. ~~**Trajectory I/O.** `molforge.io.read_trajectory` /
+   `iter_trajectory` / `write_trajectory` via mdtraj. XTC, TRR, DCD,
+   NetCDF, HDF5, multi-MODEL PDB. Eager + streaming.~~
+4. **The 1.0 version cut.** Version bump, classifier flip,
    changelog reorganization, README test-count refresh, fresh
    `dist/` build.
-4. **Caching layer + provenance tracking.** Compounds everywhere
+5. **Caching layer + provenance tracking.** Compounds everywhere
    downstream.
-5. **Cookbook + engine comparison tables.** Turn the existing surface
+6. **Cookbook + engine comparison tables.** Turn the existing surface
    into something people can find.
-6. **Horizontal engine expansion.** Gnina, ESM-IF1, AMBER, pocket
+7. **Horizontal engine expansion.** Gnina, ESM-IF1, AMBER, pocket
    detection, MMPBSA. One session per engine.
 
 Post-1.0, the identity items (cross-engine ensembles, design loop,
@@ -236,6 +242,6 @@ differentiation work.
 - **Plugin ecosystem strategy.** Seed it ourselves, or wait for organic
   contributors before investing? Seeding is cheaper than it looks if
   one good example exists.
-- **Reproducibility format.** YAML? JSON? The
+- **Reproducibility format.** YAML? JSON? Something runnable? The
   ecosystem hasn't converged. Watch what Chai/Boltz/AlphaFold settle
   on.
