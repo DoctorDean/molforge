@@ -86,18 +86,22 @@ stitch them together.
   decorators and let users compose with Prefect/Hydra/Snakemake?
   Default answer probably the latter — fight that battle only if no
   existing tool fits.
-- **Provenance tracking.** **Surface added; pass-1 adoption done.**
-  `molforge.core.Provenance` is the canonical "what produced this
-  output" record — frozen dataclass with engine / version /
-  parameters / inputs / recursive parent, JSON-round-trippable,
-  stored on `metadata[PROVENANCE]`. Pass 1 adopted it across all 
-  9 simple wrappers: ESMFold, AlphaFold, Boltz, RoseTTAFold, Vina, 
-  DiffDock, RFdiffusion, ProteinMPNN, and `load_alphafold`. Pass 2 
-  — the MD wrappers (OpenMM, GROMACS) and the `molforge.prep` functions — is still
-  pending; those have multi-step pipelines where each step
-  (`prepare → minimize → equilibrate → run`) should chain
-  Provenance to the previous step's via `parent`, exercising the
-  composability that pass 1 only used for cross-wrapper chains.
+- **Provenance tracking.** **Done.** `molforge.core.Provenance` is
+  the canonical "what produced this output" record — frozen
+  dataclass with engine / version / parameters / inputs / recursive
+  parent, JSON-round-trippable, stored on `metadata[PROVENANCE]`.
+  Adoption is complete across both passes: pass 1 covered the
+  simple wrappers (ESMFold, AlphaFold, Boltz, RoseTTAFold, Vina,
+  DiffDock, RFdiffusion, ProteinMPNN, `load_alphafold`); pass 2
+  covered the MD multi-step pipelines (OpenMM, GROMACS each
+  chaining `prepare → minimize → run`) and the prep functions
+  (`remove_heterogens`, `fix_missing_atoms`, `add_caps`,
+  `add_hydrogens`, `prepare_for_md`). The headline-feature
+  scenario from the original roadmap entry — "20 designs from
+  ProteinMPNN, docked with Vina, refined with OpenMM" — is now
+  fully traceable end-to-end via `result.metadata[PROVENANCE].chain()`.
+  Optional polish (sidecar persistence, hash-keyed caching, deeper
+  engine-version introspection) is deferred.
 - **Parallelism primitives.** `dock_many`, `fold_many`, `run_many`
   taking a list of inputs and a parallelism level. Every user ends
   up writing the same `multiprocessing.Pool` loop. Tie this to the

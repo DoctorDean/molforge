@@ -138,4 +138,20 @@ def remove_heterogens(
     # the same.
     if protein.metadata:
         out.metadata = {**protein.metadata}
+
+    # Chain a Provenance step. The output's chain() then reads as
+    # the workflow oldest-first.
+    from molforge.prep._provenance import chain_prep_provenance
+
+    chain_prep_provenance(
+        out,
+        engine="molforge.prep.remove_heterogens",
+        parameters={
+            "keep_water": keep_water,
+            "keep_ions": keep_ions,
+            "keep_ligands": keep_ligands,
+            "keep": sorted(keep) if keep else None,
+        },
+        input_protein=protein,
+    )
     return out

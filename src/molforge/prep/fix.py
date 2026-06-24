@@ -88,7 +88,19 @@ def fix_missing_atoms(
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
 
-    return _fixer_to_protein(fixer, original=protein)
+    out = _fixer_to_protein(fixer, original=protein)
+    from molforge.prep._provenance import chain_prep_provenance
+
+    chain_prep_provenance(
+        out,
+        engine="molforge.prep.fix_missing_atoms",
+        parameters={
+            "fix_missing_residues": fix_missing_residues,
+            "replace_nonstandard": replace_nonstandard,
+        },
+        input_protein=protein,
+    )
+    return out
 
 
 def add_caps(
@@ -157,7 +169,16 @@ def add_caps(
     fixer.findMissingAtoms()
     fixer.addMissingAtoms()
 
-    return _fixer_to_protein(fixer, original=protein)
+    out = _fixer_to_protein(fixer, original=protein)
+    from molforge.prep._provenance import chain_prep_provenance
+
+    chain_prep_provenance(
+        out,
+        engine="molforge.prep.add_caps",
+        parameters={"n_cap": n_cap, "c_cap": c_cap},
+        input_protein=protein,
+    )
+    return out
 
 
 # ----------------------------------------------------------------------

@@ -47,15 +47,27 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
 
+from molforge.core import Protein
+from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.md import MDEngineNotInstalledError, Simulation, Trajectory
 from molforge.wrappers.md._base import MDEngine
 
-if TYPE_CHECKING:
-    from molforge.core import Protein
+
+def _parent_provenance(meta: dict[str, Any]) -> Provenance | None:
+    """Extract a parent Provenance from a metadata dict, typed-safely.
+
+    Mirrors the helper in :mod:`molforge.wrappers.md.openmm`. Kept
+    per-wrapper rather than promoted to a shared module so each MD
+    wrapper stays self-contained (this is small, repeated tooling, not
+    a public API).
+    """
+    p = meta.get(mk.PROVENANCE)
+    return p if isinstance(p, Provenance) else None
 
 
 # GROMACS force-field names accepted by `pdb2gmx -ff`. This is not
@@ -264,6 +276,20 @@ class GROMACS(MDEngine):
             timestep=timestep,
             engine_handle=run_dir,
             metadata={
+                mk.PROVENANCE: Provenance.from_engine(
+                    engine="GROMACS.prepare",
+                    parameters={
+                        "force_field": force_field,
+                        "temperature": temperature,
+                        "timestep": timestep,
+                        "water_model": self.water_model,
+                        "box_type": self.box_type,
+                        "box_margin": self.box_margin,
+                        "gmx_executable": self.gmx_executable,
+                    },
+                    inputs={"protein": protein.name or "<Protein>"},
+                    parent=_parent_provenance(protein.metadata),
+                ),
                 "engine": "GROMACS",
                 "run_dir": str(run_dir),
                 "water_model": self.water_model,
@@ -328,6 +354,14 @@ class GROMACS(MDEngine):
             **simulation.metadata,
             "minimized": True,
             "emtol": tolerance,
+            mk.PROVENANCE: Provenance.from_engine(
+                engine="GROMACS.minimize",
+                parameters={
+                    "max_iterations": max_iterations,
+                    "tolerance": tolerance,
+                },
+                parent=_parent_provenance(simulation.metadata),
+            ),
         }
         return simulation
 
@@ -428,6 +462,17 @@ class GROMACS(MDEngine):
             times=times,
             energies=energies if energies is not None else None,
             metadata={
+                mk.PROVENANCE: Provenance.from_engine(
+                    engine="GROMACS.run",
+                    parameters={
+                        "n_steps": n_steps,
+                        "save_every": save_every,
+                        "timestep_ps": simulation.timestep,
+                        "temperature_K": simulation.temperature,
+                        "force_field": simulation.force_field,
+                    },
+                    parent=_parent_provenance(simulation.metadata),
+                ),
                 "engine": "GROMACS",
                 "n_steps": n_steps,
                 "save_every": save_every,

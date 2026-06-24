@@ -6,6 +6,93 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Provenance adoption pass 2 — MD wrappers and prep functions.**
+  Completes the wrapper-adoption work. Where
+  pass 1 demonstrated cross-wrapper chaining (ESMFold → Vina),
+  pass 2 exercises chaining **within** a single wrapper's
+  multi-step pipeline and across the composable prep functions —
+  the harder case and the one that proves the design composes.
+
+  Adopted (2 wrappers + 5 functions):
+
+  - **`molforge.wrappers.md.OpenMM`** — `prepare` / `minimize` /
+    `run` each attach a `Provenance` to the output's metadata. Each
+    step's parent is the previous step's `Provenance`, so a full
+    pipeline leaves the final `Trajectory` with a 3-deep chain
+    that reads as `["OpenMM.prepare", "OpenMM.minimize", "OpenMM.run"]`
+    oldest-first. When the input `Protein` has its own `Provenance`
+    (e.g. it came from ESMFold), the chain extends back through it
+    — a sequence-to-trajectory workflow ends with a 4-deep chain
+    that traces all the way to the sequence.
+
+  - **`molforge.wrappers.md.GROMACS`** — same three-step pattern
+    as OpenMM, with the engine strings `"GROMACS.prepare"`,
+    `"GROMACS.minimize"`, `"GROMACS.run"`. The minimize step
+    appends to `simulation.metadata` (since minimize returns the
+    same Simulation in-place, not a new one), preserving the
+    chain across the mutation.
+
+  - **`molforge.prep.{remove_heterogens, fix_missing_atoms,
+    add_caps, add_hydrogens, prepare_for_md}`** — each prep
+    function chains a `Provenance` step onto the output's
+    metadata. `prepare_for_md` (which composes the other four in
+    sequence) leaves the result with a 4-deep chain naturally:
+    `["molforge.prep.remove_heterogens",
+      "molforge.prep.fix_missing_atoms",
+      "molforge.prep.add_caps",
+      "molforge.prep.add_hydrogens"]`. No special handling needed
+    in the composite — the inner functions chain themselves.
+
+  Two helpers, both private:
+
+  - **`molforge.wrappers.md.{openmm,gromacs}._parent_provenance(meta)`**
+    — extracts a `Provenance | None` from a free-form metadata
+    dict, narrowing the type. Per-wrapper rather than shared so
+    each MD wrapper stays self-contained.
+
+  - **`molforge.prep._provenance.chain_prep_provenance(output, *,
+    engine, parameters, input_protein)`** — the DRY-up for the
+    five prep functions. One place to evolve the prep-side
+    provenance shape later (e.g. when we want to also stamp the
+    PDBFixer / OpenMM versions used).
+
+  Backwards compatibility: every existing ad-hoc metadata key
+  (`metadata["engine"]`, `metadata["run_dir"]`, `metadata["emtol"]`,
+  etc.) is preserved unchanged. The new `metadata[PROVENANCE]` is
+  additive.
+
+  Tests (`tests/unit/wrappers/test_provenance_adoption.py`, 8 new
+  in addition to the 11 from pass 1):
+
+  - `TestOpenMMProvenanceChain` (2 tests) drives a full prepare →
+    minimize → run pipeline against a real OpenMM install
+    (skipped if openmm missing). The headline scenario
+    `["ESMFold", "OpenMM.prepare", "OpenMM.run"]` is exercised
+    end-to-end.
+
+  - `TestGROMACSProvenanceWiring` (2 tests) — GROMACS needs the
+    `gmx` binary which CI usually lacks. The tests inspect the
+    module source to assert the three step engine strings appear
+    and that `_parent_provenance(...)` is used — a regression net
+    that catches future code that bypasses the helper without
+    needing the real engine to run.
+
+  - `TestPrepProvenanceChain` (4 tests) — exercises each prep
+    function individually, then a two-function chain, then the
+    full `prepare_for_md` 4-step chain, then the "ESMFold + 4
+    prep steps" 5-deep chain (the most realistic scenario).
+    Skipped if openmm + pdbfixer aren't both installed.
+
+  With pass 2 complete, the headline scenario from the roadmap
+  ("20 designs from ProteinMPNN, docked with Vina, refined with
+  OpenMM") is now fully traceable: every output object's
+  `metadata[PROVENANCE].chain()` reads as the producer pipeline,
+  with sufficient detail in each step's `parameters` to
+  reconstruct the exact call. The remaining provenance work is
+  optional polish: persistence to a sidecar format, hash-keyed
+  caching (the next roadmap item), and richer engine-version
+  introspection.
+
 - **Provenance adoption across folding, docking, and generative
   wrappers (pass 1).** Builds on the `Provenance` surface added in
   `9fafbba`. Every wrapper in scope now attaches a `Provenance` to

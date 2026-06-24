@@ -40,10 +40,13 @@ Linux and macOS. On Windows, install via conda-forge.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import numpy as np
 
+from molforge.core import Protein
+from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.md import (
     MDEngine,
     MDEngineNotInstalledError,
@@ -51,8 +54,18 @@ from molforge.md import (
     Trajectory,
 )
 
-if TYPE_CHECKING:
-    from molforge.core import Protein
+
+def _parent_provenance(meta: dict[str, Any]) -> Provenance | None:
+    """Extract a parent Provenance from a metadata dict, typed-safely.
+
+    ``metadata`` is ``dict[str, object]`` by design (free-form), so
+    a plain ``.get(mk.PROVENANCE)`` returns ``object``. This helper
+    narrows that to ``Provenance | None`` so the type-checker sees
+    the right type at each ``Provenance.from_engine(parent=...)``
+    call site.
+    """
+    p = meta.get(mk.PROVENANCE)
+    return p if isinstance(p, Provenance) else None
 
 
 # Common OpenMM force-field XML names. We expose a tiny curated subset;
@@ -268,6 +281,19 @@ class OpenMM(MDEngine):
             timestep=timestep,
             engine_handle=omm_simulation,
             metadata={
+                mk.PROVENANCE: Provenance.from_engine(
+                    engine="OpenMM.prepare",
+                    parameters={
+                        "force_field": force_field,
+                        "temperature": temperature,
+                        "timestep": timestep,
+                        "platform": self.platform or "auto",
+                        "nonbonded_method": self.nonbonded_method,
+                        "constraints": self.constraints,
+                    },
+                    inputs={"protein": protein.name or "<Protein>"},
+                    parent=_parent_provenance(protein.metadata),
+                ),
                 "platform": self.platform or "auto",
                 "nonbonded_method": self.nonbonded_method,
                 "constraints": self.constraints,
@@ -314,6 +340,19 @@ class OpenMM(MDEngine):
             .value_in_unit(unit.angstrom)
         )
         simulation.coordinates = np.asarray(positions, dtype=np.float32)
+
+        # Chain a Provenance step onto the simulation. Each MD pipeline
+        # step (prepare -> minimize -> run) appends a Provenance with
+        # parent set to the previous step's, so a final Trajectory's
+        # chain() reads as the full MD workflow oldest-first.
+        simulation.metadata[mk.PROVENANCE] = Provenance.from_engine(
+            engine="OpenMM.minimize",
+            parameters={
+                "max_iterations": max_iterations,
+                "tolerance": tolerance,
+            },
+            parent=_parent_provenance(simulation.metadata),
+        )
         return simulation
 
     # ------------------------------------------------------------------
@@ -390,6 +429,17 @@ class OpenMM(MDEngine):
             times=times,
             energies=energies,
             metadata={
+                mk.PROVENANCE: Provenance.from_engine(
+                    engine="OpenMM.run",
+                    parameters={
+                        "n_steps": n_steps,
+                        "save_every": save_every,
+                        "timestep_ps": simulation.timestep,
+                        "temperature_K": simulation.temperature,
+                        "force_field": simulation.force_field,
+                    },
+                    parent=_parent_provenance(simulation.metadata),
+                ),
                 "engine": "OpenMM",
                 "force_field": simulation.force_field,
                 "timestep_ps": simulation.timestep,

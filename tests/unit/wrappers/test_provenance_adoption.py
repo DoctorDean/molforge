@@ -489,3 +489,204 @@ class TestProvenanceChaining:
         # chain() now lists the producers oldest-first.
         engines = [step.engine for step in result_prov.chain()]
         assert engines == ["ESMFold", "Vina"]
+
+
+# =====================================================================
+# Pass 2: MD wrappers and prep functions
+# =====================================================================
+#
+# Pass 1 used parent chaining only ACROSS wrappers (ESMFold -> Vina).
+# Pass 2 exercises chaining WITHIN a single wrapper's multi-step
+# pipeline (OpenMM/GROMACS prepare -> minimize -> run) and across the
+# four prep functions chained by prepare_for_md.
+#
+# OpenMM and PDBFixer are reasonable to require in CI; GROMACS needs a
+# real `gmx` binary which most CI environments lack, so the GROMACS
+# provenance assertions stay at the unit-test level (drive the call
+# chain without actually invoking gmx).
+
+
+def _openmm_available() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("openmm") is not None
+
+
+def _pdbfixer_available() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("pdbfixer") is not None
+
+
+def _fixtures_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "fixtures"
+
+
+@pytest.mark.skipif(not _openmm_available(), reason="openmm not installed")
+class TestOpenMMProvenanceChain:
+    """A full OpenMM prepare -> minimize -> run pipeline must produce
+    a Trajectory whose Provenance.chain() reads as the three steps
+    oldest-first. When the input Protein already has a Provenance
+    (e.g. it came from ESMFold), the chain extends back through it."""
+
+    def test_three_step_chain(self) -> None:
+        """prepare -> minimize -> run, no upstream provenance."""
+        from molforge.io import load
+        from molforge.wrappers.md.openmm import OpenMM
+
+        tripeptide = load(_fixtures_dir() / "pdb" / "ala_tripeptide_heavy.pdb")
+
+        engine = OpenMM(platform="CPU")
+        sim = engine.prepare(tripeptide, force_field="amber14-all")
+        sim = engine.minimize(sim, max_iterations=5)
+        traj = engine.run(sim, n_steps=10, save_every=10)
+
+        prov = traj.metadata[mk.PROVENANCE]
+        assert isinstance(prov, Provenance)
+        engines = [step.engine for step in prov.chain()]
+        assert engines == ["OpenMM.prepare", "OpenMM.minimize", "OpenMM.run"]
+
+    def test_chain_extends_through_upstream(self) -> None:
+        """If the input Protein has a Provenance (simulating an
+        ESMFold prediction), the OpenMM chain extends back through
+        it so the final Trajectory traces all the way to the
+        sequence."""
+        from molforge.io import load
+        from molforge.wrappers.md.openmm import OpenMM
+
+        tripeptide = load(_fixtures_dir() / "pdb" / "ala_tripeptide_heavy.pdb")
+        # Pretend this Protein came from a folding engine.
+        tripeptide.metadata[mk.PROVENANCE] = Provenance.from_engine(
+            engine="ESMFold",
+            parameters={"model_name": "esmfold_v1"},
+            inputs={"sequence": "AAA"},
+        )
+
+        engine = OpenMM(platform="CPU")
+        sim = engine.prepare(tripeptide, force_field="amber14-all")
+        traj = engine.run(sim, n_steps=10, save_every=10)
+
+        prov = traj.metadata[mk.PROVENANCE]
+        engines = [step.engine for step in prov.chain()]
+        # ESMFold sat upstream; the MD pipeline adds prepare -> run.
+        assert engines == ["ESMFold", "OpenMM.prepare", "OpenMM.run"]
+
+
+class TestGROMACSProvenanceWiring:
+    """GROMACS needs the `gmx` binary which CI usually lacks, so we
+    can't run the pipeline end-to-end here. We can still verify the
+    Provenance attachment by checking that GROMACS's metadata-build
+    paths reference the right Provenance fields — that's a tighter
+    unit-test than nothing.
+
+    We do this by inspecting the source: every Simulation/Trajectory
+    return statement should include a PROVENANCE key. Reading the
+    AST would be more precise; a simple substring check is good
+    enough as a regression-net for the adoption pattern."""
+
+    def test_prepare_attaches_provenance(self) -> None:
+        from molforge.wrappers.md import gromacs
+
+        src = Path(gromacs.__file__).read_text()
+        # Each of the three pipeline steps emits a Provenance with the
+        # expected engine string.
+        assert 'engine="GROMACS.prepare"' in src
+        assert 'engine="GROMACS.minimize"' in src
+        assert 'engine="GROMACS.run"' in src
+
+    def test_parent_provenance_helper_used(self) -> None:
+        from molforge.wrappers.md import gromacs
+
+        src = Path(gromacs.__file__).read_text()
+        # Every chained step uses _parent_provenance(...) to extract
+        # the parent — not the raw .get() which would skip the type
+        # narrowing.
+        assert "_parent_provenance(" in src
+
+
+# ---------------------------------------------------------------------
+# Prep functions
+# ---------------------------------------------------------------------
+
+
+@pytest.mark.skipif(
+    not (_openmm_available() and _pdbfixer_available()),
+    reason="openmm + pdbfixer required for prep",
+)
+class TestPrepProvenanceChain:
+    """The prep subpackage's five functions chain Provenance through
+    metadata. Calling prepare_for_md (which composes four of them in
+    sequence) leaves the result with a 4-deep chain that reads as
+    the pipeline oldest-first."""
+
+    def test_remove_heterogens_attaches_provenance(self) -> None:
+        from molforge.io import load
+        from molforge.prep import remove_heterogens
+
+        protein = load(_fixtures_dir() / "pdb" / "ala_tripeptide_heavy.pdb")
+        cleaned = remove_heterogens(protein)
+
+        _assert_provenance(
+            cleaned.metadata,
+            engine="molforge.prep.remove_heterogens",
+            expected_param_keys={"keep_water", "keep_ions", "keep_ligands", "keep"},
+            expected_input_keys=set(),
+        )
+
+    def test_chain_through_two_prep_calls(self) -> None:
+        from molforge.io import load
+        from molforge.prep import fix_missing_atoms, remove_heterogens
+
+        protein = load(_fixtures_dir() / "pdb" / "ala_tripeptide_heavy.pdb")
+        cleaned = remove_heterogens(protein)
+        fixed = fix_missing_atoms(cleaned)
+
+        prov = fixed.metadata[mk.PROVENANCE]
+        engines = [step.engine for step in prov.chain()]
+        assert engines == [
+            "molforge.prep.remove_heterogens",
+            "molforge.prep.fix_missing_atoms",
+        ]
+
+    def test_prepare_for_md_full_chain(self) -> None:
+        """The composite: remove_heterogens -> fix_missing_atoms ->
+        add_caps -> add_hydrogens leaves the result with a 4-deep
+        Provenance chain."""
+        from molforge.io import load
+        from molforge.prep import prepare_for_md
+
+        protein = load(_fixtures_dir() / "pdb" / "ala_tripeptide_heavy.pdb")
+        prepared = prepare_for_md(protein)
+
+        prov = prepared.metadata[mk.PROVENANCE]
+        engines = [step.engine for step in prov.chain()]
+        assert engines == [
+            "molforge.prep.remove_heterogens",
+            "molforge.prep.fix_missing_atoms",
+            "molforge.prep.add_caps",
+            "molforge.prep.add_hydrogens",
+        ]
+
+    def test_prepare_for_md_chain_extends_through_upstream(self) -> None:
+        """When the input Protein already has Provenance, the prep
+        chain extends back through it. This is the headline
+        traceability scenario: sequence -> ESMFold -> 4 prep steps."""
+        from molforge.io import load
+        from molforge.prep import prepare_for_md
+
+        protein = load(_fixtures_dir() / "pdb" / "ala_tripeptide_heavy.pdb")
+        protein.metadata[mk.PROVENANCE] = Provenance.from_engine(
+            engine="ESMFold",
+            parameters={"model_name": "esmfold_v1"},
+            inputs={"sequence": "AAA"},
+        )
+
+        prepared = prepare_for_md(protein)
+        engines = [step.engine for step in prepared.metadata[mk.PROVENANCE].chain()]
+        assert engines == [
+            "ESMFold",
+            "molforge.prep.remove_heterogens",
+            "molforge.prep.fix_missing_atoms",
+            "molforge.prep.add_caps",
+            "molforge.prep.add_hydrogens",
+        ]

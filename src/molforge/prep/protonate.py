@@ -111,4 +111,13 @@ def add_hydrogens(
     # Preserve metadata across the round-trip.
     if protein.metadata:
         result.metadata = {**protein.metadata, **result.metadata}
+
+    from molforge.prep._provenance import chain_prep_provenance
+
+    chain_prep_provenance(
+        result,
+        engine="molforge.prep.add_hydrogens",
+        parameters={"pH": float(pH), "force_field": force_field},
+        input_protein=protein,
+    )
     return result
