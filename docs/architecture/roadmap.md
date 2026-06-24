@@ -86,12 +86,16 @@ stitch them together.
   decorators and let users compose with Prefect/Hydra/Snakemake?
   Default answer probably the latter — fight that battle only if no
   existing tool fits.
-- **Provenance tracking.** Every `Protein`, `DockingResult`,
-  `Trajectory` should carry a record of how it was produced (engine,
-  version, args, input hashes). The `metadata` dicts are already a
-  start; promote some of that to first-class provenance so an
-  ensemble of "20 designs from ProteinMPNN, docked with Vina,
-  refined with OpenMM" is fully traceable.
+- **Provenance tracking.** **Surface added; adoption pending.**
+  `molforge.core.Provenance` is the canonical "what produced this
+  output" record — frozen dataclass with engine / version /
+  parameters / inputs / recursive parent, JSON-round-trippable,
+  stored on `metadata[PROVENANCE]`. Engine-wrapper adoption (each
+  wrapper writing a `Provenance` alongside its existing ad-hoc
+  `metadata["engine"]`) is the follow-on commit; ad-hoc keys
+  continue to work in parallel for backwards compatibility. The
+  "20 ProteinMPNN designs docked with Vina refined in OpenMM"
+  scenario will be fully traceable once every wrapper opts in.
 - **Parallelism primitives.** `dock_many`, `fold_many`, `run_many`
   taking a list of inputs and a parallelism level. Every user ends
   up writing the same `multiprocessing.Pool` loop. Tie this to the

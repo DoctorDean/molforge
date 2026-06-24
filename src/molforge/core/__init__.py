@@ -37,6 +37,7 @@ from molforge.core.constants import (
 )
 from molforge.core.metadata_keys import ProteinMetadata
 from molforge.core.protein import Protein
+from molforge.core.provenance import Provenance
 from molforge.core.residue import Residue
 
 __all__ = [  # noqa: RUF022 — grouped by concept, not alphabetical
@@ -56,6 +57,9 @@ __all__ = [  # noqa: RUF022 — grouped by concept, not alphabetical
     # Metadata vocabulary (string constants live in
     # molforge.core.metadata_keys; the TypedDict is re-exported here)
     "ProteinMetadata",
+    # Provenance — first-class "what produced this output" record;
+    # stored under metadata[PROVENANCE] (see metadata_keys.PROVENANCE).
+    "Provenance",
     # Constants & helpers
     "THREE_TO_ONE",
     "ONE_TO_THREE",

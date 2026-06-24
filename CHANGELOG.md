@@ -6,6 +6,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **First-class provenance tracking: `molforge.core.Provenance`.** A
+  raw PDB and a folded AlphaFold prediction look identical at the
+  AtomArray level; the only difference is *how the structure was
+  produced*. Pre-existing engine wrappers already wrote some of this
+  information into `metadata` ad-hoc — ESMFold sets
+  `metadata["engine"] = "ESMFold"`, RFdiffusion sets
+  `metadata["source_args"]` — but the keys are scattered, the shapes
+  disagree across engines, and there's no concept of a *parent*
+  output, so a chain of operations (fold -> dock -> MD) is not
+  traceable. This commit canonicalises the shape.
+
+  The new `Provenance` dataclass (frozen, JSON-round-trippable) has:
+    - **`engine`** — producer name; an engine ("ESMFold", "Vina")
+      or a molforge function path ("molforge.prep.prepare_for_md").
+    - **`engine_version`** — engine's own version string.
+    - **`molforge_version`** — auto-filled from `molforge.__version__`.
+    - **`timestamp`** — ISO-8601 UTC, auto-filled.
+    - **`parameters`** — engine-specific arguments (must be
+      JSON-native; validated eagerly at construction so a wrapper
+      can't smuggle in a `Path` or NumPy array that crashes much
+      later at serialisation).
+    - **`inputs`** — identifiers of the input data (e.g.
+      `{"sequence": "MKTVRQ..."}`, `{"receptor": "/path/to.pdb"}`).
+    - **`parent`** — the provenance of the input this step
+      *consumed*. Recursively a `Provenance` or `None`. This is what
+      makes the system compositional: walking the parent chain
+      reconstructs the whole history.
+
+  Construction goes through `Provenance.from_engine(engine=...,
+  parameters=..., inputs=..., parent=...)` which auto-fills the two
+  version fields and the timestamp so wrappers don't have to think
+  about them. The dataclass is frozen — mutating an attached
+  provenance would corrupt the audit trail; use `.replace(**changes)`
+  to derive an amended copy.
+
+  Traversal helpers: `walk()` yields self then ancestors newest-first;
+  `chain()` returns the same list oldest-first (suitable for printing
+  as a left-to-right pipeline); `depth` is the step count.
+
+  Serialisation: `to_dict()` / `from_dict()` give a stable plain-dict
+  shape with parents nested recursively; `to_json()` / `from_json()`
+  are JSON convenience wrappers. The on-disk shape is part of the
+  stability commitment.
+
+  The new `metadata_keys.PROVENANCE = "provenance"` constant is the
+  documented key; `ProteinMetadata` TypedDict declares it. The
+  intended use is `protein.metadata[mk.PROVENANCE] = prov`.
+  **Wrappers are NOT updated in this commit** — that's deliberately
+  separate work. The existing ad-hoc `metadata["engine"]` keys
+  continue to work for the 1.x series; engines opt into the
+  `Provenance` system gradually.
+
+  *NOT persisted through PDB / mmCIF writers* — those preserve only
+  the six documented IO header keys (per the mmCIF audit in
+  `c3a012e`). Provenance is an in-memory concept; users wanting
+  persistence serialise via `to_json` to a sidecar file. This is a
+  documented limitation, not a bug. A future "molforge bundle"
+  format could carry provenance alongside structure data; out of
+  scope here.
+
+  33 new tests in `tests/unit/core/test_provenance.py` covering
+  construction (minimal, autofill, defensive copies, parent),
+  strict JSON-input validation, immutability (FrozenInstanceError +
+  `.replace`), traversal (walk / chain / depth), serialisation
+  (dict shape, JSON round-trip, missing-engine error, forward-
+  compatible deserialisation of older shapes), equality, and the
+  metadata-key integration. Module coverage 96.8%; the residual
+  two lines are a defensive `_molforge_version` exception fallback.
+
 - **mmCIF writer round-trip audit and fidelity fixes.** A systematic
   audit of `write_cif_string` against every PDB fixture in the repo
   surfaced five concrete fidelity bugs in the pre-audit writer; all

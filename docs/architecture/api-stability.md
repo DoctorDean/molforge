@@ -105,6 +105,23 @@ The audit also fixed a real inconsistency: `load_alphafold` wrote
 only AlphaFold-specific keys while the AlphaFold *wrapper* wrote the
 cross-engine-uniform keys. `load_alphafold` now writes both.
 
+### `Provenance` (added post-v0.3)
+
+[`molforge.core.Provenance`](../reference/core.md) is the first-class
+"what produced this output" record, stored on `metadata[PROVENANCE]`.
+It's a frozen dataclass with a stable JSON-round-trip shape
+(`to_dict` / `from_dict` / `to_json` / `from_json`) and a recursive
+`parent` field that captures the chain of operations. The
+class is part of the public surface — its field names, the JSON
+shape, and the traversal helpers (`walk`, `chain`, `depth`) are
+stability commitments. *Wrapper adoption is gradual*: engine
+wrappers currently still write ad-hoc keys like `metadata["engine"]`,
+and the `Provenance` system is available to opt into; both will
+continue to work for the 1.x series. Persisting provenance through
+PDB / mmCIF writers is *not* supported — those preserve only six
+documented metadata keys; users serialise provenance to a sidecar
+file via `to_json`.
+
 ### `Rosetta` removed
 
 `molforge.wrappers.folding.Rosetta` — a deprecated alias for

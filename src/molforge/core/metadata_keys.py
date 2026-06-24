@@ -65,6 +65,23 @@ RESOLUTION = "resolution"
 """Resolution in Angstrom (float). Absent for non-diffraction structures."""
 
 # ----------------------------------------------------------------------
+# Provenance
+# ----------------------------------------------------------------------
+
+PROVENANCE = "provenance"
+"""First-class provenance record (:class:`molforge.core.Provenance`).
+
+The canonical key for "what produced this output." Carries engine
+name, version, parameters, inputs, and a recursive parent pointer to
+the upstream step's provenance. See :mod:`molforge.core.provenance`
+for construction helpers and the data shape.
+
+This is the documented replacement for the older ad-hoc
+``metadata["engine"]`` / ``metadata["source_args"]`` keys. Both
+continue to work for backwards compatibility; new code should write a
+:class:`Provenance` to this key instead."""
+
+# ----------------------------------------------------------------------
 # Uniform folding-engine keys (every folding wrapper sets these)
 # ----------------------------------------------------------------------
 
@@ -166,6 +183,13 @@ class ProteinMetadata(TypedDict, total=False):
     experimental_method: str
     resolution: float
 
+    # Provenance — first-class record of what produced this output.
+    # The value type is molforge.core.Provenance; declared here as
+    # ``Any`` to avoid a runtime circular import (the dataclass lives
+    # in molforge.core.provenance which imports nothing from this
+    # module).
+    provenance: Any
+
     # Uniform folding-engine keys.
     engine: str
     source_sequence: str
@@ -203,6 +227,7 @@ DOCUMENTED_KEYS: frozenset[str] = frozenset(
         DEPOSITION_DATE,
         EXPERIMENTAL_METHOD,
         RESOLUTION,
+        PROVENANCE,
         ENGINE,
         SOURCE_SEQUENCE,
         CONFIDENCE_PER_RESIDUE,
@@ -240,6 +265,8 @@ __all__ = [
     "DEPOSITION_DATE",
     "EXPERIMENTAL_METHOD",
     "RESOLUTION",
+    # Provenance
+    "PROVENANCE",
     # Uniform folding-engine keys
     "ENGINE",
     "SOURCE_SEQUENCE",
