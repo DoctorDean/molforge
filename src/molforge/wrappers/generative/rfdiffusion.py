@@ -59,6 +59,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.generative import GenerativeEngine, GenerativeEngineNotInstalledError
 
 if TYPE_CHECKING:
@@ -345,8 +347,30 @@ class RFdiffusion(GenerativeEngine):
         designs: list[Protein] = []
         for i, pdb in enumerate(pdbs):
             protein = read_pdb(pdb)
+            # Each design is its own independent output, so each gets
+            # its own Provenance. The engine parameters are the same
+            # across designs (same call, same config); design_index
+            # stays as a separate metadata key — it identifies *which*
+            # of N designs this is, not part of the engine config.
+            prov = Provenance.from_engine(
+                engine="RFdiffusion",
+                parameters={
+                    **source_args,
+                    "rfdiffusion_dir": (
+                        str(self.rfdiffusion_dir) if self.rfdiffusion_dir else None
+                    ),
+                    "python_executable": self.python_executable,
+                    "device": self.device,
+                },
+                inputs=(
+                    {"target_pdb": source_args["target_pdb"]}
+                    if source_args.get("target_pdb")
+                    else {}
+                ),
+            )
             protein.metadata.update(
                 {
+                    mk.PROVENANCE: prov,
                     "engine": "RFdiffusion",
                     "design_index": i,
                     "source_args": source_args,

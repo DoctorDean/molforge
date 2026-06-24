@@ -208,6 +208,7 @@ class AlphaFold(FoldingEngine):
         convention: per-atom in ``confidence_per_atom``, per-residue
         in ``confidence_per_residue``, scalar in ``mean_confidence``.
         """
+        from molforge.core import Provenance
         from molforge.io.pdb import read_pdb_string
 
         protein = read_pdb_string(pdb_text)
@@ -219,8 +220,25 @@ class AlphaFold(FoldingEngine):
             per_residue.append(float(plddt_per_atom[sl].mean()))
         per_residue_arr = np.asarray(per_residue, dtype=np.float32)
 
+        # First-class provenance. The msa_mode / num_models / num_recycles
+        # echoes below stay for backwards compatibility but are now also
+        # carried inside parameters in a canonical shape.
+        prov = Provenance.from_engine(
+            engine="AlphaFold",
+            parameters={
+                "mode": self.mode,
+                "model_type": self.model_type,
+                "msa_mode": self.msa_mode,
+                "num_models": self.num_models,
+                "num_recycles": self.num_recycles,
+                "device": self.device,
+            },
+            inputs={"sequence": sequence},
+        )
+
         protein.metadata.update(
             {
+                mk.PROVENANCE: prov,
                 mk.ENGINE: "AlphaFold",
                 mk.MODEL_TYPE: self.model_type,
                 mk.SOURCE_SEQUENCE: sequence,

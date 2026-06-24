@@ -6,6 +6,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Provenance adoption across folding, docking, and generative
+  wrappers (pass 1).** Builds on the `Provenance` surface added in
+  `9fafbba`. Every wrapper in scope now attaches a `Provenance` to
+  the output's `metadata[PROVENANCE]` alongside its existing ad-hoc
+  keys, so the "20 designs from ProteinMPNN, docked with Vina"
+  scenario is now traceable end-to-end.
+
+  Wrappers adopted:
+    - **Folding**: ESMFold, AlphaFold, Boltz, RoseTTAFold. Each
+      records its `__init__` config (model name, device, msa mode,
+      recycles, etc.) in `parameters` and the input sequence in
+      `inputs`. Folding has no upstream wrapper, so `parent` is
+      `None`.
+    - **Docking**: Vina, DiffDock. Each `DockingResult.metadata`
+      gets a `Provenance` covering the run (box, exhaustiveness,
+      seed, etc. in `parameters`; receptor + ligand refs in
+      `inputs`); when the receptor was a `Protein` with its own
+      `Provenance`, that becomes the `parent` so a Vina pose
+      docked against an ESMFold prediction chains back to the
+      sequence. Per-pose `Pose.metadata` keeps existing per-pose
+      keys (`confidence`, `source_file`) — poses aren't
+      independently produced, so they share the result-level
+      provenance rather than each carrying their own.
+    - **Generative**: RFdiffusion, ProteinMPNN. Each returned
+      design (a `Protein` for RFdiffusion, a `DesignedSequence`
+      for ProteinMPNN) gets its own `Provenance` — all designs
+      from one call share the same Provenance object (frozen +
+      immutable, so by-reference sharing is safe). `design_index`
+      stays as a separate metadata key, not part of `parameters`,
+      since it identifies *which* design rather than the engine
+      config.
+    - **`molforge.io.load_alphafold`**: the loader helper. The
+      engine name reflects that this is the loader, not the
+      AlphaFold run itself (`engine="load_alphafold"`); the file
+      path goes in `inputs["path"]`.
+
+  Existing ad-hoc metadata keys are preserved across every change
+  — `metadata["engine"]`, `metadata["source_sequence"]`,
+  `metadata["source_args"]`, etc. continue to work for 1.x
+  backwards compatibility. The new `metadata[PROVENANCE]` is
+  *additive*, not a replacement, until 2.x.
+
+  Two wrapper-side surface changes worth noting:
+    - `Vina._parse_poses_pdbqt` and `DiffDock._parse_outputs`
+      gained optional `provenance_parameters` /
+      `provenance_inputs` / `provenance_parent` kwargs (and
+      DiffDock additionally `receptor_ref` / `ligand_ref`). The
+      kwargs are optional so legacy tests calling the parsers
+      directly without those refs still work — they just don't
+      get a Provenance attached. The main `dock()` entry points
+      always pass them.
+    - The `Vina` module gained a `_provenance_ref` helper for
+      converting a `Protein | str | PathLike` to a JSON-native
+      string identifier.
+
+  Tests (`tests/unit/wrappers/test_provenance_adoption.py`, 11
+  new): one assertion per adopted wrapper plus a parent-chaining
+  integration test that exercises the headline scenario
+  (`ESMFold -> Vina` chain). Each adoption test holds the wrapper
+  to a uniform contract: `engine` matches the documented name,
+  `parameters` contains every promised key, `inputs` contains the
+  expected input identifier(s). The chaining test confirms
+  `result.metadata[PROVENANCE].chain()` reads as
+  `["ESMFold", "Vina"]` oldest-first.
+
 - **First-class provenance tracking: `molforge.core.Provenance`.** A
   raw PDB and a folded AlphaFold prediction look identical at the
   AtomArray level; the only difference is *how the structure was

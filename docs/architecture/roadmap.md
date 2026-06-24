@@ -86,16 +86,18 @@ stitch them together.
   decorators and let users compose with Prefect/Hydra/Snakemake?
   Default answer probably the latter — fight that battle only if no
   existing tool fits.
-- **Provenance tracking.** **Surface added; adoption pending.**
+- **Provenance tracking.** **Surface added; pass-1 adoption done.**
   `molforge.core.Provenance` is the canonical "what produced this
   output" record — frozen dataclass with engine / version /
   parameters / inputs / recursive parent, JSON-round-trippable,
-  stored on `metadata[PROVENANCE]`. Engine-wrapper adoption (each
-  wrapper writing a `Provenance` alongside its existing ad-hoc
-  `metadata["engine"]`) is the follow-on commit; ad-hoc keys
-  continue to work in parallel for backwards compatibility. The
-  "20 ProteinMPNN designs docked with Vina refined in OpenMM"
-  scenario will be fully traceable once every wrapper opts in.
+  stored on `metadata[PROVENANCE]`. Pass 1 adopted it across all 
+  9 simple wrappers: ESMFold, AlphaFold, Boltz, RoseTTAFold, Vina, 
+  DiffDock, RFdiffusion, ProteinMPNN, and `load_alphafold`. Pass 2 
+  — the MD wrappers (OpenMM, GROMACS) and the `molforge.prep` functions — is still
+  pending; those have multi-step pipelines where each step
+  (`prepare → minimize → equilibrate → run`) should chain
+  Provenance to the previous step's via `parent`, exercising the
+  composability that pass 1 only used for cross-wrapper chains.
 - **Parallelism primitives.** `dock_many`, `fold_many`, `run_many`
   taking a list of inputs and a parallelism level. Every user ends
   up writing the same `multiprocessing.Pool` loop. Tie this to the

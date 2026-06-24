@@ -371,6 +371,7 @@ class RoseTTAFold(FoldingEngine):
         uniform confidence convention and additionally expose the
         RFAA-specific PAE matrix and scalars.
         """
+        from molforge.core import Provenance
         from molforge.io.pdb import read_pdb_string
 
         protein = read_pdb_string(pdb_text)
@@ -384,6 +385,17 @@ class RoseTTAFold(FoldingEngine):
         mean_conf = float(per_residue_arr.mean()) if per_residue_arr.size else 0.0
 
         meta: dict[str, object] = {
+            mk.PROVENANCE: Provenance.from_engine(
+                engine="RoseTTAFold",
+                parameters={
+                    "repo_dir": self.repo_dir,
+                    "python_executable": self.python_executable,
+                    "max_cycle": self.max_cycle,
+                    "job_name": self.job_name,
+                    "extra_overrides": list(self.extra_overrides),
+                },
+                inputs={"sequence": sequence},
+            ),
             mk.ENGINE: "RoseTTAFold",
             mk.SOURCE_SEQUENCE: sequence,
             mk.JOB_NAME: self.job_name,

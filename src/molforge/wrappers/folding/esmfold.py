@@ -134,6 +134,7 @@ class ESMFold(FoldingEngine):
             A :class:`Protein` with one chain (``"A"``), the predicted
             structure, and:
 
+            - ``metadata["provenance"]``: :class:`molforge.core.Provenance`
             - ``metadata["engine"] = "ESMFold"``
             - ``metadata["confidence_per_residue"]``: ``(L,)`` float32 pLDDT
             - ``metadata["mean_confidence"]``: float mean pLDDT
@@ -211,6 +212,7 @@ class ESMFold(FoldingEngine):
             pdb_text: PDB-formatted string from :meth:`_output_to_pdb`.
             sequence: The original input sequence (stored in metadata).
         """
+        from molforge.core import Provenance
         from molforge.io.pdb import read_pdb_string
 
         protein = read_pdb_string(pdb_text)
@@ -222,8 +224,24 @@ class ESMFold(FoldingEngine):
             per_residue.append(float(plddt_per_atom[sl].mean()))
         per_residue_arr = np.asarray(per_residue, dtype=np.float32)
 
+        # First-class provenance record. Engine config goes into
+        # `parameters`; the sequence (the actual input data) into
+        # `inputs`. The engine name and model_name remain in the ad-hoc
+        # keys below for backwards compatibility.
+        prov = Provenance.from_engine(
+            engine="ESMFold",
+            parameters={
+                "model_name": self.model_name,
+                "device": self.device,
+                "chunk_size": self.chunk_size,
+                "dtype": self.dtype,
+            },
+            inputs={"sequence": sequence},
+        )
+
         protein.metadata.update(
             {
+                mk.PROVENANCE: prov,
                 mk.ENGINE: "ESMFold",
                 mk.MODEL_NAME: self.model_name,
                 mk.SOURCE_SEQUENCE: sequence,

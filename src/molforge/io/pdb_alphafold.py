@@ -83,6 +83,7 @@ def load_alphafold(path: str | PathLike[str]) -> Protein:
     downstream tools that still expect to find pLDDT there.
     """
     from molforge.core import metadata_keys as mk
+    from molforge.core.provenance import Provenance
 
     protein = read_pdb(path)
     arr = protein.atom_array
@@ -95,6 +96,15 @@ def load_alphafold(path: str | PathLike[str]) -> Protein:
         per_res.append(float(plddt[sl].mean()))
     plddt_per_residue = np.asarray(per_res, dtype=np.float32)
     mean_plddt = float(plddt.mean()) if plddt.size else 0.0
+
+    # Provenance: this isn't an engine run, it's a loader. Engine name
+    # reflects that (the prediction came from AlphaFold at some prior
+    # time, but the *molforge* operation is "load from file"). Inputs
+    # carry the file path so the chain is traceable.
+    protein.metadata[mk.PROVENANCE] = Provenance.from_engine(
+        engine="load_alphafold",
+        inputs={"path": str(path)},
+    )
 
     # Uniform folding-engine keys (preferred).
     protein.metadata[mk.ENGINE] = "AlphaFold"

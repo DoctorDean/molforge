@@ -55,17 +55,15 @@ import shlex
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+from molforge.core import Protein
+from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.generative import (
     DesignedSequence,
     GenerativeEngine,
     GenerativeEngineNotInstalledError,
 )
-
-if TYPE_CHECKING:
-    from molforge.core import Protein
-
 
 # Valid model names per the official repo
 _VALID_MODELS = ("v_48_002", "v_48_010", "v_48_020", "v_48_030")
@@ -205,13 +203,49 @@ class ProteinMPNN(GenerativeEngine):
             RuntimeError: If the subprocess fails.
         """
         pmpnn_dir = self._resolve_proteinmpnn_dir()
-        return self._run_cli(
+        designs = self._run_cli(
             backbone=backbone,
             pmpnn_dir=pmpnn_dir,
             chains_to_design=chains_to_design,
             fixed_positions=fixed_positions,
             timeout=timeout,
         )
+
+        # Attach Provenance to each designed sequence. They were all
+        # produced by the same call with the same engine config, so
+        # they share a single Provenance object (frozen + immutable,
+        # so sharing is safe). The parent is the input backbone's
+        # provenance when present — chains a ProteinMPNN design back
+        # to whatever produced its scaffold.
+        parent: Provenance | None = None
+        backbone_ref: str
+        if isinstance(backbone, Protein):
+            parent = backbone.metadata.get(mk.PROVENANCE)
+            backbone_ref = backbone.name or "<Protein>"
+        else:
+            backbone_ref = str(backbone)
+
+        prov = Provenance.from_engine(
+            engine="ProteinMPNN",
+            parameters={
+                "model_name": self.model_name,
+                "use_soluble_model": self.use_soluble_model,
+                "ca_only": self.ca_only,
+                "num_seqs": self.num_seqs,
+                "sampling_temp": self.sampling_temp,
+                "omit_aas": self.omit_aas,
+                "seed": self.seed,
+                "chains_to_design": chains_to_design,
+                "fixed_positions": fixed_positions,
+                "proteinmpnn_dir": (str(self.proteinmpnn_dir) if self.proteinmpnn_dir else None),
+                "python_executable": self.python_executable,
+            },
+            inputs={"backbone": backbone_ref},
+            parent=parent,
+        )
+        for d in designs:
+            d.metadata[mk.PROVENANCE] = prov
+        return designs
 
     # ------------------------------------------------------------------
     # CLI invocation (testable seam)

@@ -36,6 +36,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from molforge.core import Protein
+from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -45,6 +47,20 @@ from molforge.docking import (
 
 if TYPE_CHECKING:
     from os import PathLike
+
+
+def _provenance_ref(ref: Protein | str | PathLike[str]) -> str:
+    """Return a JSON-native string identifier for a docking input.
+
+    Provenance ``inputs`` must be JSON-serialisable, but Vina takes
+    either a :class:`Protein` or a path. For paths we serialise the
+    string form; for a :class:`Protein` we use its name or a generic
+    marker — the actual provenance ancestry (when present) is carried
+    through ``provenance_parent``, not duplicated here.
+    """
+    if isinstance(ref, Protein):
+        return ref.name or "<Protein>"
+    return str(ref)
 
 
 class Vina(DockingEngine):
@@ -183,6 +199,24 @@ class Vina(DockingEngine):
                 "scoring": self.scoring,
                 "seed": self.seed,
             },
+            provenance_parameters={
+                "center": list(center),
+                "box_size": list(box_size),
+                "exhaustiveness": exhaustiveness,
+                "n_poses": n_poses,
+                "energy_range": energy_range,
+                "min_rmsd": min_rmsd,
+                "scoring": self.scoring,
+                "seed": self.seed,
+                "cpu": self.cpu,
+            },
+            provenance_inputs={
+                "receptor": _provenance_ref(receptor),
+                "ligand": _provenance_ref(ligand),
+            },
+            provenance_parent=(
+                receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -263,6 +297,9 @@ class Vina(DockingEngine):
         *,
         receptor: Protein | None = None,
         run_metadata: dict[str, object] | None = None,
+        provenance_parameters: dict[str, Any] | None = None,
+        provenance_inputs: dict[str, Any] | None = None,
+        provenance_parent: Provenance | None = None,
     ) -> DockingResult:
         """Parse Vina's multi-pose PDBQT output into a DockingResult.
 
@@ -355,9 +392,20 @@ class Vina(DockingEngine):
         for i, p in enumerate(poses):
             p.rank = i
 
+        # Build the result-level metadata, layering Provenance on top
+        # of the ad-hoc run_metadata keys for backwards compatibility.
+        result_metadata: dict[str, object] = dict(run_metadata or {})
+        if provenance_parameters is not None or provenance_inputs is not None:
+            result_metadata[mk.PROVENANCE] = Provenance.from_engine(
+                engine="Vina",
+                parameters=provenance_parameters or {},
+                inputs=provenance_inputs or {},
+                parent=provenance_parent,
+            )
+
         return DockingResult(
             poses=poses,
             receptor=receptor,
             engine="Vina",
-            metadata=run_metadata or {},
+            metadata=result_metadata,
         )

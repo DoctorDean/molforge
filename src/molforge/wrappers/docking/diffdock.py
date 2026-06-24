@@ -53,6 +53,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from molforge.core import Protein
+from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -252,6 +254,13 @@ class DiffDock(DockingEngine):
             return self._parse_outputs(
                 out_dir,
                 receptor=receptor if isinstance(receptor, Protein) else None,
+                receptor_ref=(
+                    receptor.name or "<Protein>" if isinstance(receptor, Protein) else str(receptor)
+                ),
+                ligand_ref=str(ligand),
+                provenance_parent=(
+                    receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
+                ),
             )
 
     # ------------------------------------------------------------------
@@ -297,6 +306,9 @@ class DiffDock(DockingEngine):
         out_dir: Path,
         *,
         receptor: Protein | None,
+        receptor_ref: str | None = None,
+        ligand_ref: str | None = None,
+        provenance_parent: Provenance | None = None,
     ) -> DockingResult:
         """Parse DiffDock's ranked SDF poses into a DockingResult.
 
@@ -338,14 +350,37 @@ class DiffDock(DockingEngine):
         for i, p in enumerate(poses):
             p.rank = i
 
+        # Build result-level metadata, with Provenance layered on top
+        # of the ad-hoc config-echo keys for backwards compatibility.
+        # Inputs come through the call site (receptor_ref / ligand_ref);
+        # tests that call _parse_outputs directly without those refs
+        # still produce a result, just without provenance attached.
+        result_metadata: dict[str, object] = {
+            "samples_per_complex": self.samples_per_complex,
+            "inference_steps": self.inference_steps,
+        }
+        if receptor_ref is not None or ligand_ref is not None:
+            result_metadata[mk.PROVENANCE] = Provenance.from_engine(
+                engine="DiffDock",
+                parameters={
+                    "samples_per_complex": self.samples_per_complex,
+                    "inference_steps": self.inference_steps,
+                    "batch_size": self.batch_size,
+                    "repo_dir": str(self.repo_dir) if self.repo_dir else None,
+                    "python_executable": self.python_executable,
+                },
+                inputs={
+                    "receptor": receptor_ref,
+                    "ligand": ligand_ref,
+                },
+                parent=provenance_parent,
+            )
+
         return DockingResult(
             poses=poses,
             receptor=receptor,
             engine="DiffDock",
-            metadata={
-                "samples_per_complex": self.samples_per_complex,
-                "inference_steps": self.inference_steps,
-            },
+            metadata=result_metadata,
         )
 
 

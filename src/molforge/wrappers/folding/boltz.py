@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -363,6 +364,18 @@ class Boltz(FoldingEngine):
 
         protein.metadata.update(
             {
+                mk.PROVENANCE: Provenance.from_engine(
+                    engine="Boltz",
+                    parameters={
+                        "model_version": self.model_version,
+                        "use_msa_server": self.use_msa_server,
+                        "recycling_steps": self.recycling_steps,
+                        "diffusion_samples": self.diffusion_samples,
+                        "sampling_steps": self.sampling_steps,
+                        "device": self.device,
+                    },
+                    inputs={"sequence": sequence},
+                ),
                 mk.ENGINE: "Boltz",
                 mk.MODEL_VERSION: self.model_version,
                 mk.SOURCE_SEQUENCE: sequence,
