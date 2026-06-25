@@ -33,10 +33,12 @@ The following are considered stable and ready to freeze for 1.0:
   contract. See "Metadata" below.
 - **I/O** — `load`, `save`, `fetch`, and the format-specific
   `read_*` / `write_*` functions for PDB, mmCIF, FASTA, SDF, MOL2,
-  PDBQT, and PQR. The `FastaRecord` type. (Trajectory I/O —
-  `read_trajectory`, `iter_trajectory`, `write_trajectory` — is on
-  main but not yet shipped on PyPI; it'll move into this list when
-  the next release cuts.)
+  PDBQT, and PQR. Trajectory I/O — `read_trajectory`,
+  `iter_trajectory`, `write_trajectory` — and the `FastaRecord`
+  type.
+- **Prep** — the five `molforge.prep` functions
+  (`remove_heterogens`, `fix_missing_atoms`, `add_caps`,
+  `add_hydrogens`, `prepare_for_md`).
 - **Sequence, structure, metrics, ML featurization** — the analysis
   functions (alignment, RMSD, contacts, SASA, dihedrals, DSSP, lDDT,
   GDT, graph and structure featurization) have stable signatures.
@@ -52,7 +54,7 @@ The following are considered stable and ready to freeze for 1.0:
 ## Type checking
 
 The **entire `molforge` package** is verified under `mypy --strict` —
-all 83 source modules, every subpackage. CI enforces it: the
+all 85 source modules, every subpackage. CI enforces it: the
 `typecheck` job's `Mypy (strict)` step runs `mypy src` (the
 `[tool.mypy]` config sets `strict = true`) and fails the build on any
 new type error. A `slow`-marked regression test
@@ -105,7 +107,7 @@ The audit also fixed a real inconsistency: `load_alphafold` wrote
 only AlphaFold-specific keys while the AlphaFold *wrapper* wrote the
 cross-engine-uniform keys. `load_alphafold` now writes both.
 
-### `Provenance` (added post-v0.3)
+### `Provenance` (added in 0.4.0)
 
 [`molforge.core.Provenance`](../reference/core.md) is the first-class
 "what produced this output" record, stored on `metadata[PROVENANCE]`.
@@ -114,9 +116,10 @@ It's a frozen dataclass with a stable JSON-round-trip shape
 `parent` field that captures the chain of operations. The
 class is part of the public surface — its field names, the JSON
 shape, and the traversal helpers (`walk`, `chain`, `depth`) are
-stability commitments. *Wrapper adoption is gradual*: engine
-wrappers currently still write ad-hoc keys like `metadata["engine"]`,
-and the `Provenance` system is available to opt into; both will
+stability commitments. Wrapper adoption is complete across all
+shipped wrappers (every folding, docking, generative, and MD
+wrapper, plus the five prep functions, attach a `Provenance` to
+their outputs); the existing ad-hoc keys like `metadata["engine"]`
 continue to work for the 1.x series. Persisting provenance through
 PDB / mmCIF writers is *not* supported — those preserve only six
 documented metadata keys; users serialise provenance to a sidecar

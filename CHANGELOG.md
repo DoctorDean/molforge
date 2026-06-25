@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.4.0] 2026-06-25
+
+### Added
+
 - **Provenance adoption pass 2 — MD wrappers and prep functions.**
   Completes the wrapper-adoption work. Where
   pass 1 demonstrated cross-wrapper chaining (ESMFold → Vina),

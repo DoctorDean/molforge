@@ -25,7 +25,7 @@ shell script — `molforge` is just imports.
 
 | Subpackage          | What it does                                                                                              |
 | ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `molforge.core`     | Canonical data model: `Protein`, `Chain`, `Residue`, `Atom`, `AtomArray`.                                 |
+| `molforge.core`     | Canonical data model: `Protein`, `Chain`, `Residue`, `Atom`, `AtomArray`, plus `Provenance` for tracking how outputs were produced. |
 | `molforge.io`       | Structure I/O (PDB, mmCIF, FASTA, SDF, MOL2, PDBQT, PQR) and trajectory I/O (XTC, TRR, DCD, NetCDF, HDF5). |
 | `molforge.sequence` | Alignment, mutations, composition, substitution matrices.                                                 |
 | `molforge.structure`| RMSD, SASA, contacts, DSSP, dihedrals, superposition.                                                     |
@@ -51,7 +51,7 @@ shell script — `molforge` is just imports.
    Drug targets have ligands and ions. Membrane proteins have lipids.
    The data model handles all of it without an awkward special case
    for *"non-protein."*
-5. **Typed, tested, documented.** Strict mypy, ruff-clean, 1,100+ tests
+5. **Typed, tested, documented.** Strict mypy, ruff-clean, 1,200+ tests
    in CI, every public symbol has a Google-style docstring.
 
 ## Where to go next
