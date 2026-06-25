@@ -50,6 +50,17 @@ nav:
       - Plugins: guide/plugins.md
       - Validation: guide/validation.md
       - Ensembles: guide/ensembles.md
+  - Cookbook:
+      - Overview: cookbook/index.md
+      - Fold a sequence: cookbook/folding.md
+      - Fold then dock: cookbook/folding-then-docking.md
+      - Prepare for MD: cookbook/prep-for-md.md
+      - MD and RMSD: cookbook/md-and-rmsd.md
+      - Design then refold: cookbook/design-then-refold.md
+      - Inspect provenance: cookbook/inspect-provenance.md
+      - "Choosing: folding engines": cookbook/choosing-folding.md
+      - "Choosing: docking engines": cookbook/choosing-docking.md
+      - "Choosing: generative engines": cookbook/choosing-generative.md
   - Walkthroughs:
       - Sequences: walkthroughs/01_sequences.ipynb
       - Structures: walkthroughs/02_structures.ipynb

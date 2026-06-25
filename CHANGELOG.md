@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Cookbook + engine comparison tables.** A new
+  [`docs/cookbook/`](https://doctordean.github.io/molforge/cookbook/)
+  section answers the "I want to do X, what do I write?" question
+  in a task-oriented way, distinct from the concept-oriented user
+  guide and the learning-oriented walkthrough notebooks.
+
+  Six recipes, each structurally complete (real imports, real
+  signatures, real arguments — runnable as written if you have
+  the engine's dependencies):
+
+  - **Fold a sequence** — ESMFold workflow with confidence-based
+    filtering. Covers when to switch to AlphaFold / Boltz /
+    RoseTTAFold.
+  - **Fold then dock** — cross-engine ESMFold → Vina pipeline,
+    including how to pick a docking-site centre (active-site
+    residue, co-crystallised ligand reference, geometric centre).
+  - **Prepare for MD** — `prepare_for_md` end-to-end, with the
+    individual `remove_heterogens` / `fix_missing_atoms` /
+    `add_caps` / `add_hydrogens` steps and how to keep
+    co-crystallised ligands.
+  - **MD and RMSD** — OpenMM `prepare → minimize → run`, with
+    `trajectory.frame(i)` and `molforge.structure.rmsd` for
+    per-frame RMSD analysis. Covers trajectory I/O and
+    production-scale scaling.
+  - **Design then refold** — ProteinMPNN inverse folding + ESMFold
+    refold validation; the standard "design score + refold RMSD +
+    refold pLDDT" triple-signal check; how to pair with RFdiffusion
+    for de novo design.
+  - **Inspect provenance** — showcase for the
+    `metadata[PROVENANCE]` feature shipped in 0.4.0. Walks the
+    chain, filters by engine, saves to sidecar JSON, compares
+    runs, shows the cache-key derivation pattern.
+
+  Three decision-oriented comparison tables, separate from the
+  recipes because they answer "which engine?" rather than "how do
+  I run engine X":
+
+  - **Choosing folding engines** — ESMFold vs AlphaFold vs Boltz
+    vs RoseTTAFold across method, multimer support, MSA need,
+    speed, install footprint, license. Includes a decision tree
+    for monomer vs multimer vs cofactor predictions.
+  - **Choosing docking engines** — Vina vs DiffDock, the
+    force-field-search vs ML-pose-prediction trade-off, and a
+    two-stage workflow that uses DiffDock for pocket discovery
+    and Vina for precise scoring.
+  - **Choosing generative engines** — RFdiffusion vs ProteinMPNN,
+    framing them as complementary tools in the de novo design
+    loop rather than competing options.
+
+  Landing page (`docs/index.md`) gains a cookbook callout in
+  "Where to go next" — first place users land. `mkdocs.yml` gets
+  a Cookbook nav section between User guide and Walkthroughs.
+
+  All 32 Python code blocks across the 10 cookbook files are
+  syntax-validated (`ast.parse`); all 22 molforge imports
+  resolve to real symbols (verified by import). The
+  `mkdocs build --strict` pass catches any cross-link or nav
+  reference that doesn't resolve.
+
 ## [0.4.0] 2026-06-25
 
 ### Added

@@ -1,7 +1,5 @@
 # Roadmap
 
-This document captures the post-`0.2.0` direction for molforge.
-
 The goal: molforge as the layer that lets a researcher, a startup, or a
 big-enterprise pipeline glue together folding, docking, MD, and
 generative design across many engines without rewriting the boilerplate
@@ -19,41 +17,35 @@ each time.
   MDAnalysis, or RDKit already solve a problem well, molforge reads
   and writes their formats rather than competing.
 
-## Snapshot at this point
-
-The skeleton is solid: six engine wrappers across three modalities,
-ML featurizers, metrics with cross-validation, ensemble analysis, a
-plugin registry. The whole tree is `mypy --strict` clean across 76
-modules; ~988 tests passing. What's missing is mostly horizontal
-expansion (more engines, more formats, more workflows) plus a few
-vertical investments that compound.
-
 ---
 
 ## A. Fill in the obvious gaps
 
+### **COMPLETED** 
+
 Small-to-medium items where the import path already exists and a real
 implementation closes a visible hole.
 
-- **Format I/O completion.** **Done** `read_sdf`, `read_mol2`, `read_pdbqt`,
-  `read_pqr` are all real.
-- **mmCIF write support.** **Audited and hardened.** The existing
-  `write_cif` shipped in v0.3 was audited against every PDB fixture in
-  the repo; five concrete fidelity bugs were fixed (model_id, partial
-  charges, classification / deposition_date, _entry.id / block-name
-  divergence, serial). 38 new round-trip regression tests; the
-  parametrized `TestFixtureSweep` guards future regressions across the
-  whole corpus.
-- **Automatic system preparation.** **Done in `molforge.prep`.**
-  `remove_heterogens`, `fix_missing_atoms`, `add_caps`,
-  `add_hydrogens`, and a `prepare_for_md` convenience pipeline let a
-  user go from an AlphaFold-or-RCSB PDB to an MD-ready structure in
-  one call. Ion neutralization remains future work — it belongs with
-  explicit solvation, which is its own item.
-- **Trajectory I/O.** **Done via `molforge.io.read_trajectory` /
-  `iter_trajectory` / `write_trajectory`.** Wraps mdtraj for `.xtc`,
-  `.trr`, `.dcd`, `.nc`, `.h5`, multi-MODEL PDB; chunked iteration
-  via `iter_trajectory` bounds memory for large files.
+- **Format I/O completion.** **Done** 
+  - `read_sdf`, `read_mol2`, `read_pdbqt`,
+    `read_pqr` are all real.
+- **mmCIF write support.** **Audited and hardened.** 
+  - The existing `write_cif` shipped in v0.3 was audited against every PDB fixture in
+    the repo; five concrete fidelity bugs were fixed (model_id, partial
+    charges, classification / deposition_date, _entry.id / block-name
+    divergence, serial). 38 new round-trip regression tests; the
+    parametrized `TestFixtureSweep` guards future regressions across the
+    whole corpus.
+- **Automatic system preparation.** **Done**
+  - `remove_heterogens`, `fix_missing_atoms`, `add_caps`,
+    `add_hydrogens`, and a `prepare_for_md` convenience pipeline let a
+    user go from an AlphaFold-or-RCSB PDB to an MD-ready structure in
+    one call. Ion neutralization remains future work — it belongs with
+    explicit solvation, which is its own item.
+- **Trajectory I/O.** **Done** 
+  - `molforge.io.read_trajectory` / `iter_trajectory` / `write_trajectory`. 
+    Wraps mdtraj for `.xtc`, `.trr`, `.dcd`, `.nc`, `.h5`, multi-MODEL PDB; 
+    chunked iteration via `iter_trajectory` bounds memory for large files.
 
 ## B. Round out the engine matrix
 
@@ -86,22 +78,23 @@ stitch them together.
   decorators and let users compose with Prefect/Hydra/Snakemake?
   Default answer probably the latter — fight that battle only if no
   existing tool fits.
-- **Provenance tracking.** **Done.** `molforge.core.Provenance` is
-  the canonical "what produced this output" record — frozen
-  dataclass with engine / version / parameters / inputs / recursive
-  parent, JSON-round-trippable, stored on `metadata[PROVENANCE]`.
-  Adoption is complete across both passes: pass 1 covered the
-  simple wrappers (ESMFold, AlphaFold, Boltz, RoseTTAFold, Vina,
-  DiffDock, RFdiffusion, ProteinMPNN, `load_alphafold`); pass 2
-  covered the MD multi-step pipelines (OpenMM, GROMACS each
-  chaining `prepare → minimize → run`) and the prep functions
-  (`remove_heterogens`, `fix_missing_atoms`, `add_caps`,
-  `add_hydrogens`, `prepare_for_md`). The headline-feature
-  scenario from the original roadmap entry — "20 designs from
-  ProteinMPNN, docked with Vina, refined with OpenMM" — is now
-  fully traceable end-to-end via `result.metadata[PROVENANCE].chain()`.
-  Optional polish (sidecar persistence, hash-keyed caching, deeper
-  engine-version introspection) is deferred.
+- **Provenance tracking.** **Done.** 
+  - `molforge.core.Provenance` is
+    the canonical "what produced this output" record — frozen
+    dataclass with engine / version / parameters / inputs / recursive
+    parent, JSON-round-trippable, stored on `metadata[PROVENANCE]`.
+    Adoption is complete across both passes: pass 1 covered the
+    simple wrappers (ESMFold, AlphaFold, Boltz, RoseTTAFold, Vina,
+    DiffDock, RFdiffusion, ProteinMPNN, `load_alphafold`); pass 2
+    covered the MD multi-step pipelines (OpenMM, GROMACS each
+    chaining `prepare → minimize → run`) and the prep functions
+    (`remove_heterogens`, `fix_missing_atoms`, `add_caps`,
+    `add_hydrogens`, `prepare_for_md`). The headline-feature
+    scenario from the original roadmap entry — "20 designs from
+    ProteinMPNN, docked with Vina, refined with OpenMM" — is now
+    fully traceable end-to-end via `result.metadata[PROVENANCE].chain()`.
+    Optional polish (sidecar persistence, hash-keyed caching, deeper
+    engine-version introspection) is deferred.
 - **Parallelism primitives.** `dock_many`, `fold_many`, `run_many`
   taking a list of inputs and a parallelism level. Every user ends
   up writing the same `multiprocessing.Pool` loop. Tie this to the
@@ -179,17 +172,21 @@ Where existing functionality could be deeper, not wider.
 
 ## G. Documentation and onboarding
 
-- **A cookbook.** Not API reference, not tutorials, but "how do I do
-  X" recipes. "Dock a library of 1000 SMILES against a protein",
-  "MD-refine an AlphaFold model", "Cross-validate a ProteinMPNN
-  design with folding". Each recipe is one runnable notebook.
+- **A cookbook.** **Done**
+  - Six task-oriented recipes (folding, fold-then-dock, prep-for-MD, MD +
+   RMSD, design-then-refold, inspect-provenance) and three
+   decision-oriented comparison tables (folding, docking,
+   generative engines) live under `docs/cookbook/`. The landing
+   page points to the cookbook as the answer to "trying to do
+   something specific?"
 - **Performance benchmarks page.** Publish the numbers from the
   benchmark suite — "molforge X takes Y ms on Z input" — so users
   know what to expect.
-- **Engine comparison tables.** "Which folding engine should I use
-  for this case" with rows = engines, columns = (accuracy, speed,
-  license, install difficulty, memory). High value, low effort, often
-  missing in similar packages.
+- **Engine comparison tables.** **Done**
+  - "Which folding engine should I use
+    for this case" with rows = engines, columns = (accuracy, speed,
+    license, install difficulty, memory). High value, low effort, often
+    missing in similar packages.
 - **Migration guides.** "Coming from BioPython", "Coming from
   Biotite", "Coming from MDAnalysis". Lower the cost of switching.
 
@@ -235,8 +232,8 @@ A rough sequencing:
    `dist/` build.
 5. **Caching layer + provenance tracking.** Compounds everywhere
    downstream.
-6. **Cookbook + engine comparison tables.** Turn the existing surface
-   into something people can find.
+6. ~~**Cookbook + engine comparison tables.** Turn the existing surface
+   into something people can find.~~
 7. **Horizontal engine expansion.** Gnina, ESM-IF1, AMBER, pocket
    detection, MMPBSA. One session per engine.
 

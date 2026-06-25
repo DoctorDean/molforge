@@ -58,6 +58,11 @@ shell script — `molforge` is just imports.
 
 - **New here?** Start with [Installation](getting-started/installation.md)
   and the [Quickstart](getting-started/quickstart.md).
+- **Trying to do something specific?** The
+  [Cookbook](cookbook/index.md) has task-oriented recipes
+  (folding, docking, MD, design) and decision-oriented comparison
+  tables (which folding / docking / generative engine for what
+  job).
 - **Want to understand the design?** Read the
   [Architecture overview](architecture/overview.md).
 - **Looking for a specific function?** Browse the
