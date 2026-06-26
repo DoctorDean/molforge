@@ -230,6 +230,7 @@ module = [
     "Bio.*",
     "biotite.*",
     "colabfold.*",
+    "esm.*",
     "mdtraj.*",
     "meeko.*",
     "openmm.*",

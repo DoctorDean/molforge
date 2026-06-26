@@ -8,6 +8,146 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **ESM-IF1 inverse-folding wrapper.** Third generative engine,
+  joining ProteinMPNN (inverse folding) and RFdiffusion (backbone
+  generation). ESM-IF1 (Hsu et al. 2022) solves the same problem
+  as ProteinMPNN — given a backbone, design sequences that adopt
+  it — with a fundamentally different architecture (GVP-GNN +
+  seq2seq transformer) and dramatically different training data
+  (~12M AlphaFold2 predictions vs ProteinMPNN's ~20k PDB
+  structures). Cross-checking with both engines is the headline
+  workflow: orthogonal training data means residue-identity
+  agreement between the two is a strong signal that's not just
+  capturing training-distribution biases.
+
+  Same `GenerativeEngine` interface as ProteinMPNN — swap from one
+  to the other is a one-line change in user code, and both return
+  the same `list[DesignedSequence]` shape:
+
+      engine = ESMIF1(num_seqs=8, temperature=0.1, seed=42)
+      designs = engine.generate(backbone)
+      print(designs[0].sequence, designs[0].score, designs[0].recovery)
+
+  Public surface:
+
+  - `ESMIF1(model_name=, device=, num_seqs=, temperature=,
+    score_sequences=, compute_recovery=, seed=)` — constructor.
+    Argument validation upfront (num_seqs >= 1, temperature > 0).
+    Lazy: construction does no model loading, no network calls,
+    no torch import. Users can import ESMIF1 without fair-esm
+    installed.
+  - `.generate(backbone, *, chain_id="A")` — accepts a Protein,
+    PDB path, or mmCIF path. Returns a list sorted best-first by
+    negative log-likelihood (lower = better; matches the existing
+    DesignedSequence convention from ProteinMPNN).
+
+  Per-design metadata exposes engine config + sampling index for
+  reproducibility:
+
+      design.score                    # -ll_fullseq (lower better)
+      design.recovery                 # vs native, in [0, 1]
+      design.metadata["engine"]       # "ESM-IF1"
+      design.metadata["model_name"]   # "esm_if1_gvp4_t16_142M_UR50"
+      design.metadata["temperature"]  # passed-through sampling temp
+      design.metadata["sample_index"] # 0..num_seqs-1
+
+  All designs from one `.generate()` call share a single
+  Provenance (frozen, by-reference) — same pattern as ProteinMPNN
+  and Gnina. The chain extends through any upstream wrapper's
+  provenance, so an RFdiffusion → ESM-IF1 pipeline produces a
+  chain reading `["RFdiffusion", "ESM-IF1"]` oldest-first.
+
+  Install path is dramatically lighter than ProteinMPNN's: ESM-IF1
+  ships in the `fair-esm` PyPI package (no clone, no
+  `ESMIF1_HOME` env var). `pip install "molforge[ml]"` pulls
+  fair-esm; users separately install `torch-geometric` for the
+  GVP-GNN layers (the upstream's environment-setup note).
+  `GenerativeEngineNotInstalledError` with install-path guidance
+  fires when fair-esm or its deps aren't available.
+
+  What this wrapper deliberately doesn't cover (v1 scope):
+
+  - **Multi-chain conditioning.** ESM-IF1 has
+    `multichain_util.sample_sequence_in_complex` for designing one
+    chain conditioned on others; that takes a dict input shape and
+    deserves its own commit when concrete user needs surface.
+  - **Partial sequence conditioning.** The model supports masking
+    specific positions with `score_sequence` partial inputs;
+    deferred until needed.
+  - **Custom model checkpoints.** ESM-IF1 currently ships one
+    production model. The `model_name` constructor argument exists
+    for future-proofing.
+
+  Multi-chain or partial-sequence use cases can fall back to the
+  underlying model handle (lazily loaded; exposed via `ESMIF1.model`
+  after the first `generate()` call) and call the `fair-esm`
+  library directly.
+
+  Internal seams: `_sample_one(coords)` and
+  `_score_one(coords, sequence)` are deliberately small instance
+  methods that bracket the calls into
+  `esm.inverse_folding.util.sample_sequence` and `.score_sequence`.
+  Tests patch.object these to drive the full `generate()` pipeline
+  without fair-esm installed.
+
+  Tests (`tests/unit/wrappers/test_esm_if1.py`, 25 unit tests +
+  1 real-model skipped):
+
+  - `TestConstruction` (5) — defaults, custom options, validators
+    (num_seqs, temperature), construction is lazy (no torch
+    needed).
+  - `TestMissingDependency` (1, skipped when fair-esm installed)
+    — friendly error mentions fair-esm and the molforge[ml]
+    install path.
+  - `TestComputeRecovery` (7) — pure-Python utility: perfect /
+    partial / no match, empty strings either side, length
+    mismatch uses overlap.
+  - `TestSampleDesigns` (4) — drives `_sample_designs` with
+    `_sample_one` and `_score_one` patched: basic sampling
+    produces correctly-scored designs with right metadata,
+    `score_sequences=False` skips scoring (zero score, never
+    calls `_score_one`), `compute_recovery=False` yields
+    `recovery=None`, empty native sequence yields `recovery=None`.
+  - `TestGenerate` (4) — full `generate()` flow with
+    `_ensure_loaded` / `_load_coords` / `_sample_one` /
+    `_score_one` patched: designs returned sorted best-first by
+    score, Provenance shared by-reference across designs,
+    Provenance chains through an upstream RFdiffusion provenance,
+    Provenance.parameters captures every constructor field
+    relevant to reproducing the call.
+  - `TestMaterialiseBackbone` (2) — Path/string passes through,
+    Protein writes to a temp PDB in the supplied tmp dir.
+  - `TestSourceInspection` (2) — regression net: the literal
+    `ll_fullseq, _ = esm.inverse_folding.util.score_sequence`
+    destructure is present (catches a future refactor that mixes
+    up which of the two return values to use), the
+    `score = -float(ll_fullseq)` negation is present (catches a
+    refactor that flips the sign).
+  - `TestRealESMIF1` (1, skipped when fair-esm missing) —
+    end-to-end test that samples three sequences against the
+    `ala_tripeptide_heavy.pdb` fixture with the real model.
+    Runs when fair-esm is on PATH; downloads ~145 MB of weights
+    on first execution.
+
+  Cookbook updated:
+
+  - `cookbook/choosing-generative.md` — header updated from "two
+    engines" to "three engines"; comparison table gains an
+    ESM-IF1 row; new "You're choosing between ProteinMPNN and
+    ESM-IF1" subsection contrasts them across architecture,
+    training data, sequence recovery, install footprint,
+    multi-chain support, and sampling control; example
+    cross-engine consensus workflow demonstrating the headline
+    use case (residue-identity agreement as a robust filter);
+    Installation footprint and Confidence-signals tables updated.
+  - `cookbook/design-then-refold.md` — new "Cross-checking with
+    ESM-IF1" section after "Pairing with RFdiffusion", showing
+    the MPNN-then-ESM-IF1-validate workflow with refold-pLDDT
+    triangulation.
+
+  `pyproject.toml` mypy override added: `"esm.*"` joins the list
+  of optional dependencies whose missing stubs mypy should ignore.
+
 - **Gnina docking wrapper.** Third docking engine, joining Vina and
   DiffDock. Gnina is a fork of smina (itself a fork of AutoDock
   Vina) with integrated CNN scoring — same Monte-Carlo search as

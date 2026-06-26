@@ -7,6 +7,11 @@ Concrete engines:
     - :class:`ProteinMPNN` — message-passing neural network for
       protein sequence design (Dauparas et al. 2022). Given a
       backbone, propose sequences that should fold to it.
+    - :class:`ESMIF1` — ESM-IF1 inverse-folding model (Hsu et al.
+      2022). Same problem as ProteinMPNN — sequence design from
+      backbone — with a different architecture (GVP-GNN + seq2seq
+      transformer) and different training data. Common practice is
+      to run both and compare.
 
 Shared:
     - :class:`GenerativeEngine` — abstract base for the engine contract
@@ -22,6 +27,7 @@ with the folding wrappers (ESMFold, AlphaFold) and the analysis layer
 from __future__ import annotations
 
 from molforge.generative import GenerativeEngine, GenerativeEngineNotInstalledError
+from molforge.wrappers.generative.esm_if1 import ESMIF1
 from molforge.wrappers.generative.proteinmpnn import ProteinMPNN
 from molforge.wrappers.generative.rfdiffusion import RFdiffusion
 
@@ -30,4 +36,5 @@ __all__ = [  # noqa: RUF022 — grouped: base, then engines
     "GenerativeEngineNotInstalledError",
     "RFdiffusion",
     "ProteinMPNN",
+    "ESMIF1",
 ]

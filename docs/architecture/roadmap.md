@@ -64,9 +64,12 @@ layer.
 - **MD.** AMBER is **shipped**
   - (post-0.4.0; wraps `tleap` + `sander` + optional `pmemd`); 
     NAMD and LAMMPS for non-bio workloads remain on the wishlist.
-- **Generative.** ESM-IF1 (inverse folding, natural companion to
-  ProteinMPNN), LigandMPNN (handles ligand context), Chroma,
-  Protpardelle.
+- **Generative.** ESM-IF1 is **shipped**
+  - (post-0.4.0; pip-installable
+    inverse folding via fair-esm, companion to ProteinMPNN for
+    cross-engine validation). LigandMPNN (ProteinMPNN extension that
+    handles ligand context), Chroma (diffusion-based backbone
+    generation), and Protpardelle remain on the wishlist.
 - **MSA / sequence search.** Wrap `mmseqs2`, `hmmer`, `jackhmmer`.
   Most folding wrappers currently dodge this via ColabFold's MSA
   server; a local MSA path is what serious users need.

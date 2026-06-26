@@ -129,13 +129,51 @@ for backbone in backbones:
 See [Choosing a generative engine](choosing-generative.md) for when
 each is the right tool.
 
+## Cross-checking with ESM-IF1
+
+molforge also wraps ESM-IF1, an inverse-folding model with a
+different architecture (GVP-GNN + transformer) and different
+training data (~12M AlphaFold2 predictions vs ProteinMPNN's ~20k
+PDB structures). When both engines agree on a residue identity at
+a position, the agreement is a strong signal — orthogonal training
+data means the agreements aren't trivial.
+
+A common workflow: design with ProteinMPNN (the field's default,
+faster install), validate with ESM-IF1 on the top candidates,
+filter for designs both engines like.
+
+```python
+from molforge.wrappers.generative import ProteinMPNN, ESMIF1
+from molforge.wrappers.folding import ESMFold
+
+mpnn  = ProteinMPNN(num_seqs=16, sampling_temp=0.1, seed=42)
+esmif = ESMIF1(num_seqs=8, temperature=0.1, seed=42)
+folder = ESMFold()
+
+mpnn_designs = mpnn.generate(backbone)
+for design in mpnn_designs[:4]:                 # top 4 from MPNN
+    # Re-score via ESM-IF1 on the same backbone, count agreement.
+    esmif_designs = esmif.generate(backbone)
+    esmif_top = esmif_designs[0].sequence
+    agreement = sum(a == b for a, b in zip(design.sequence, esmif_top)) / len(design.sequence)
+
+    refolded = folder.predict(design.sequence)
+    plddt = refolded.metadata["mean_confidence"]
+    print(f"MPNN score {design.score:.2f}  ESM-IF1 agreement {agreement:.0%}  pLDDT {plddt:.1f}")
+```
+
+Designs where MPNN and ESM-IF1 strongly agree (>70% residue
+identity at default temperatures) and refold cleanly are the
+candidates worth carrying forward.
+
 ## Provenance
 
-Each `DesignedSequence` carries its own `Provenance`. When you refold
-one with ESMFold, the resulting `Protein`'s provenance has the
-ESMFold call as a top-level step but **does not** chain back to the
-ProteinMPNN design — folding takes a sequence string, not a
-`DesignedSequence` object, so the chain is broken at that hand-off.
+Each `DesignedSequence` carries its own `Provenance` — whether it
+came from ProteinMPNN or ESM-IF1. When you refold one with ESMFold,
+the resulting `Protein`'s provenance has the ESMFold call as a
+top-level step but **does not** chain back to the original design
+— folding takes a sequence string, not a `DesignedSequence` object,
+so the chain is broken at that hand-off.
 
 If you need a record of the design that produced a given refold,
 keep a sidecar dict mapping refold filenames to
