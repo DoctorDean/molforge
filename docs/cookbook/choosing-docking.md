@@ -92,6 +92,33 @@ score = Vina(seed=42).dock(
 )
 ```
 
+### A different pre-step: detect pockets, then dock
+
+If you don't know the binding site *and* want Vina's reproducible
+scoring rather than DiffDock's ML-driven search, molforge also wraps
+**fpocket**, a fast Voronoi-based pocket detector. It runs in seconds
+and gives you ranked pocket candidates with druggability scores; pick
+the top one and pass its centre to Vina:
+
+```python
+from molforge.wrappers.pockets import detect_pockets
+from molforge.wrappers.docking import Vina
+
+pockets = detect_pockets(receptor)         # ranked best-first
+result = Vina(seed=42).dock(
+    receptor=receptor,
+    ligand=ligand,
+    center=tuple(pockets[0].center.tolist()),
+    box_size=(20.0, 20.0, 20.0),
+)
+```
+
+fpocket is much cheaper than DiffDock (CPU-only, seconds) but its
+ranking is heuristic rather than learned — for tough cases (allosteric
+sites, cryptic pockets) DiffDock's exploration is usually better. See
+the [folding-then-docking](folding-then-docking.md) recipe for more
+on pocket-centre selection.
+
 ## Common dimensions
 
 ### Input formats

@@ -100,10 +100,35 @@ center = tuple(ligand_atoms.coords.mean(axis=0).tolist())
 center = tuple(receptor.atom_array.coords.mean(axis=0).tolist())
 ```
 
-For *systematic* pocket detection there's no built-in molforge tool
-yet. Common external choices are fpocket and P2Rank — run them on
-your folded structure, then pass the predicted pocket centre to
-`dock`.
+For *systematic* pocket detection, molforge wraps **fpocket**:
+
+```python
+from molforge.wrappers.pockets import detect_pockets
+
+pockets = detect_pockets(receptor)
+print(f"Found {len(pockets)} pockets; top druggability "
+      f"{pockets[0].druggability:.2f}")
+
+# Use the top pocket's centre as the docking box centre.
+result = Vina().dock(
+    receptor=receptor,
+    ligand=ligand_smiles,
+    center=tuple(pockets[0].center.tolist()),
+    box_size=(20.0, 20.0, 20.0),
+)
+```
+
+`detect_pockets` returns a list of `Pocket` objects ranked by
+fpocket's score. Each pocket has a `center` you can pass straight
+to a docking engine's `center=` argument, plus `volume`, `score`,
+`druggability` (fpocket's 0–1 drug-likeness estimate), and a list
+of lining residues.
+
+`fpocket` itself isn't pip-installable; install via your system
+package manager (`brew install fpocket` on macOS,
+`apt install fpocket` on Linux) or build from
+`https://github.com/Discngine/fpocket`. P2Rank (an ML-based
+alternative) isn't wrapped yet.
 
 ## Higher-confidence results
 

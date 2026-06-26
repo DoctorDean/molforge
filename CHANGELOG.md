@@ -8,6 +8,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **fpocket wrapper — pocket detection.** A new
+  `molforge.wrappers.pockets.detect_pockets(protein)` returns a list
+  of `molforge.docking.Pocket` ranked by fpocket's score (best
+  first). Pockets carry a `center` (the `(3,)` geometric centre of
+  the alpha-sphere cluster, ready to pass to a docking engine's
+  `center=` argument), a list of lining residues, plus `volume`,
+  `score`, and `druggability` headline descriptors. Each pocket's
+  metadata carries the full fpocket descriptor dict for users who
+  want the polar SASA / hydrophobicity / etc. extras, plus a
+  `Provenance` shared across all pockets from one call (same
+  immutability-by-reference pattern as ProteinMPNN's
+  `DesignedSequence`).
+
+  When the input `Protein` has its own provenance (e.g. from
+  ESMFold), pocket detection chains through it, so an
+  ESMFold → fpocket → Vina pipeline produces a final
+  `DockingResult` whose `chain()` reads as the full
+  sequence-to-pose history.
+
+  The `Pocket` dataclass lives in `molforge.docking` alongside
+  `Pose` / `DockingResult` since pockets are *for* docking — their
+  canonical downstream use is feeding `center=` to a docking call.
+  The detector function lives in a new
+  `molforge.wrappers.pockets` subpackage, mirroring the
+  `molforge.wrappers.docking` / `.folding` / `.md` / `.generative`
+  layout. Free function rather than class because fpocket is
+  stateless — no model to warm-load. Future ML-based detectors
+  (P2Rank, PUResNet, etc.) may follow a class-based pattern for
+  weight reuse; that's a per-detector decision.
+
+  The wrapper shells out to the `fpocket` binary, which isn't
+  pip-installable; users install via system package manager
+  (`brew install fpocket` / `apt install fpocket`) or build from
+  https://github.com/Discngine/fpocket. The wrapper raises
+  `FpocketNotInstalledError` with install-path guidance when the
+  binary's missing — friendlier than letting Python's raw
+  `FileNotFoundError` bubble up.
+
+  Tests (`tests/unit/wrappers/test_fpocket.py`, 19 new + 1
+  binary-skipped):
+
+  - Parser tests against real-shape fpocket output (the exact
+    format documented in fpocket's GETTINGSTARTED.md):
+    multi-pocket parsing, headline-descriptor extraction,
+    forgiving on missing blank lines, ignoring banner / version
+    lines outside pocket blocks.
+  - `_maybe_float` coercion: valid floats, integers, `None`,
+    non-numeric input returning `None`.
+  - End-to-end parser on a synthetic output directory: pocket
+    centre computed from `*_vert.pqr` alpha-sphere coords, lining
+    residues extracted from `*_atm.pdb`, missing side-files
+    yielding NaN centre rather than crashing, Provenance attached
+    and shared across pockets from one call, parent-chaining
+    through an upstream ESMFold provenance.
+  - Error path: `FpocketNotInstalledError` with friendly install
+    guidance when the binary's missing.
+  - One real-binary smoke test (`TestRealFpocket`) skip-marked
+    when fpocket isn't on `$PATH`; verifies the full pipeline
+    against 1UBQ when run locally with fpocket installed.
+
+  The pocket centre is computed from the `*_vert.pqr`
+  alpha-sphere centres rather than the lining-residue centroid —
+  the alpha-sphere mean is fpocket's own geometric definition of
+  the pocket. The PQR I/O shipped in 0.4.0 is exactly what makes
+  this composition clean (`read_pqr` does the heavy lifting; the
+  wrapper just averages the coords).
+
+  Cookbook updated: the [Fold then dock](https://doctordean.github.io/molforge/cookbook/folding-then-docking/)
+  recipe now shows pocket detection as a real molforge feature
+  (replacing the previous "no built-in tool yet" note), and the
+  [Choosing docking engines](https://doctordean.github.io/molforge/cookbook/choosing-docking/)
+  comparison adds a "detect pockets, then dock" pre-step
+  workflow as an alternative to DiffDock for the
+  unknown-binding-site case.
+
 - **Cookbook + engine comparison tables.** A new
   [`docs/cookbook/`](https://doctordean.github.io/molforge/cookbook/)
   section answers the "I want to do X, what do I write?" question

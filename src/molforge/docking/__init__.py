@@ -21,6 +21,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import numpy as np
+from numpy.typing import NDArray
+
 if TYPE_CHECKING:
     from molforge.core import Protein
 
@@ -89,6 +92,57 @@ class DockingResult:
         return self.poses[:n]
 
 
+@dataclass
+class Pocket:
+    """A predicted ligand-binding pocket on a protein surface.
+
+    Pockets are the output of *pocket detection* algorithms (fpocket,
+    P2Rank, mdpocket on a trajectory, etc.). They sit alongside
+    :class:`Pose` and :class:`DockingResult` in this module because
+    pockets are *for* docking — the canonical downstream use is
+    passing :attr:`center` to a docking engine's ``center=`` argument
+    as a binding-site hint.
+
+    A :class:`Pocket` is intentionally *thin*. Detection algorithms
+    expose dozens of descriptors (volume, alpha-sphere count,
+    hydrophobicity, polarity, surface-area splits, etc.); only the
+    handful most universally useful for downstream code live as
+    typed attributes. The rest goes in :attr:`metadata` so
+    engine-specific extras don't pollute the type.
+
+    Attributes:
+        center: ``(3,)`` float32 array of the pocket's geometric
+            centre (Å). The natural input for a docking box centre.
+        residues: List of residue identifiers (``(chain_id,
+            residue_id, insertion_code)`` triples) lining the pocket.
+            Empty list when the detector doesn't report lining
+            residues.
+        volume: Pocket volume in Å³. ``None`` when the detector
+            doesn't report a volume.
+        score: Detector's pocket score (higher = more pocket-like).
+            ``None`` when the detector doesn't compute one. For
+            cross-detector comparability, prefer :attr:`druggability`
+            where available.
+        druggability: Detector's druggability score (typically 0–1,
+            higher = more drug-binding-like). ``None`` when not
+            available. fpocket and similar detectors compute this.
+        rank: 0-indexed rank within the detection result (0 = best
+            by the detector's own scoring).
+        metadata: Detector-specific extras (alpha-sphere count,
+            SASA splits, hydrophobicity descriptors, etc.) plus a
+            :class:`molforge.core.Provenance` under the
+            ``provenance`` key.
+    """
+
+    center: NDArray[np.float32]
+    residues: list[tuple[str, int, str]] = field(default_factory=list)
+    volume: float | None = None
+    score: float | None = None
+    druggability: float | None = None
+    rank: int = 0
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
 class DockingEngine(ABC):
     """Abstract base for receptor-ligand docking engines.
 
@@ -139,5 +193,6 @@ __all__ = [
     "DockingEngine",
     "DockingEngineNotInstalledError",
     "DockingResult",
+    "Pocket",
     "Pose",
 ]

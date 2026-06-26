@@ -121,9 +121,13 @@ Where existing functionality could be deeper, not wider.
   of the docking wrappers lets users score docking results with
   multiple scorers, or score AlphaFold-folded structures with a
   scorer.
-- **Active-site / pocket detection.** `fpocket`, `P2Rank`, `SiteHound`
-  wrappers. Docking needs a pocket; right now the user specifies
-  coordinates by hand.
+- **Active-site / pocket detection.** `fpocket` is shipped (post-
+  0.4.0); P2Rank and SiteHound remain unwrapped. P2Rank in
+  particular is the ML-based modern counterpart to fpocket and
+  the natural next pocket detector to add when its install path
+  gets cleaner. fpocket's adoption validated the pattern (Pocket
+  dataclass + free-function detector + Provenance chaining), so
+  follow-ons drop into the same shape.
 - **Free energy / binding affinity.** A wrapper for `gmx_MMPBSA` (the
   GROMACS-based MM-PBSA / MM-GBSA workflow) or AmberTools'
   `MMPBSA.py` would put molforge somewhere only a handful of unified
