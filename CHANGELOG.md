@@ -8,6 +8,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AMBER MD wrapper.** Third MD engine, joining OpenMM and GROMACS.
+  Wraps the AmberTools toolchain — `tleap` for topology / coordinate
+  setup, `sander` for minimisation and (fallback) production
+  dynamics, optional `pmemd` for production dynamics when available
+  (the paid academic Amber package; the wrapper falls back to
+  sander when only AmberTools is installed).
+
+  Same `MDEngine` interface as OpenMM and GROMACS — `prepare →
+  minimize → run` returning `Simulation` then `Trajectory`. The
+  Provenance chain on the final Trajectory reads as
+  `["AMBER.prepare", "AMBER.minimize", "AMBER.run"]` oldest-first,
+  extending back through any upstream wrapper's provenance.
+
+  Public surface:
+
+  - `AMBER(tleap_executable=, sander_executable=, pmemd_executable=,
+    water_model=, box_buffer_a=, verbose=)` — constructor.
+    Resolution is lazy; construction never touches the filesystem.
+  - `.prepare(protein, *, force_field="ff14SB", temperature=300.0,
+    timestep=0.002)` — runs tleap to build `.prmtop` + `.inpcrd`,
+    returns a `Simulation` whose `engine_handle` is the run
+    directory. Supports vacuum (water_model="none"), TIP3P, TIP4P/Ew,
+    OPC, SPC/E.
+  - `.minimize(simulation, *, max_iterations=1000, tolerance=10.0)`
+    — writes a sander min input, runs sander, reads the .rst7 back.
+    ncyc (steepest-descent prelude) is chosen as half of
+    max_iterations, capped at 500 — standard heuristic.
+  - `.run(simulation, *, n_steps, save_every=1)` — writes a sander
+    production input, runs pmemd if available else sander, parses
+    the NetCDF (.nc) trajectory through molforge's existing
+    `read_trajectory`.
+
+  Curated force-field allowlist (`ff14SB`, `ff19SB`, `ff99SB`,
+  `ff99SBildn`); unknown names raise ValueError upfront rather
+  than failing deep in a tleap subprocess. Water-model allowlist
+  similarly curated. The wrapper deliberately doesn't expose
+  AMBER's full configuration surface — custom ff combinations,
+  free-energy methods, REMD — those are out of v1 scope and
+  extendable when concrete user needs surface.
+
+  Tests (`tests/unit/wrappers/test_amber.py`, 20 unit tests +
+  1 binary-skipped end-to-end):
+
+  - `TestConstruction` (6) — constructor defaults, custom paths,
+    vacuum mode, invalid water-model / box-buffer rejection,
+    construction is lazy (no filesystem touching).
+  - `TestForceFieldValidation` (3) — unknown force-field rejection,
+    tleap-missing error path, error message points at OpenMM as a
+    fallback.
+  - `TestSubprocessSeam` (4) — drive prepare/minimize with
+    `_run_subprocess` mocked, assert the generated tleap script
+    contains the right directives (`source leaprc.protein.X`,
+    `solvateBox`, ...), the sander min input has correct maxcyc
+    and ncyc, the ncyc heuristic caps at 500 for long
+    minimisations, vacuum runs skip the solvate directive.
+  - `TestRunDirValidation` (4) — Simulation without an AMBER run
+    directory raises clearly, pmemd/sander resolution prefers
+    pmemd when available, falls back to sander when only
+    AmberTools is installed, fails with a clear error when
+    neither is on PATH.
+  - `TestSourceInspection` (3) — regression net: the three
+    Provenance step engine strings exist in the source, the
+    `_parent_provenance(...)` helper is used (not raw
+    `.get(...)`), `subprocess.run` is called exactly once (only
+    inside `_run_subprocess`, the single seam) so future code
+    that adds direct subprocess calls trips this test.
+  - `TestRealAmber` (1, skipped) — full prepare→minimize→run
+    pipeline against 1AKE with the real AmberTools installed.
+    Skip-marked when `tleap` and `sander` aren't both on PATH;
+    runs end-to-end when available, asserting the Provenance
+    chain ends with the three AMBER steps.
+
+  Pattern matches the GROMACS source-inspection regression net:
+  the binary won't usually be in CI (AmberTools is conda-only,
+  several GB, optional), so the wrapper's wiring is verified by
+  source inspection plus mocked-subprocess pipeline tests, and
+  the end-to-end check is gated by binary availability.
+
+  Cookbook updated: the [MD and RMSD](https://doctordean.github.io/molforge/cookbook/md-and-rmsd/)
+  recipe's "When to pick GROMACS instead" section is now "When to
+  pick a different MD engine" and covers all three (OpenMM,
+  GROMACS, AMBER) with a code snippet showing how to swap engines
+  while keeping the rest of the pipeline identical.
+
+  Roadmap MD entry updated: AMBER is now shipped; NAMD and LAMMPS
+  remain on the wishlist for non-biological-MD workloads.
+
 - **fpocket wrapper — pocket detection.** A new
   `molforge.wrappers.pockets.detect_pockets(protein)` returns a list
   of `molforge.docking.Pocket` ranked by fpocket's score (best

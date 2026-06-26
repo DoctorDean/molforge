@@ -131,21 +131,47 @@ holding all frames in memory. The current implementation holds the
 full trajectory in memory; expect that to change as longer
 simulations become a first-class workflow.
 
-## When to pick GROMACS instead
+## When to pick a different MD engine
 
 OpenMM is the right default — Python-native, simple to drive,
-faster than GROMACS for many setups on modern GPUs. Switch to
-GROMACS when:
+faster than the alternatives for many setups on modern GPUs. molforge
+also wraps **GROMACS** and **AMBER**; switch when one of their
+ecosystems is what you actually need.
 
-- You need a feature OpenMM doesn't have (specific enhanced-
-  sampling methods, complex topology manipulation, certain
-  membrane setups).
-- You're running on a cluster where GROMACS is the established
-  workflow (job scripts, restart files, etc.).
+- **GROMACS**: pick when you need a feature OpenMM doesn't have
+  (specific enhanced-sampling methods, complex topology
+  manipulation, certain membrane setups), or when you're running
+  on a cluster where GROMACS is the established workflow (job
+  scripts, restart files, integration with existing analysis).
+- **AMBER**: pick when you're already in the Amber force-field
+  ecosystem (ff14SB / ff19SB protocols, AmberTools analyses with
+  cpptraj, MMPBSA workflows downstream) or when you need pmemd's
+  performance on supported hardware. AmberTools alone (free)
+  drives the wrapper; pmemd (paid academic) is used automatically
+  when present.
 
-The molforge interface is the same — `GROMACS(...).prepare().minimize().run()`
-returns the same `Trajectory` shape. See the
-[Engine wrappers guide](../guide/wrappers.md).
+The molforge interface is identical across all three —
+`Engine(...).prepare().minimize().run()` returns the same
+`Trajectory` shape:
+
+```python
+from molforge.wrappers.md import OpenMM, GROMACS, AMBER
+
+# Same shape, swap the constructor:
+engine = OpenMM(platform="CPU")
+# engine = GROMACS(water_model="tip3p")
+# engine = AMBER(water_model="tip3p")
+
+sim = engine.prepare(ready, force_field="amber14-all")
+sim = engine.minimize(sim, max_iterations=100)
+trajectory = engine.run(sim, n_steps=5_000, save_every=100)
+```
+
+The `force_field` argument is engine-specific: OpenMM takes its
+own XML names (`"amber14-all"`), GROMACS takes `pdb2gmx -ff` names
+(`"amber99sb-ildn"`), AMBER takes leaprc names (`"ff14SB"`). The
+[Engine wrappers guide](../guide/wrappers.md) lists the accepted
+values per engine.
 
 ## RMSD subset choices
 

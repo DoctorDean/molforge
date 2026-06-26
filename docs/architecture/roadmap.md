@@ -57,9 +57,9 @@ layer.
   released. AlphaFold 3 when its license permits.
 - **Docking.** Gnina (Vina with CNN scoring — common modern choice),
   Smina, AutoDock-GPU, Uni-Dock (GPU-accelerated Vina variant).
-- **MD.** AMBER (via `pmemd`/`sander` CLI) is the biggest gap; many
-  older labs run AMBER, not OpenMM. NAMD and LAMMPS for non-bio
-  workloads later.
+- **MD.** AMBER is **shipped**
+  - (post-0.4.0; wraps `tleap` + `sander` + optional `pmemd`); 
+    NAMD and LAMMPS for non-bio workloads remain on the wishlist.
 - **Generative.** ESM-IF1 (inverse folding, natural companion to
   ProteinMPNN), LigandMPNN (handles ligand context), Chroma,
   Protpardelle.
