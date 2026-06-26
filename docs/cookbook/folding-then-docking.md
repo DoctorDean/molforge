@@ -153,6 +153,10 @@ multiple ligands or runs.
 For SMILES + receptor → pose, Vina is the workhorse default. Switch
 when:
 
+- **You know the site and want CNN scoring** → Gnina. Same Vina
+  search but each pose is rescored by a 3D CNN; typically more
+  accurate ranking than Vina's empirical function, at ~10× the
+  per-call latency.
 - **You have a ligand and want fast, ML-based pose prediction
   without specifying a box** → DiffDock. Slower per-call but the
   search is learned, no manual site selection.

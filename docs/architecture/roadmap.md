@@ -55,8 +55,12 @@ layer.
 
 - **Folding.** Chai-1 (actively used, clean CLI), ESM3, Boltz-2 once
   released. AlphaFold 3 when its license permits.
-- **Docking.** Gnina (Vina with CNN scoring — common modern choice),
-  Smina, AutoDock-GPU, Uni-Dock (GPU-accelerated Vina variant).
+- **Docking.** Gnina is **shipped**
+  - (post-0.4.0; CNN-rescored Vina via
+    the `gnina` binary). Smina remains unwrapped — Gnina with
+    `cnn_scoring="none"` is effectively smina, so a dedicated wrapper
+    is low priority. AutoDock-GPU and Uni-Dock (GPU-accelerated Vina
+    variants) remain on the wishlist.
 - **MD.** AMBER is **shipped**
   - (post-0.4.0; wraps `tleap` + `sander` + optional `pmemd`); 
     NAMD and LAMMPS for non-bio workloads remain on the wishlist.
@@ -121,13 +125,14 @@ Where existing functionality could be deeper, not wider.
   of the docking wrappers lets users score docking results with
   multiple scorers, or score AlphaFold-folded structures with a
   scorer.
-- **Active-site / pocket detection.** `fpocket` is shipped (post-
-  0.4.0); P2Rank and SiteHound remain unwrapped. P2Rank in
-  particular is the ML-based modern counterpart to fpocket and
-  the natural next pocket detector to add when its install path
-  gets cleaner. fpocket's adoption validated the pattern (Pocket
-  dataclass + free-function detector + Provenance chaining), so
-  follow-ons drop into the same shape.
+- **Active-site / pocket detection.** 
+  - `fpocket` is shipped (post-0.4.0); 
+  - P2Rank and SiteHound remain unwrapped. P2Rank in
+    particular is the ML-based modern counterpart to fpocket and
+    the natural next pocket detector to add when its install path
+    gets cleaner. fpocket's adoption validated the pattern (Pocket
+    dataclass + free-function detector + Provenance chaining), so
+    follow-ons drop into the same shape.
 - **Free energy / binding affinity.** A wrapper for `gmx_MMPBSA` (the
   GROMACS-based MM-PBSA / MM-GBSA workflow) or AmberTools'
   `MMPBSA.py` would put molforge somewhere only a handful of unified
@@ -231,9 +236,6 @@ A rough sequencing:
 3. ~~**Trajectory I/O.** `molforge.io.read_trajectory` /
    `iter_trajectory` / `write_trajectory` via mdtraj. XTC, TRR, DCD,
    NetCDF, HDF5, multi-MODEL PDB. Eager + streaming.~~
-4. **The 1.0 version cut.** Version bump, classifier flip,
-   changelog reorganization, README test-count refresh, fresh
-   `dist/` build.
 5. **Caching layer + provenance tracking.** Compounds everywhere
    downstream.
 6. ~~**Cookbook + engine comparison tables.** Turn the existing surface

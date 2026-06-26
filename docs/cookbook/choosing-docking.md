@@ -1,7 +1,7 @@
 # Choosing a docking engine
 
-molforge wraps two docking engines that take different approaches to
-the same problem: given a receptor and a ligand, where does the
+molforge wraps three docking engines that take different approaches
+to the same problem: given a receptor and a ligand, where does the
 ligand bind?
 
 ## Side-by-side
@@ -9,10 +9,14 @@ ligand bind?
 | Engine    | Method                              | Manual binding site? | Speed (1 ligand)        | When to pick it                                                          |
 | --------- | ----------------------------------- | -------------------- | ----------------------- | ------------------------------------------------------------------------ |
 | **Vina**  | Force-field scoring + search        | Yes (box centre + size) | Seconds                 | Known binding site; virtual screening; reproducible scores.             |
+| **Gnina** | Vina search + CNN rescoring         | Yes (box centre + size) | Tens of seconds         | Known binding site, where CNN scoring beats Vina's empirical function. |
 | **DiffDock** | Diffusion-model pose prediction  | No                   | Minutes (GPU)           | Unknown binding site; ML-driven pose proposal; novel ligand classes.    |
 
 These differ in two fundamental ways: **how they search**, and
-**how much you need to know about the site upfront**.
+**how they score**. Vina and Gnina share the same Monte-Carlo
+search (gnina is a fork of Vina) but differ in scoring — Vina uses
+an empirical function, Gnina rescores with a CNN. DiffDock does
+the search itself with a diffusion model.
 
 ## How to choose
 
@@ -39,6 +43,53 @@ Vina's weaknesses:
   data; out-of-distribution ligand classes (large macrocycles,
   covalent binders, metal-coordinating compounds) get unreliable
   scores.
+
+### You know the binding site but want better scoring than Vina
+
+**Use Gnina.** Same Monte-Carlo search as Vina (it's a Vina fork),
+but rescores poses with a 3D CNN trained on PDBbind. The CNN
+typically ranks poses more accurately than Vina's empirical
+scoring function — gnina's own benchmarks show Top-1 redocking
+accuracy going from ~58% (Vina) to ~73% (gnina). The cost is
+tens-of-seconds per call rather than seconds: the CNN forward
+pass is the bottleneck.
+
+Gnina returns three scores per pose:
+
+- `vina_affinity` — the Vina-style empirical energy (kcal/mol).
+- `cnn_score` — the learned pose-quality score (0–1, higher is
+  better). This is the default ranking criterion.
+- `cnn_affinity` — the learned binding affinity (pK units).
+
+```python
+from molforge.wrappers.docking import Gnina
+
+result = Gnina(seed=42).dock(
+    receptor=receptor,
+    ligand=ligand,
+    center=(10.0, 5.0, -2.0),
+    box_size=(20.0, 20.0, 20.0),
+)
+# Default: poses sorted by CNN score, best first.
+top = result.poses[0]
+print(f"CNN score: {top.score:.2f}    "
+      f"CNN affinity: {top.metadata['cnn_affinity']:.2f}    "
+      f"Vina: {top.metadata['vina_affinity']:.2f}")
+```
+
+For ranking compounds in a virtual screen, you can override
+`sort_order="CNNaffinity"` to rank by predicted binding strength
+rather than pose quality:
+
+```python
+result = Gnina(sort_order="CNNaffinity").dock(...)
+```
+
+Gnina's reproducibility is the same as Vina's — same seed produces
+the same poses (the CNN scoring is deterministic given fixed
+inputs). For virtual screening where Vina-only speed matters more
+than CNN accuracy, pass `cnn_scoring="none"` to make Gnina behave
+like smina (Vina with extra command-line ergonomics).
 
 ### You don't know the binding site
 
@@ -136,37 +187,45 @@ Both accept the same range:
 | Engine    | Install                                                            |
 | --------- | ------------------------------------------------------------------ |
 | Vina      | `pip install "molforge[docking]"` + `pip install vina` + Open Babel installed system-wide. |
+| Gnina     | Not pip-installable. `brew install gnina` on macOS, download a release binary from `github.com/gnina/gnina/releases`, or build from source. The binary bundles all CNN models. |
 | DiffDock  | Manual clone + install of gcorso/DiffDock repo. `DIFFDOCK_HOME` env var. GPU strongly recommended. |
 
-Vina is by far the easier install — pip + a system package.
-DiffDock needs the upstream repository present.
+Vina is the easiest install — pip + a system package. Gnina is a
+single binary download. DiffDock needs the upstream repository
+present.
 
 ### Reproducibility
 
-Vina with a fixed `seed=N` produces bit-identical output across
-runs on the same hardware. DiffDock has multiple sources of non-
-determinism (PyTorch RNG, CUDA non-determinism) and is harder to
-pin to byte-identical output even with seeds set.
+Vina and Gnina with a fixed `seed=N` produce bit-identical output
+across runs on the same hardware. (Gnina's CNN scoring is
+deterministic given fixed inputs, so the seed only affects the
+Vina-style Monte-Carlo search.) DiffDock has multiple sources of
+non-determinism (PyTorch RNG, CUDA non-determinism) and is harder
+to pin to byte-identical output even with seeds set.
 
 For *workflow* reproducibility — same engine, same parameters, same
-inputs — both engines write a `Provenance` to the `DockingResult`
-that lets downstream code verify the inputs match. See
-[Inspect provenance](inspect-provenance.md).
+inputs — all three engines write a `Provenance` to the
+`DockingResult` that lets downstream code verify the inputs match.
+See [Inspect provenance](inspect-provenance.md).
 
 ### Receptor preparation
 
-Vina needs the receptor in PDBQT format. molforge handles this
-automatically: pass a `Protein` or a `.pdb` and Vina prepares it
-with meeko. If you have lots of ligands to dock against the same
-receptor, prepare the receptor once and pass the `.pdbqt` path
-directly to skip re-preparation.
+Vina needs the receptor in PDBQT format; molforge handles this
+automatically via meeko. If you have lots of ligands to dock against
+the same receptor, prepare the receptor once and pass the `.pdbqt`
+path directly to skip re-preparation.
+
+Gnina handles format conversion internally via Open Babel — pass a
+`Protein`, a `.pdb`, a `.pdbqt`, or a `.mol2` and it figures things
+out. No molforge-side preparation needed.
 
 DiffDock has its own preparation pipeline inside the upstream repo;
 molforge just shells out to it.
 
 ## What molforge doesn't wrap (yet)
 
-- **GNINA** (CNN-rescored Vina) — on the roadmap.
+- **Smina** — Vina's direct ancestor. Gnina with `cnn_scoring="none"`
+  is effectively smina, so a dedicated wrapper isn't urgent.
 - **Glide, GOLD, Surflex** — commercial; no plans.
 - **AutoDock GPU** — the GPU-accelerated descendant of Vina;
   considered for the roadmap.

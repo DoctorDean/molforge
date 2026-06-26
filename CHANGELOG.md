@@ -8,6 +8,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Gnina docking wrapper.** Third docking engine, joining Vina and
+  DiffDock. Gnina is a fork of smina (itself a fork of AutoDock
+  Vina) with integrated CNN scoring — same Monte-Carlo search as
+  Vina, but each pose is rescored by a 3D convolutional neural
+  network trained on PDBbind. The CNN output gives both a learned
+  pose-quality score (`CNNscore`, 0–1) and a learned affinity
+  estimate (`CNNaffinity`, pK units).
+
+  Same `DockingEngine` interface as Vina and DiffDock —
+  `engine.dock(receptor, ligand, *, center, box_size, ...)`
+  returns a `DockingResult` with poses sorted best-first. The
+  swap from Vina to Gnina is a one-line change in user code.
+
+  Public surface:
+
+  - `Gnina(gnina_executable=, cnn_scoring=, cnn=, sort_order=,
+    scoring=, seed=, cpu=, timeout=, verbose=)` — constructor.
+    `cnn_scoring` is one of `{"none", "rescore", "refinement",
+    "all"}` (default `"rescore"`, matching gnina's own default);
+    `sort_order` is one of `{"CNNscore", "CNNaffinity", "Energy"}`
+    (default `"CNNscore"`). Argument validation is upfront —
+    typos ValueError on construction rather than failing deep
+    in a subprocess.
+  - `.dock(receptor, ligand, *, center, box_size, exhaustiveness,
+    n_poses, min_rmsd)` — same interface as `Vina.dock`. Returns
+    a `DockingResult`.
+
+  Pose-level metadata exposes all three scores per pose
+  regardless of which one was used for ranking:
+
+      pose.score                       # primary, by sort_order
+      pose.metadata["vina_affinity"]   # gnina's minimizedAffinity
+      pose.metadata["cnn_score"]       # CNNscore (0-1)
+      pose.metadata["cnn_affinity"]    # CNNaffinity (pK)
+      pose.metadata["cnn_variance"]    # ensemble variance, if present
+
+  This lets users post-filter on a different metric than the one
+  used for ranking — e.g. dock with `sort_order="CNNscore"` but
+  filter the top results by `cnn_affinity > 6.0` afterward.
+
+  Provenance: all poses from one `dock()` call share a single
+  `Provenance` (frozen, by-reference) attached at the
+  `DockingResult.metadata` level — same pattern as Vina and
+  DiffDock. The chain extends back through any upstream wrapper's
+  provenance, so an ESMFold → Gnina pipeline produces a chain
+  reading `["ESMFold", "Gnina"]` oldest-first.
+
+  The wrapper shells out to the `gnina` binary which isn't
+  pip-installable; users install via `brew install gnina` on macOS,
+  download a release from github.com/gnina/gnina/releases, or
+  build from source. The wrapper raises
+  `DockingEngineNotInstalledError` with install-path guidance when
+  the binary's missing, and points at Vina as the no-CNN fallback
+  so users who tried Gnina first don't think they need a CNN-
+  capable install to do any docking at all.
+
+  Tests (`tests/unit/wrappers/test_gnina.py`, 29 unit tests +
+  1 binary-skipped end-to-end):
+
+  - `TestConstruction` (7) — defaults, custom paths, all
+    validators (cnn_scoring, sort_order, scoring, cpu, timeout),
+    lazy resolution.
+  - `TestMissingBinaryError` (1) — friendly error mentions
+    install paths and the Vina fallback.
+  - `TestCommandBuilder` (5) — assembled command-line has the
+    right flags (--receptor, --ligand, --out, --center_x/y/z,
+    --size_x/y/z, --exhaustiveness, --num_modes, --cnn_scoring,
+    --pose_sort_order, --scoring), optional flags appear only
+    when set (--cnn, --seed, --cpu).
+  - `TestExtractRemarks` (4) — SDF tag-field parser handles the
+    real gnina output format (verified against gnina/issues/294
+    and the gninatorch docs), vina-only mode without CNN keys,
+    empty SDF, malformed numeric values gracefully skipped.
+  - `TestParseSdfOutput` (7) — end-to-end parser: two poses with
+    default sort, sort_order='Energy' uses minimizedAffinity,
+    sort_order='CNNaffinity', all three score types in per-pose
+    metadata regardless of sort, Provenance attached at result
+    level, Provenance chains through upstream, cnn_scoring='none'
+    + sort_order='CNNscore' produces 0.0 scores without crashing.
+  - `TestSubprocessSeam` (3) — `subprocess.run` mocked: dock()
+    invokes gnina with correct binary, raises clearly on non-zero
+    exit, raises clearly on missing output SDF.
+  - `TestRealGnina` (1, skipped) — end-to-end against 1AKE +
+    aspirin with the real binary. Skip-marked when `gnina` isn't
+    on `$PATH`.
+
+  Cookbook updated:
+
+  - `cookbook/choosing-docking.md` — header updated from "two
+    engines" to "three engines"; comparison table gains a Gnina
+    row; new "You know the binding site but want better scoring
+    than Vina" section explains the CNN-rescoring trade-offs and
+    when to use `sort_order="CNNaffinity"` vs `"CNNscore"`;
+    Installation footprint, Reproducibility, Receptor preparation
+    sub-sections updated to cover all three engines.
+  - `cookbook/folding-then-docking.md` — "When to pick a different
+    docking engine" gains a Gnina bullet.
+
+  Roadmap "Docking" entry updated: Gnina shipped; Smina deferred
+  (effectively reachable via `Gnina(cnn_scoring="none")`);
+  AutoDock-GPU and Uni-Dock remain on the wishlist.
+
 - **AMBER MD wrapper.** Third MD engine, joining OpenMM and GROMACS.
   Wraps the AmberTools toolchain — `tleap` for topology / coordinate
   setup, `sander` for minimisation and (fallback) production
