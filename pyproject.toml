@@ -229,6 +229,7 @@ show_error_codes = true
 module = [
     "Bio.*",
     "biotite.*",
+    "chai_lab.*",
     "colabfold.*",
     "esm.*",
     "mdtraj.*",

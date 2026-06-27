@@ -53,8 +53,15 @@ The engine ABCs all have ≥2 real implementations now. A few more in
 each modality would solidify molforge as *the* swap-engines abstraction
 layer.
 
-- **Folding.** Chai-1 (actively used, clean CLI), ESM3, Boltz-2 once
-  released. AlphaFold 3 when its license permits.
+- **Folding.** Chai-1 is **shipped**
+  - (post-0.4.0; Python-API wrapper for
+    the chai_lab package; mirrors Boltz's interface for cross-engine
+    uniformity). Both AF3-style models molforge supports — Boltz and
+    Chai-1 — are independent reimplementations from different teams,
+    making cross-checks meaningful. 
+    - ESM3 and AlphaFold-3 (DeepMind
+      release) remain on the wishlist; Protenix is the next AF3
+      reimplementation to consider.
 - **Docking.** Gnina is **shipped**
   - (post-0.4.0; CNN-rescored Vina via
     the `gnina` binary). Smina remains unwrapped — Gnina with
@@ -67,9 +74,10 @@ layer.
 - **Generative.** ESM-IF1 is **shipped**
   - (post-0.4.0; pip-installable
     inverse folding via fair-esm, companion to ProteinMPNN for
-    cross-engine validation). LigandMPNN (ProteinMPNN extension that
-    handles ligand context), Chroma (diffusion-based backbone
-    generation), and Protpardelle remain on the wishlist.
+    cross-engine validation). 
+    - LigandMPNN (ProteinMPNN extension that
+      handles ligand context), Chroma (diffusion-based backbone
+      generation), and Protpardelle remain on the wishlist.
 - **MSA / sequence search.** Wrap `mmseqs2`, `hmmer`, `jackhmmer`.
   Most folding wrappers currently dodge this via ColabFold's MSA
   server; a local MSA path is what serious users need.

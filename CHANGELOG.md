@@ -8,6 +8,147 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Chai-1 folding wrapper.** Fifth folding engine, joining ESMFold,
+  AlphaFold, Boltz, and RoseTTAFold. Chai-1 (Chai Discovery, October
+  2024) is an open-weights re-implementation of AlphaFold-3-style
+  biomolecular structure prediction — proteins, nucleic acids, and
+  small-molecule ligands in a single forward pass, at AF3-class
+  accuracy.
+
+  This is the *second* AF3-style engine in molforge (the first being
+  Boltz, shipped pre-v0.4). Boltz and Chai-1 are independent
+  reimplementations from different teams (MIT Jameel Clinic and
+  Chai Discovery) released within weeks of each other. Running both
+  on a hard target and comparing predictions is a robust confidence
+  signal — when two AF3-class models from independent codebases
+  agree on a binding pose or interface geometry, that's much
+  stronger evidence than either alone.
+
+  Public surface:
+
+  - `Chai1(device=, use_msa_server=, msa_server_url=, num_trunk_recycles=,
+    num_diffn_timesteps=, seed=, cache_dir=)` — constructor. Argument
+    validation upfront (num_trunk_recycles >= 1, num_diffn_timesteps
+    >= 1). Lazy: construction touches no torch, no chai_lab, no
+    weight downloads.
+  - `.predict(sequence)` — same `predict(sequence) -> Protein`
+    interface as the other folding engines. A one-line swap from
+    `Boltz()` to `Chai1()` produces a Chai-1 prediction with the
+    same downstream code.
+
+  Mirrors :class:`Boltz`'s v1 scope deliberately: single protein
+  chain only. Chai-1 natively supports multi-component complexes
+  (its FASTA uses typed headers like `>protein|name=...` /
+  `>ligand|name=...` / `>dna|name=...`); multi-component support
+  will land for all AF3-class wrappers together in a future commit.
+
+  Architectural difference from Boltz: Chai-1 has a clean Python
+  entry point (`chai_lab.chai1.run_inference`), so the wrapper
+  calls it directly — no subprocess plumbing, no YAML construction.
+  Tests mock the single `_run_inference` seam to drive the full
+  predict() pipeline without chai_lab installed or a GPU available.
+
+  Output handling: Chai-1 always emits 5 diffusion samples per call
+  (hard-coded upstream). The wrapper picks the highest-ranked one
+  by `aggregate_score` as the canonical returned `Protein`; the
+  other four samples' headline scores (`aggregate_score`, `ptm`,
+  `iptm`) are preserved in `metadata["per_sample_scores"]` for
+  users who want to inspect ranking spread or pick a non-best
+  sample.
+
+  Per-residue pLDDT is extracted from the chosen CIF's B-factor
+  column (AlphaFold convention, which Chai-1 follows). The helper
+  prefers CA-atom B-factors for canonical residues and falls back
+  to per-residue mean B-factor when CAs are absent (e.g. all-ligand
+  structures) rather than crashing.
+
+  Metadata exposes the full Chai score set:
+
+      protein.metadata["confidence_per_residue"]  # (L,) float32
+      protein.metadata["mean_confidence"]         # scalar
+      protein.metadata["aggregate_score"]         # best sample
+      protein.metadata["ptm"]                     # best sample
+      protein.metadata["iptm"]                    # best sample
+      protein.metadata["best_sample_index"]       # 0..4
+      protein.metadata["per_sample_scores"]       # list of 5 dicts
+
+  Provenance: attached at the result level (`metadata[PROVENANCE]`)
+  with all constructor kwargs captured for reproducibility.
+
+  Install path: `pip install chai_lab` (much lighter than
+  RoseTTAFold's clone-and-env-var path; similar to Boltz). Chai-1
+  requires Linux, Python 3.10+, and a CUDA-capable GPU with
+  bfloat16 support. The wrapper raises
+  `FoldingEngineNotInstalledError` with both `chai_lab` install
+  guidance and GPU-requirement context if the package or CUDA is
+  missing.
+
+  What this wrapper deliberately doesn't cover (v1 scope):
+
+    - Multi-component complexes (deferred until multi-component
+      lands for all AF3 wrappers together).
+    - MSA file inputs (use `use_msa_server=True` for v1).
+    - Restraints, templates, custom feature contexts (the lower-
+      level `run_folding_on_context` API).
+
+  Tests (`tests/unit/wrappers/test_chai.py`, 29 unit tests + 1
+  real-model skipped):
+
+  - `TestConstruction` (5) — defaults, custom options, validators
+    (num_trunk_recycles, num_diffn_timesteps), construction is
+    lazy.
+  - `TestFastaConstruction` (2) — typed FASTA header
+    (`>protein|name=...`).
+  - `TestMissingDependency` (1, skipped when chai_lab installed) —
+    friendly error mentions chai_lab AND the GPU requirement.
+  - `TestLoadScoresNpz` (3) — flattens 0-d arrays to Python
+    scalars, preserves multi-dim arrays, handles bool scalars
+    correctly.
+  - `TestPerResiduePlddtFromCif` (3) — extracts CA B-factors as
+    per-residue pLDDT, falls back to residue-mean B-factor when
+    no CAs (ligand-only structures), handles empty Protein.
+  - `TestCollectSamples` (3) — gathers all 5 samples with CIF
+    text + scores; missing CIF raises with the right filename;
+    missing NPZ raises with the right filename.
+  - `TestParseOutputs` (7) — picks best by aggregate_score, all
+    metadata keys populated per the docstring contract,
+    per-residue confidence from CA B-factors, per-sample scores
+    preserved for all 5, Provenance captures engine config,
+    empty samples list raises, missing aggregate_score samples
+    sort last rather than crashing.
+  - `TestPredictPipeline` (3) — full predict() with
+    `_run_inference` mocked: end-to-end shape, sequence
+    validation runs before model invocation, written FASTA uses
+    the typed header.
+  - `TestSourceInspection` (2) — regression net for the
+    hard-coded 5-sample constant and the consistency of the
+    "Chai-1" engine string across metadata, Provenance, and
+    class name.
+  - `TestRealChai1` (1, skipped without chai_lab) — full
+    end-to-end with the real model. Marked `@pytest.mark.slow`
+    since it requires a CUDA GPU and downloads ~3 GB of weights
+    on first run.
+
+  Cookbook updated:
+
+  - `cookbook/choosing-folding.md` — header from "four engines"
+    to "five engines"; comparison table gains a Chai-1 row;
+    "Predicting with cofactors, ligands, or nucleic acids"
+    section updated to position Chai-1 alongside Boltz and
+    RoseTTAFold as multi-component options; new
+    "Cross-checking with Chai-1 and Boltz" section shows the
+    headline two-engine workflow (independent reimplementations
+    of AF3, agreement is a strong signal); Installation
+    footprint, Licenses, Confidence metrics, Cross-engine
+    workflows sub-sections updated.
+  - The "What molforge doesn't wrap (yet)" list updated to
+    remove Chai-1, retaining AlphaFold-3 (DeepMind release) and
+    Protenix on the wishlist.
+
+  `pyproject.toml` mypy override added: `"chai_lab.*"` joins the
+  list of optional dependencies whose missing stubs mypy should
+  ignore.
+
 - **ESM-IF1 inverse-folding wrapper.** Third generative engine,
   joining ProteinMPNN (inverse folding) and RFdiffusion (backbone
   generation). ESM-IF1 (Hsu et al. 2022) solves the same problem
