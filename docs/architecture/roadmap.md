@@ -121,11 +121,17 @@ stitch them together.
   up writing the same `multiprocessing.Pool` loop. Tie this to the
   wrappers so each engine declares whether it parallelizes across
   processes (CPU engines) or within one process (GPU engines).
-- **Caching layer.** The single biggest "real-user pain" item. Folding
-  200 proteins overnight is common; if 30 crash, redoing the other
-  170 is wasted compute. A content-addressed cache keyed on (engine,
-  args, input hash), even just file-based, would change the user
-  experience dramatically.
+- **Caching layer (shipped post-0.4.0).** Content-addressed result
+  cache keyed on `(engine, parameters, inputs, parent_chain)` via
+  `Provenance`. Folding (ESMFold, Boltz, Chai-1) and sequence design
+  (ProteinMPNN, ESM-IF1) all participate. File-system-backed,
+  default location `~/.cache/molforge/`, env-var overrides for
+  location and disable. Cascading invalidation through the parent
+  chain — change an upstream step and downstream caches invalidate
+  automatically. Docking engines (Vina, Gnina, DiffDock) and the
+  MD trajectory cache remain follow-ups; MD trajectories are
+  deliberately uncached (multi-GB; users should use upstream
+  framework checkpointing).
 
 ## D. Quality and correctness depth
 

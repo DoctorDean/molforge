@@ -11,11 +11,13 @@ covers concrete workflows.
 | Task                                                            | Recipe                                                    |
 | --------------------------------------------------------------- | --------------------------------------------------------- |
 | Predict a structure from a sequence                             | [Fold a sequence](folding.md)                             |
+| Predict a protein + ligand or multi-chain complex               | [Multi-component cofolding](multi-component-folding.md)   |
 | Dock a small molecule against a folded receptor                 | [Fold then dock](folding-then-docking.md)                 |
 | Get a raw PDB ready for MD simulation                           | [Prepare for MD](prep-for-md.md)                          |
 | Run a short MD simulation and analyse it                        | [MD and RMSD](md-and-rmsd.md)                             |
 | Design sequences for a backbone, then validate by re-folding    | [Design then refold](design-then-refold.md)               |
 | Trace what produced an output across a multi-step workflow      | [Inspect provenance](inspect-provenance.md)               |
+| Skip recomputing expensive engine calls you've already run      | [Caching results](caching-results.md)                     |
 
 ## If you're choosing between options...
 

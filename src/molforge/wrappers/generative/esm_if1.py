@@ -57,6 +57,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from molforge.cache import get_default_cache
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
@@ -176,6 +177,16 @@ class ESMIF1(GenerativeEngine):
             GenerativeEngineNotInstalledError: If ``fair-esm`` (and
                 its peer ``torch-geometric``) aren't installed.
         """
+        # Cache lookup before loading the model. We use ``self.device``
+        # (the user-specified value) rather than ``_effective_device()``
+        # so the cache key stays stable independent of load-time
+        # auto-detection.
+        provenance = self._build_provenance(backbone, chain_id=chain_id)
+        cache = get_default_cache()
+        cached: list[DesignedSequence] | None = cache.get(provenance, "designed_sequences")
+        if cached is not None:
+            return cached
+
         self._ensure_loaded()
 
         # We rely on the upstream ``load_coords`` helper because it
@@ -188,16 +199,33 @@ class ESMIF1(GenerativeEngine):
 
         designs = self._sample_designs(coords, native_seq)
         designs.sort(key=lambda d: d.score)
-        # Re-rank by sort order (the score field is already correct
-        # but the user may want the lowest-score design at index 0).
-        # We also attach a *shared* Provenance — all designs from one
-        # call share by-reference (same as ProteinMPNN / Gnina).
+        # Attach the same shared Provenance built above to each design
+        # (frozen + immutable, safe to share by reference).
+        for d in designs:
+            d.metadata[mk.PROVENANCE] = provenance
+        cache.put(provenance, designs, "designed_sequences")
+        return designs
+
+    def _build_provenance(self, backbone: Protein | str | Path, *, chain_id: str) -> Provenance:
+        """Construct the Provenance for a generate() call.
+
+        Pure function of inputs + constructor parameters — used as
+        the cache key. Note: ``device`` is the user-specified value,
+        not ``_effective_device()``, to keep the cache key stable
+        without needing to load the model.
+        """
         backbone_ref = self._provenance_ref(backbone)
-        shared_prov = Provenance.from_engine(
+        parent = (
+            backbone.metadata.get(mk.PROVENANCE)
+            if isinstance(backbone, Protein)
+            and isinstance(backbone.metadata.get(mk.PROVENANCE), Provenance)
+            else None
+        )
+        return Provenance.from_engine(
             engine="ESM-IF1",
             parameters={
                 "model_name": self.model_name,
-                "device": self._effective_device(),
+                "device": self.device,
                 "num_seqs": self.num_seqs,
                 "temperature": self.temperature,
                 "score_sequences": self.score_sequences,
@@ -206,16 +234,8 @@ class ESMIF1(GenerativeEngine):
                 "seed": self.seed,
             },
             inputs={"backbone": backbone_ref},
-            parent=(
-                backbone.metadata.get(mk.PROVENANCE)
-                if isinstance(backbone, Protein)
-                and isinstance(backbone.metadata.get(mk.PROVENANCE), Provenance)
-                else None
-            ),
+            parent=parent,
         )
-        for d in designs:
-            d.metadata[mk.PROVENANCE] = shared_prov
-        return designs
 
     # ------------------------------------------------------------------
     # Model loading

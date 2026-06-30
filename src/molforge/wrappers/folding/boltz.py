@@ -49,8 +49,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.folding import ComplexSpec, Entity
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -156,17 +158,87 @@ class Boltz(FoldingEngine):
                 its output can't be parsed.
         """
         sequence = _validate_sequence(sequence)
-        return self._run_local(sequence)
+        # Delegate to the spec-based code path with a single-entity
+        # spec. This keeps the multi-component machinery as the one
+        # canonical implementation — single-sequence is just a
+        # degenerate special case.
+        spec = ComplexSpec.from_protein(sequence)
+        return self._predict_spec(spec, single_sequence=sequence)
+
+    def predict_complex(self, spec: ComplexSpec, **kwargs: object) -> Protein:
+        """Fold a multi-component complex via the boltz CLI.
+
+        This is the headline AlphaFold-3-style capability: predict
+        the structure of multiple protein chains, DNA/RNA, and/or
+        small-molecule ligands in a single forward pass. See
+        :class:`molforge.folding.ComplexSpec` for input shape and
+        examples.
+
+        Args:
+            spec: A :class:`ComplexSpec` describing the entities to
+                fold. The returned :class:`Protein` has one chain in
+                its ``atom_array`` per polymer entity (or per copy,
+                for homo-oligomers). Ligand atoms appear as
+                hetero-atoms with chain IDs assigned by the spec.
+            **kwargs: Reserved for future per-call options.
+
+        Returns:
+            A :class:`Protein` with multi-chain ``atom_array`` and
+            metadata as documented in :meth:`predict`, plus:
+
+            - ``metadata["complex_spec"]``: the :class:`ComplexSpec`
+                passed in, for traceability.
+            - ``metadata["per_chain_ptm"]``: per-chain pTM values
+                from Boltz's confidence JSON.
+
+        Raises:
+            FoldingEngineNotInstalledError: If the ``boltz`` CLI
+                isn't installed.
+            RuntimeError: If the CLI runs but produces no parseable
+                output.
+
+        Examples:
+            Protein-ligand complex::
+
+                from molforge.folding import ComplexSpec
+                from molforge.wrappers.folding import Boltz
+
+                spec = ComplexSpec.protein_ligand(
+                    protein_sequence="MVTPEG...",
+                    ligand_smiles="CC(=O)OC1=CC=CC=C1C(=O)O",
+                )
+                complex_struct = Boltz().predict_complex(spec)
+                # complex_struct.atom_array has chain A (protein) and
+                # chain B (ligand atoms).
+        """
+        return self._predict_spec(spec, single_sequence=None)
 
     # ------------------------------------------------------------------
     # Local-execution path (testable seam)
     # ------------------------------------------------------------------
-    def _run_local(self, sequence: str) -> Protein:
-        """Drive the boltz CLI in a temporary directory and parse the result.
+    def _predict_spec(
+        self,
+        spec: ComplexSpec,
+        *,
+        single_sequence: str | None,
+    ) -> Protein:
+        """The shared spec-based execution path.
 
-        Separated from `predict` so tests can mock the subprocess call
-        without touching sequence validation or output parsing.
+        Both :meth:`predict` and :meth:`predict_complex` route through
+        here. ``single_sequence`` is non-None when the caller was the
+        single-sequence ``predict()`` path; that lets us preserve the
+        existing ``metadata["source_sequence"]`` contract for users
+        that depend on it. For multi-entity calls it's None and the
+        spec itself goes into ``metadata["complex_spec"]``.
         """
+        # Cache lookup. Build the Provenance upfront so we can
+        # check the cache *before* spawning the boltz subprocess.
+        provenance = self._build_provenance(spec, single_sequence=single_sequence)
+        cache = get_default_cache()
+        cached: Protein | None = cache.get(provenance, "protein")
+        if cached is not None:
+            return cached
+
         binary = self._require_boltz()
 
         with tempfile.TemporaryDirectory() as td:
@@ -176,7 +248,7 @@ class Boltz(FoldingEngine):
             output_dir.mkdir()
 
             input_yaml.write_text(
-                self._build_input_yaml(sequence, name="query"),
+                self._build_input_yaml_from_spec(spec),
                 encoding="utf-8",
             )
 
@@ -186,11 +258,50 @@ class Boltz(FoldingEngine):
 
             cif_text, confidence_json = self._collect_outputs(output_dir)
 
-        return self._parse_outputs(
+        result = self._parse_outputs(
             cif_text=cif_text,
             confidence_json=confidence_json,
-            sequence=sequence,
+            sequence=single_sequence,
+            spec=spec,
+            provenance=provenance,
         )
+        cache.put(provenance, result, "protein")
+        return result
+
+    def _build_provenance(self, spec: ComplexSpec, *, single_sequence: str | None) -> Provenance:
+        """Construct the Provenance for a predict / predict_complex call.
+
+        Factored out of :meth:`_parse_outputs` so :meth:`_predict_spec`
+        can build it upfront for cache lookup. Pure function of inputs
+        + constructor parameters — does not touch the boltz CLI.
+        """
+        prov_inputs: dict[str, object]
+        if single_sequence is not None:
+            prov_inputs = {"sequence": single_sequence}
+        else:
+            prov_inputs = {"complex_spec": _serialize_spec_for_provenance(spec)}
+        return Provenance.from_engine(
+            engine="Boltz",
+            parameters={
+                "model_version": self.model_version,
+                "use_msa_server": self.use_msa_server,
+                "recycling_steps": self.recycling_steps,
+                "diffusion_samples": self.diffusion_samples,
+                "sampling_steps": self.sampling_steps,
+                "device": self.device,
+            },
+            inputs=prov_inputs,
+        )
+
+    def _run_local(self, sequence: str) -> Protein:
+        """Single-sequence local execution (legacy API).
+
+        Preserved for any external code that may have been calling
+        the private seam directly. New code should use
+        :meth:`_predict_spec` instead.
+        """
+        sequence = _validate_sequence(sequence)
+        return self._predict_spec(ComplexSpec.from_protein(sequence), single_sequence=sequence)
 
     # ------------------------------------------------------------------
     # Process plumbing (each step a testable seam)
@@ -208,16 +319,38 @@ class Boltz(FoldingEngine):
         return binary
 
     def _build_input_yaml(self, sequence: str, *, name: str) -> str:
-        """Construct the Boltz YAML input for a single protein chain.
+        """Single-sequence YAML builder (legacy API).
+
+        Preserved as a thin wrapper around :meth:`_build_input_yaml_from_spec`
+        so existing tests of the single-sequence path keep working.
+        """
+        return self._build_input_yaml_from_spec(ComplexSpec.from_protein(sequence))
+
+    def _build_input_yaml_from_spec(self, spec: ComplexSpec) -> str:
+        """Construct the Boltz YAML input for a ComplexSpec.
 
         Boltz's input format is a YAML document with a top-level
-        ``sequences`` list of entities. For a single protein chain we
-        write one entity with ``protein`` type, a chain ID of ``A``,
-        and the raw sequence string. MSA is requested implicitly via
-        ``--use_msa_server`` on the CLI (no per-entity MSA field).
+        ``sequences`` list of entities. Each entity is keyed by its
+        type (``protein`` / ``ligand`` / ``dna`` / ``rna``). For
+        single-protein inputs this collapses to the trivial
+        single-entity YAML the v1 wrapper originally produced.
+
+        Multi-copy entities (``Entity.copies > 1``) are emitted with
+        ``id: [A, B, ...]`` — Boltz's documented shape for declaring
+        multiple chains share the same input sequence.
+
+        Hand-built YAML rather than pulling PyYAML for one schema
+        we entirely control.
         """
-        # Hand-built YAML to avoid a PyYAML dependency for one trivial doc.
-        return f"version: 1\nsequences:\n  - protein:\n      id: A\n      sequence: {sequence}\n"
+        lines: list[str] = ["version: 1", "sequences:"]
+        chain_ids_per_entity = spec.assigned_chain_ids()
+
+        for entity, chain_ids in zip(spec.entities, chain_ids_per_entity, strict=True):
+            lines.extend(_boltz_yaml_entity(entity, chain_ids))
+
+        # Trailing newline keeps Boltz's parser happy on some
+        # versions and makes diffing the file pleasant.
+        return "\n".join(lines) + "\n"
 
     def _build_command(
         self,
@@ -327,7 +460,9 @@ class Boltz(FoldingEngine):
         *,
         cif_text: str,
         confidence_json: dict[str, Any],
-        sequence: str,
+        sequence: str | None,
+        spec: ComplexSpec | None = None,
+        provenance: Provenance | None = None,
     ) -> Protein:
         """Parse a Boltz mmCIF + confidence JSON into a Protein with metadata.
 
@@ -337,6 +472,17 @@ class Boltz(FoldingEngine):
         per-residue in ``confidence_per_residue``, scalar mean in
         ``mean_confidence``. Boltz-specific scalars (pTM, iPTM,
         composite confidence score) are surfaced verbatim.
+
+        Args:
+            cif_text: The raw mmCIF text from Boltz's prediction.
+            confidence_json: The parsed confidence sidecar JSON.
+            sequence: The original single-sequence input, when the
+                caller is the single-sequence :meth:`predict` path.
+                ``None`` for multi-component :meth:`predict_complex`
+                calls (the spec carries that information instead).
+            spec: The :class:`ComplexSpec` used for this prediction.
+                Always set; for single-sequence predict() it's the
+                trivial single-entity spec.
         """
         from molforge.io.mmcif import read_cif_string
 
@@ -362,30 +508,132 @@ class Boltz(FoldingEngine):
             )
         )
 
-        protein.metadata.update(
-            {
-                mk.PROVENANCE: Provenance.from_engine(
-                    engine="Boltz",
-                    parameters={
-                        "model_version": self.model_version,
-                        "use_msa_server": self.use_msa_server,
-                        "recycling_steps": self.recycling_steps,
-                        "diffusion_samples": self.diffusion_samples,
-                        "sampling_steps": self.sampling_steps,
-                        "device": self.device,
-                    },
-                    inputs={"sequence": sequence},
-                ),
-                mk.ENGINE: "Boltz",
-                mk.MODEL_VERSION: self.model_version,
-                mk.SOURCE_SEQUENCE: sequence,
-                mk.USE_MSA_SERVER: self.use_msa_server,
-                mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
-                mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
-                mk.MEAN_CONFIDENCE: mean_conf,
-                mk.PTM: ptm,
-                mk.IPTM: iptm,
-                mk.CONFIDENCE_SCORE: composite,
-            }
-        )
+        # Per-chain confidence stats. Boltz writes a chains_ptm dict
+        # (chain_id -> pTM) in its confidence JSON for multi-chain
+        # predictions; pass through verbatim when present.
+        per_chain_ptm = confidence_json.get("chains_ptm")
+        pair_chains_iptm = confidence_json.get("pair_chains_iptm")
+
+        # Provenance: use the prebuilt one when supplied (the normal
+        # _predict_spec path), otherwise build a fresh one (legacy
+        # test path that calls _parse_outputs directly).
+        if provenance is None:
+            if spec is None and sequence is not None:
+                spec = ComplexSpec.from_protein(sequence)
+            assert spec is not None, "_parse_outputs needs spec or sequence"
+            provenance = self._build_provenance(spec, single_sequence=sequence)
+
+        metadata_update: dict[str, object] = {
+            mk.PROVENANCE: provenance,
+            mk.ENGINE: "Boltz",
+            mk.MODEL_VERSION: self.model_version,
+            mk.USE_MSA_SERVER: self.use_msa_server,
+            mk.CONFIDENCE_PER_ATOM: plddt_per_atom,
+            mk.CONFIDENCE_PER_RESIDUE: per_residue_arr,
+            mk.MEAN_CONFIDENCE: mean_conf,
+            mk.PTM: ptm,
+            mk.IPTM: iptm,
+            mk.CONFIDENCE_SCORE: composite,
+        }
+        # Preserve the SOURCE_SEQUENCE key only for single-sequence
+        # calls (where it has a clear meaning). For complexes, surface
+        # the spec instead under a dedicated key.
+        if sequence is not None:
+            metadata_update[mk.SOURCE_SEQUENCE] = sequence
+        if spec is not None and sequence is None:
+            metadata_update["complex_spec"] = spec
+        if per_chain_ptm is not None:
+            metadata_update["per_chain_ptm"] = per_chain_ptm
+        if pair_chains_iptm is not None:
+            metadata_update["pair_chains_iptm"] = pair_chains_iptm
+
+        protein.metadata.update(metadata_update)
         return protein
+
+
+# ---------------------------------------------------------------------
+# Module-level YAML serialization helpers (testable without a Boltz instance)
+# ---------------------------------------------------------------------
+
+
+def _boltz_yaml_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
+    """Render one ComplexSpec.Entity as Boltz YAML lines.
+
+    Returns a list of lines (without trailing newlines) ready to be
+    joined into the larger document. The Boltz YAML schema is::
+
+        - protein:
+            id: A
+            sequence: MKQH...
+        - ligand:
+            id: B
+            smiles: 'CCO'
+        - ligand:
+            id: C
+            ccd: ATP
+        - dna:
+            id: D
+            sequence: ATCG
+        - rna:
+            id: E
+            sequence: AUCG
+
+    For multi-copy entities, ``id`` becomes a YAML list:
+    ``id: [A, B]``. Boltz documents this as the canonical shape for
+    declaring identical chains share a single input sequence.
+    """
+    # Boltz's entity type names exactly match Entity.kind, so no
+    # mapping needed.
+    kind_key = entity.kind
+
+    # id: A   (single)   or   id: [A, B]   (multi-copy)
+    if len(chain_ids) == 1:
+        id_line = f"      id: {chain_ids[0]}"
+    else:
+        id_line = "      id: [{}]".format(", ".join(chain_ids))
+
+    body: list[str] = [f"  - {kind_key}:", id_line]
+
+    if entity.is_polymer:
+        body.append(f"      sequence: {entity.normalized_sequence()}")
+    elif entity.is_ligand:
+        if entity.smiles is not None:
+            # YAML strings with special chars (e.g. SMILES with
+            # backslashes or quotes) need single-quoting. Smiles
+            # are well-defined ASCII so single-quote is safe.
+            body.append(f"      smiles: '{entity.smiles}'")
+        else:
+            assert entity.ccd is not None  # validated upstream
+            body.append(f"      ccd: {entity.ccd}")
+
+    return body
+
+
+def _serialize_spec_for_provenance(spec: ComplexSpec | None) -> object:
+    """Render a ComplexSpec to a JSON-safe shape for Provenance.inputs.
+
+    Provenance.inputs must be JSON-serializable; the dataclass itself
+    is not (it's a frozen dataclass with Entity tuples). We flatten
+    it to a list of dicts where each entry has the key fields. The
+    Provenance still cross-references back to the actual spec via
+    ``Protein.metadata["complex_spec"]`` for callers that want the
+    rich type.
+    """
+    if spec is None:
+        return None
+    entities_payload: list[dict[str, object]] = []
+    for entity, chain_ids in zip(spec.entities, spec.assigned_chain_ids(), strict=True):
+        payload: dict[str, object] = {
+            "kind": entity.kind,
+            "chain_ids": chain_ids,
+        }
+        if entity.is_polymer:
+            payload["sequence"] = entity.normalized_sequence()
+        elif entity.smiles is not None:
+            payload["smiles"] = entity.smiles
+        else:
+            payload["ccd"] = entity.ccd
+        if entity.name is not None:
+            payload["name"] = entity.name
+        entities_payload.append(payload)
+    return {"entities": entities_payload}

@@ -56,6 +56,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from molforge.cache import get_default_cache
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
@@ -202,6 +203,17 @@ class ProteinMPNN(GenerativeEngine):
             GenerativeEngineNotInstalledError: If ProteinMPNN isn't found.
             RuntimeError: If the subprocess fails.
         """
+        # Cache lookup before the ProteinMPNN subprocess.
+        provenance = self._build_provenance(
+            backbone,
+            chains_to_design=chains_to_design,
+            fixed_positions=fixed_positions,
+        )
+        cache = get_default_cache()
+        cached: list[DesignedSequence] | None = cache.get(provenance, "designed_sequences")
+        if cached is not None:
+            return cached
+
         pmpnn_dir = self._resolve_proteinmpnn_dir()
         designs = self._run_cli(
             backbone=backbone,
@@ -211,12 +223,28 @@ class ProteinMPNN(GenerativeEngine):
             timeout=timeout,
         )
 
-        # Attach Provenance to each designed sequence. They were all
-        # produced by the same call with the same engine config, so
-        # they share a single Provenance object (frozen + immutable,
-        # so sharing is safe). The parent is the input backbone's
-        # provenance when present — chains a ProteinMPNN design back
-        # to whatever produced its scaffold.
+        # All designs share the same Provenance (frozen + immutable
+        # so by-reference sharing is safe). The cache key was derived
+        # from the same provenance.
+        for d in designs:
+            d.metadata[mk.PROVENANCE] = provenance
+        cache.put(provenance, designs, "designed_sequences")
+        return designs
+
+    def _build_provenance(
+        self,
+        backbone: Protein | str | os.PathLike[str],
+        *,
+        chains_to_design: str | None,
+        fixed_positions: dict[str, list[int]] | None,
+    ) -> Provenance:
+        """Construct the Provenance for a generate() call.
+
+        Pure function of inputs + constructor parameters — used as
+        the cache key; no I/O. The parent chain extends through
+        whatever produced the backbone, so the cache invalidates
+        correctly when an upstream step changes.
+        """
         parent: Provenance | None = None
         backbone_ref: str
         if isinstance(backbone, Protein):
@@ -225,7 +253,7 @@ class ProteinMPNN(GenerativeEngine):
         else:
             backbone_ref = str(backbone)
 
-        prov = Provenance.from_engine(
+        return Provenance.from_engine(
             engine="ProteinMPNN",
             parameters={
                 "model_name": self.model_name,
@@ -243,9 +271,6 @@ class ProteinMPNN(GenerativeEngine):
             inputs={"backbone": backbone_ref},
             parent=parent,
         )
-        for d in designs:
-            d.metadata[mk.PROVENANCE] = prov
-        return designs
 
     # ------------------------------------------------------------------
     # CLI invocation (testable seam)

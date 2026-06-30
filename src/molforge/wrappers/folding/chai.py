@@ -68,8 +68,10 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.folding import ComplexSpec, Entity
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -190,17 +192,81 @@ class Chai1(FoldingEngine):
             RuntimeError: If Chai-1 produces no parseable output.
         """
         sequence = _validate_sequence(sequence)
-        return self._run_local(sequence)
+        # Delegate to the spec-based code path. Multi-component
+        # machinery is the canonical implementation; single-sequence
+        # is a degenerate special case.
+        spec = ComplexSpec.from_protein(sequence)
+        return self._predict_spec(spec, single_sequence=sequence)
+
+    def predict_complex(self, spec: ComplexSpec, **kwargs: object) -> Protein:
+        """Fold a multi-component complex via Chai-1.
+
+        The headline AlphaFold-3-style capability: predict the
+        structure of multiple protein chains, DNA/RNA, and/or
+        small-molecule ligands in a single forward pass. See
+        :class:`molforge.folding.ComplexSpec` for input shape.
+
+        Args:
+            spec: A :class:`ComplexSpec` describing the entities to
+                fold. The returned :class:`Protein` has one chain in
+                its ``atom_array`` per polymer entity (or per copy,
+                for homo-oligomers). Ligand atoms appear as
+                hetero-atoms with chain IDs assigned by the spec.
+            **kwargs: Reserved for future per-call options.
+
+        Returns:
+            A :class:`Protein` with multi-chain ``atom_array`` and
+            the metadata documented in :meth:`predict`, plus:
+
+            - ``metadata["complex_spec"]``: the :class:`ComplexSpec`
+                passed in, for traceability.
+            - ``metadata["per_chain_ptm"]``: per-chain pTM values
+                from Chai's scores NPZ (when present).
+            - ``metadata["per_chain_pair_iptm"]``: pairwise
+                interface pTM matrix (when present).
+
+        Raises:
+            FoldingEngineNotInstalledError: If ``chai_lab`` isn't
+                installed.
+            RuntimeError: If Chai-1 produces no parseable output.
+
+        Examples:
+            Protein-ligand complex::
+
+                from molforge.folding import ComplexSpec
+                from molforge.wrappers.folding import Chai1
+
+                spec = ComplexSpec.protein_ligand(
+                    protein_sequence="MVTPEG...",
+                    ligand_smiles="CC(=O)OC1=CC=CC=C1C(=O)O",
+                )
+                complex_struct = Chai1().predict_complex(spec)
+        """
+        return self._predict_spec(spec, single_sequence=None)
 
     # ------------------------------------------------------------------
     # Local-execution path (testable seam)
     # ------------------------------------------------------------------
-    def _run_local(self, sequence: str) -> Protein:
-        """Drive ``chai_lab.chai1.run_inference`` in a temp directory.
+    def _predict_spec(
+        self,
+        spec: ComplexSpec,
+        *,
+        single_sequence: str | None,
+    ) -> Protein:
+        """The shared spec-based execution path.
 
-        Separated from :meth:`predict` so tests can mock the run
-        without touching sequence validation or output parsing.
+        Both :meth:`predict` and :meth:`predict_complex` route through
+        here. ``single_sequence`` is non-None when the caller was the
+        single-sequence ``predict()`` path; that lets us preserve the
+        existing ``metadata["source_sequence"]`` contract.
         """
+        # Cache lookup before chai_lab GPU inference.
+        provenance = self._build_provenance(spec, single_sequence=single_sequence)
+        cache = get_default_cache()
+        cached: Protein | None = cache.get(provenance, "protein")
+        if cached is not None:
+            return cached
+
         with tempfile.TemporaryDirectory(prefix="molforge_chai1_") as td:
             tmpdir = Path(td)
             fasta_path = tmpdir / "input.fasta"
@@ -208,27 +274,91 @@ class Chai1(FoldingEngine):
             output_dir.mkdir()
 
             fasta_path.write_text(
-                self._build_fasta(sequence, name="query"),
+                self._build_fasta_from_spec(spec),
                 encoding="utf-8",
             )
 
             self._run_inference(fasta_path, output_dir)
             samples = self._collect_samples(output_dir)
 
-        return self._parse_outputs(samples=samples, sequence=sequence)
+        result = self._parse_outputs(
+            samples=samples,
+            sequence=single_sequence,
+            spec=spec,
+            provenance=provenance,
+        )
+        cache.put(provenance, result, "protein")
+        return result
+
+    def _build_provenance(self, spec: ComplexSpec, *, single_sequence: str | None) -> Provenance:
+        """Construct the Provenance for a predict / predict_complex call.
+
+        Pure function of inputs + constructor parameters — used as
+        the cache key. Does not touch chai_lab.
+        """
+        prov_inputs: dict[str, object]
+        if single_sequence is not None:
+            prov_inputs = {"sequence": single_sequence}
+        else:
+            prov_inputs = {"complex_spec": _serialize_spec_for_provenance(spec)}
+        return Provenance.from_engine(
+            engine="Chai-1",
+            parameters={
+                "device": self.device,
+                "use_msa_server": self.use_msa_server,
+                "msa_server_url": self.msa_server_url,
+                "num_trunk_recycles": self.num_trunk_recycles,
+                "num_diffn_timesteps": self.num_diffn_timesteps,
+                "seed": self.seed,
+                "cache_dir": self.cache_dir,
+            },
+            inputs=prov_inputs,
+        )
+
+    def _run_local(self, sequence: str) -> Protein:
+        """Single-sequence local execution (legacy API).
+
+        Preserved for any external callers of the private seam. New
+        code should use :meth:`_predict_spec` instead.
+        """
+        return self._predict_spec(ComplexSpec.from_protein(sequence), single_sequence=sequence)
 
     # ------------------------------------------------------------------
     # Process plumbing (each step a testable seam)
     # ------------------------------------------------------------------
     def _build_fasta(self, sequence: str, *, name: str) -> str:
-        """Construct the Chai-1 FASTA input for a single protein chain.
+        """Single-sequence FASTA builder (legacy API).
 
-        Chai-1's FASTA uses a typed header like ``>protein|name=foo``;
-        the type prefix is what tells Chai-1 whether each entity is a
-        protein, ligand (SMILES), DNA, or RNA. For a single protein
-        chain we emit one ``>protein|name=...`` record.
+        Preserved as a thin wrapper around
+        :meth:`_build_fasta_from_spec` so existing tests of the
+        single-sequence path keep working.
         """
-        return f">protein|name={name}\n{sequence}\n"
+        return self._build_fasta_from_spec(
+            ComplexSpec(entities=(Entity(kind="protein", sequence=sequence, name=name),))
+        )
+
+    def _build_fasta_from_spec(self, spec: ComplexSpec) -> str:
+        """Construct the Chai-1 FASTA input for a ComplexSpec.
+
+        Chai-1's FASTA uses typed headers like ``>protein|name=foo``,
+        ``>ligand|name=...``, ``>dna|name=...``, ``>rna|name=...``.
+        The type prefix is what tells Chai whether each record is a
+        polymer or a ligand.
+
+        Unlike Boltz's YAML which can express multi-copy with a list-
+        of-IDs shape, Chai-1's FASTA needs each copy as a separate
+        record. A homodimer becomes two ``>protein|name=...`` records
+        with the same sequence and distinct ``name=`` suffixes. We
+        embed the chain ID into the ``name=`` field so users can map
+        FASTA records back to chains in the output structure.
+        """
+        records: list[str] = []
+        chain_ids_per_entity = spec.assigned_chain_ids()
+
+        for entity, chain_ids in zip(spec.entities, chain_ids_per_entity, strict=True):
+            records.extend(_chai_fasta_entity(entity, chain_ids))
+
+        return "".join(records)
 
     def _run_inference(self, fasta_path: Path, output_dir: Path) -> None:
         """Single seam to ``chai_lab.chai1.run_inference``.
@@ -335,7 +465,9 @@ class Chai1(FoldingEngine):
         self,
         *,
         samples: list[dict[str, Any]],
-        sequence: str,
+        sequence: str | None,
+        spec: ComplexSpec | None = None,
+        provenance: Provenance | None = None,
     ) -> Protein:
         """Pick the best sample by ``aggregate_score`` and build the
         canonical :class:`Protein`.
@@ -343,6 +475,16 @@ class Chai1(FoldingEngine):
         The non-best samples' headline scores are preserved in
         ``metadata["per_sample_scores"]`` so users wanting to inspect
         ranking spread can do so without re-running Chai-1.
+
+        Args:
+            samples: Output of :meth:`_collect_samples`.
+            sequence: The original single-sequence input, when the
+                caller is the single-sequence :meth:`predict` path.
+                ``None`` for multi-component :meth:`predict_complex`
+                calls (the spec carries that information instead).
+            spec: The :class:`ComplexSpec` used for this prediction.
+                Always set; for single-sequence predict() it's the
+                trivial single-entity spec.
         """
         if not samples:
             raise RuntimeError("Chai-1 produced no samples — nothing to parse.")
@@ -376,34 +518,44 @@ class Chai1(FoldingEngine):
             float(confidence_per_residue.mean()) if confidence_per_residue.size > 0 else 0.0
         )
 
-        provenance = Provenance.from_engine(
-            engine="Chai-1",
-            parameters={
-                "device": self.device,
-                "use_msa_server": self.use_msa_server,
-                "msa_server_url": self.msa_server_url,
-                "num_trunk_recycles": self.num_trunk_recycles,
-                "num_diffn_timesteps": self.num_diffn_timesteps,
-                "seed": self.seed,
-                "cache_dir": self.cache_dir,
-            },
-            inputs={"sequence": sequence},
-        )
+        # Per-chain confidence stats. Chai-1's NPZ writes
+        # ``per_chain_ptm`` and ``per_chain_pair_iptm`` for multi-chain
+        # predictions; pass through verbatim when present.
+        per_chain_ptm = best["scores"].get("per_chain_ptm")
+        per_chain_pair_iptm = best["scores"].get("per_chain_pair_iptm")
 
-        protein.metadata.update(
-            {
-                "engine": "Chai-1",
-                "source_sequence": sequence,
-                mk.CONFIDENCE_PER_RESIDUE: confidence_per_residue,
-                mk.MEAN_CONFIDENCE: mean_confidence,
-                "aggregate_score": best["scores"].get("aggregate_score"),
-                "ptm": best["scores"].get("ptm"),
-                "iptm": best["scores"].get("iptm"),
-                "best_sample_index": best["index"],
-                "per_sample_scores": per_sample_scores,
-                mk.PROVENANCE: provenance,
-            }
-        )
+        # Provenance: use the prebuilt one when supplied (the normal
+        # _predict_spec path), otherwise build a fresh one (legacy
+        # test path that calls _parse_outputs directly).
+        if provenance is None:
+            if spec is None and sequence is not None:
+                spec = ComplexSpec.from_protein(sequence)
+            assert spec is not None, "_parse_outputs needs spec or sequence"
+            provenance = self._build_provenance(spec, single_sequence=sequence)
+
+        metadata_update: dict[str, object] = {
+            "engine": "Chai-1",
+            mk.CONFIDENCE_PER_RESIDUE: confidence_per_residue,
+            mk.MEAN_CONFIDENCE: mean_confidence,
+            "aggregate_score": best["scores"].get("aggregate_score"),
+            "ptm": best["scores"].get("ptm"),
+            "iptm": best["scores"].get("iptm"),
+            "best_sample_index": best["index"],
+            "per_sample_scores": per_sample_scores,
+            mk.PROVENANCE: provenance,
+        }
+        # Preserve "source_sequence" only for single-sequence calls.
+        # For complexes, surface the spec instead.
+        if sequence is not None:
+            metadata_update["source_sequence"] = sequence
+        if spec is not None and sequence is None:
+            metadata_update["complex_spec"] = spec
+        if per_chain_ptm is not None:
+            metadata_update["per_chain_ptm"] = per_chain_ptm
+        if per_chain_pair_iptm is not None:
+            metadata_update["per_chain_pair_iptm"] = per_chain_pair_iptm
+
+        protein.metadata.update(metadata_update)
         return protein
 
 
@@ -493,3 +645,98 @@ def _residue_mean_bfactor(arr: Any) -> np.ndarray:
     np.add.at(sums, per_atom_residue_idx, arr.b_factor)
     np.add.at(counts, per_atom_residue_idx, 1)
     return sums / np.maximum(counts, 1)
+
+
+# ---------------------------------------------------------------------
+# Module-level FASTA serialization helpers (testable without a Chai1 instance)
+# ---------------------------------------------------------------------
+
+
+def _chai_fasta_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
+    """Render one ComplexSpec.Entity as Chai-1 FASTA records.
+
+    Returns a list of FASTA-record strings (each already
+    newline-terminated). Each copy of the entity becomes its own
+    FASTA record — Chai-1's FASTA format doesn't have an id-list
+    shape like Boltz's YAML.
+
+    The ``name=`` field embeds the chain_id, falling back to the
+    user-supplied :attr:`Entity.name`. This is what lets users map
+    output chains back to input entities.
+
+    Example output for a homodimer::
+
+        >protein|name=A
+        MKQH...
+        >protein|name=B
+        MKQH...
+
+    Example output for a protein + SMILES ligand::
+
+        >protein|name=A
+        MKQH...
+        >ligand|name=ligand_B
+        CC(=O)OC1=CC=CC=C1C(=O)O
+    """
+    records: list[str] = []
+    base_name = entity.name
+
+    for chain_id in chain_ids:
+        # Choose a name suffix. We prefer the chain_id (it's unique
+        # and traceable) but respect user-provided entity.name when
+        # set on single-copy entities. For multi-copy, the user-
+        # supplied name only serves as a base; chain_id distinguishes
+        # the copies.
+        if base_name is not None and len(chain_ids) == 1:
+            record_name = base_name
+        elif base_name is not None:
+            record_name = f"{base_name}_{chain_id}"
+        else:
+            # Default: kind + chain_id (e.g. "ligand_B"). For protein,
+            # using just the chain_id is more conventional.
+            record_name = chain_id if entity.kind == "protein" else f"{entity.kind}_{chain_id}"
+
+        header = f">{entity.kind}|name={record_name}\n"
+
+        if entity.is_polymer:
+            body = entity.normalized_sequence() + "\n"
+        elif entity.smiles is not None:
+            body = entity.smiles + "\n"
+        else:
+            # CCD code. Chai-1 accepts CCD codes via the ligand
+            # entity type using the same record-body convention.
+            assert entity.ccd is not None  # validated upstream
+            body = entity.ccd + "\n"
+
+        records.append(header + body)
+
+    return records
+
+
+def _serialize_spec_for_provenance(spec: ComplexSpec | None) -> object:
+    """Render a ComplexSpec to a JSON-safe shape for Provenance.inputs.
+
+    Identical contract to the helper in boltz.py: flattens the spec
+    into a list of dicts with engine-agnostic keys, so the same
+    structure shows up in Provenance regardless of which engine
+    produced the prediction. This is what lets users compare Boltz
+    and Chai-1 provenance side-by-side.
+    """
+    if spec is None:
+        return None
+    entities_payload: list[dict[str, object]] = []
+    for entity, chain_ids in zip(spec.entities, spec.assigned_chain_ids(), strict=True):
+        payload: dict[str, object] = {
+            "kind": entity.kind,
+            "chain_ids": chain_ids,
+        }
+        if entity.is_polymer:
+            payload["sequence"] = entity.normalized_sequence()
+        elif entity.smiles is not None:
+            payload["smiles"] = entity.smiles
+        else:
+            payload["ccd"] = entity.ccd
+        if entity.name is not None:
+            payload["name"] = entity.name
+        entities_payload.append(payload)
+    return {"entities": entities_payload}

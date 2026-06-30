@@ -31,7 +31,9 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
+from molforge.core.provenance import Provenance
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -142,6 +144,16 @@ class ESMFold(FoldingEngine):
                 (copy of B-factor column for convenience)
         """
         sequence = _validate_sequence(sequence)
+
+        # Cache lookup. Build the Provenance upfront from inputs +
+        # constructor parameters; if a previous identical call has
+        # cached its result, return it without touching the model.
+        provenance = self._build_provenance(sequence)
+        cache = get_default_cache()
+        cached: Protein | None = cache.get(provenance, "protein")
+        if cached is not None:
+            return cached
+
         self._ensure_loaded()
 
         # Run the model and convert to molforge's representation. The
@@ -162,7 +174,27 @@ class ESMFold(FoldingEngine):
             output = self._model(**inputs)
 
         pdb_text = self._output_to_pdb(output)
-        return self._pdb_to_protein(pdb_text, sequence=sequence)
+        result = self._pdb_to_protein(pdb_text, sequence=sequence, provenance=provenance)
+        cache.put(provenance, result, "protein")
+        return result
+
+    def _build_provenance(self, sequence: str) -> Provenance:
+        """Construct the Provenance for a predict() call.
+
+        Factored out of :meth:`_pdb_to_protein` so :meth:`predict`
+        can build the Provenance upfront for cache lookup. Pure
+        function of inputs + constructor parameters.
+        """
+        return Provenance.from_engine(
+            engine="ESMFold",
+            parameters={
+                "model_name": self.model_name,
+                "device": self.device,
+                "chunk_size": self.chunk_size,
+                "dtype": self.dtype,
+            },
+            inputs={"sequence": sequence},
+        )
 
     # ------------------------------------------------------------------
     # Helpers (separated for testability — these are what tests mock)
@@ -205,14 +237,23 @@ class ESMFold(FoldingEngine):
             of_proteins.append(to_pdb(pred))
         return str(of_proteins[0])
 
-    def _pdb_to_protein(self, pdb_text: str, *, sequence: str) -> Protein:
+    def _pdb_to_protein(
+        self,
+        pdb_text: str,
+        *,
+        sequence: str,
+        provenance: Provenance | None = None,
+    ) -> Protein:
         """Parse the model's PDB output and attach ESMFold metadata.
 
         Args:
             pdb_text: PDB-formatted string from :meth:`_output_to_pdb`.
             sequence: The original input sequence (stored in metadata).
+            provenance: Pre-built :class:`Provenance` from
+                :meth:`_build_provenance`. ``None`` falls back to
+                building one here (kept for tests that call this
+                method directly).
         """
-        from molforge.core import Provenance
         from molforge.io.pdb import read_pdb_string
 
         protein = read_pdb_string(pdb_text)
@@ -228,16 +269,7 @@ class ESMFold(FoldingEngine):
         # `parameters`; the sequence (the actual input data) into
         # `inputs`. The engine name and model_name remain in the ad-hoc
         # keys below for backwards compatibility.
-        prov = Provenance.from_engine(
-            engine="ESMFold",
-            parameters={
-                "model_name": self.model_name,
-                "device": self.device,
-                "chunk_size": self.chunk_size,
-                "dtype": self.dtype,
-            },
-            inputs={"sequence": sequence},
-        )
+        prov = provenance if provenance is not None else self._build_provenance(sequence)
 
         protein.metadata.update(
             {

@@ -8,6 +8,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Result caching across folding + generative engines.** The single
+  largest "real-user pain" item from the roadmap, now shipped. Engines
+  silently cache successful results keyed on the same `(engine,
+  parameters, inputs, parent_chain)` shape that `Provenance` already
+  captures. Re-running an identical computation returns the cached
+  result in milliseconds; rerunning a downstream step after an
+  upstream change invalidates correctly thanks to parent-chain
+  participation in the cache key.
+
+  Folding (ESMFold, Boltz, Chai-1) and sequence design (ProteinMPNN,
+  ESM-IF1) all participate. A user pipeline that previously had to
+  rerun a 10-minute Boltz call every time a downstream analysis
+  tweak iterated is now a millisecond cache hit.
+
+  New `molforge.cache` module:
+
+  - `Cache` class — file-system-backed, one directory per entry
+    named by SHA-256 of the cache key. Atomic writes via
+    tmp-directory + rename so partial writes never leave broken
+    entries. Corrupted entries (missing files, parse errors) are
+    silently treated as cache misses; never crash the caller.
+  - `cache_key(provenance)` — canonical hashing. Strips timestamps
+    (different runs of the same computation share a slot) and
+    mixes in molforge's major.minor version (upgrades invalidate
+    transparently; patch versions don't).
+  - `default_cache_dir()` — XDG-respecting default path resolution:
+    `MOLFORGE_CACHE_DIR` → `$XDG_CACHE_HOME/molforge` →
+    `~/.cache/molforge`.
+  - `get_default_cache()` — process-wide singleton engines
+    consult on every call.
+  - `register_serializer(type_tag, serializer, deserializer)` —
+    extension hook for new cacheable result types.
+  - Built-in serializers for `Protein` (mmCIF + metadata JSON +
+    numpy archive) and `list[DesignedSequence]` (JSON + numpy
+    archive). ComplexSpec values in metadata round-trip via marker
+    dicts; Provenance values round-trip via its existing
+    `to_dict`/`from_dict`.
+
+  Env-var control:
+
+  - `MOLFORGE_CACHE=disabled` (or `0` / `false` / `off` / `no`)
+    disables the cache globally. Useful for benchmarking, where
+    cached returns would skew timing, or for diagnosing
+    nondeterminism, where the cache would hide real differences.
+  - `MOLFORGE_CACHE_DIR=/path` overrides the default location.
+    Useful on shared clusters where `~/` has tight quotas.
+
+  Engine integration (3-5 lines per engine):
+
+  - Each wrapper gained a `_build_provenance(...)` helper —
+    a pure function of inputs + constructor parameters,
+    factored out of the result-attachment code path. Used both
+    as the cache key (built upfront before any computation) and
+    as the final result's Provenance.
+  - Entry-point methods (`predict`, `predict_complex`, `generate`)
+    check `cache.get(provenance, type_tag)` before invoking the
+    expensive compute. On hit, return immediately. On miss, run
+    the compute, attach the prebuilt Provenance to the result,
+    `cache.put` it, and return.
+  - `_parse_outputs` methods accept the prebuilt Provenance via
+    a new keyword arg, with a fallback path that rebuilds it
+    locally for direct callers (tests that exercise the parser
+    in isolation).
+
+  Tests added:
+
+  - `tests/unit/test_cache.py` (40 tests) covers: cache-key
+    determinism (timestamps stripped, molforge version
+    participates), keys change on engine/params/inputs/parent
+    changes, default-dir resolution with all three env-var
+    interactions, Protein round-trip with numpy arrays +
+    Provenance + ComplexSpec metadata, DesignedSequence list
+    round-trip with per-design arrays, corruption recovery
+    (missing files, wrong type tag, garbage JSON all → miss not
+    crash), disabled mode (explicit constructor + all six
+    documented env-var values), `clear()` only removing
+    hex-named entries (never touches user files in the cache
+    dir), atomicity (failed serializer leaves no partial
+    entry), default-cache singleton.
+  - `tests/conftest.py` gained an autouse `_isolate_cache`
+    fixture: every test in the suite gets a per-test temp dir
+    for the default cache, with proper singleton reset and
+    env-var save/restore. This prevents test runs polluting (or
+    reading from) the real user cache, and prevents tests
+    leaking entries to each other within a single pytest run.
+
+  Verification: **1,422 passed + 33 skipped** (was 1,382 + 33;
+  +40 dedicated cache tests + zero regressions). mypy --strict
+  clean across 93 source files (+1 for cache.py). ruff + mkdocs
+  --strict clean. The existing 75 Boltz + Chai-1 + ESMFold +
+  ProteinMPNN + ESM-IF1 tests pass unchanged through the cache
+  integration — backward compatibility preserved.
+
+  Cookbook:
+
+  - New `docs/cookbook/caching-results.md` walks through the
+    default behaviour, cascading invalidation, what's in the
+    cache directory (with the layout sketched), three ways to
+    disable, how to clear, and notes on what's deliberately not
+    cached and when you might want to disable.
+
+  Scope deliberately deferred:
+
+  - **Docking engines** (Vina, Gnina, DiffDock). Same pattern
+    applies; punted to a follow-up commit to keep this one
+    focused on folding + generative.
+  - **MD trajectories.** Deliberately uncached — multi-GB per
+    simulation, users should rely on the upstream MD framework's
+    checkpointing.
+  - **LRU eviction / size caps.** v1 has no eviction; entries
+    accumulate until manual cleanup. Easy to add when first user
+    runs into the issue.
+  - **Concurrent-write safety.** Multiple processes writing the
+    same key are safe in that the final state is correct
+    (last-write-wins, content is determined by the key), but no
+    file locking. Sufficient for the typical single-user case.
+
 - **Multi-component cofolding via `ComplexSpec` + `predict_complex`.**
   The headline AlphaFold-3 capability — predict structures of
   *complexes* of multiple protein chains, DNA/RNA strands, and
