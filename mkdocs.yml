@@ -53,6 +53,7 @@ nav:
   - Cookbook:
       - Overview: cookbook/index.md
       - Fold a sequence: cookbook/folding.md
+      - Multi-component cofolding: cookbook/multi-component-folding.md
       - Fold then dock: cookbook/folding-then-docking.md
       - Prepare for MD: cookbook/prep-for-md.md
       - MD and RMSD: cookbook/md-and-rmsd.md

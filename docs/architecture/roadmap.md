@@ -59,6 +59,12 @@ layer.
     uniformity). Both AF3-style models molforge supports — Boltz and
     Chai-1 — are independent reimplementations from different teams,
     making cross-checks meaningful. 
+  - **Multi-component cofolding is now
+  shipped via `ComplexSpec` + `predict_complex()` on Boltz and Chai-1**
+    — protein + ligand, protein-protein, protein-DNA/RNA, homo-oligomers
+    via a unified engine-agnostic input. 
+    - Modifications, restraints,
+      per-entity MSAs, and Boltz-2 affinity prediction remain follow-ups.
     - ESM3 and AlphaFold-3 (DeepMind
       release) remain on the wishlist; Protenix is the next AF3
       reimplementation to consider.

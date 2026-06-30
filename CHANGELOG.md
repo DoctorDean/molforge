@@ -8,6 +8,197 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Multi-component cofolding via `ComplexSpec` + `predict_complex`.**
+  The headline AlphaFold-3 capability — predict structures of
+  *complexes* of multiple protein chains, DNA/RNA strands, and
+  small-molecule ligands in a single forward pass — is now exposed
+  through a unified engine-agnostic interface. Both Boltz and Chai-1
+  participate. This closes the gap between molforge's previous
+  single-protein folding interface (`predict(sequence)`) and what
+  these engines can actually do underneath, which was the headline
+  drug-discovery and structural-biology use case for both.
+
+  New top-level module `molforge.folding`:
+
+  - `Entity` (frozen dataclass): one component of a complex.
+    `kind` is one of `"protein"` / `"dna"` / `"rna"` / `"ligand"`.
+    Polymers carry a one-letter `sequence`; ligands carry a `smiles`
+    string XOR a `ccd` code (3-letter CCD codes like `"ATP"`,
+    `"NAD"`, `"ZN"`). Optional `chain_id` (auto-assigned A, B, C,
+    ... when omitted), `copies` for homo-oligomers, and `name` for
+    human-readable identification. Upfront validation rejects bad
+    input combinations (ligand with sequence, polymer without
+    sequence, copies <= 0, invalid alphabet characters per kind,
+    overlong CCD codes, overlong chain IDs) so user mistakes
+    surface immediately rather than as opaque engine errors.
+
+  - `ComplexSpec` (frozen dataclass): an ordered tuple of entities
+    defining the system to fold. Validators reject empty entity
+    tuples and duplicate explicit chain_ids. Convenience
+    constructors `from_protein(sequence)` and `protein_ligand(...)`
+    for the two most common shapes. `assigned_chain_ids()` returns
+    the per-entity chain-ID layout that the serializer will
+    produce, exposing the auto-assignment logic for users who need
+    to know what chains the output structure will have.
+
+  - `_index_to_chain_id(i)` (module-private): base-26 chain naming
+    A, B, ..., Z, AA, AB, ..., handles up to 676 chains (well
+    beyond any practical cofolding use case).
+
+  New public method on `Boltz` and `Chai1`:
+
+  - `predict_complex(spec: ComplexSpec) -> Protein` — predicts the
+    full multi-component complex. Returns a `Protein` whose
+    `atom_array` has one chain per entity (or per copy, for
+    homo-oligomers). Ligand atoms appear as hetero-atoms with
+    their assigned chain IDs.
+
+  ```python
+  from molforge.folding import ComplexSpec, Entity
+  from molforge.wrappers.folding import Boltz, Chai1
+
+  # Protein + small-molecule drug (the headline drug discovery shape).
+  spec = ComplexSpec.protein_ligand(
+      protein_sequence="MVTPEG...",
+      ligand_smiles="CC(=O)OC1=CC=CC=C1C(=O)O",
+  )
+  pred = Boltz(use_msa_server=True).predict_complex(spec)
+  print(pred.metadata["iptm"])  # interface pTM (was always 0 before)
+
+  # Antibody-antigen 3-chain complex.
+  spec = ComplexSpec(entities=(
+      Entity(kind="protein", sequence=heavy, chain_id="H", name="heavy"),
+      Entity(kind="protein", sequence=light, chain_id="L", name="light"),
+      Entity(kind="protein", sequence=antigen, chain_id="A", name="antigen"),
+  ))
+  abag = Chai1(use_msa_server=True).predict_complex(spec)
+
+  # Homodimer + ATP cofactor.
+  spec = ComplexSpec(entities=(
+      Entity(kind="protein", sequence=enzyme, copies=2),
+      Entity(kind="ligand", ccd="ATP"),
+  ))
+
+  # Protein on DNA (transcription factor).
+  spec = ComplexSpec(entities=(
+      Entity(kind="protein", sequence=tf),
+      Entity(kind="dna", sequence="ATCGTAATCG"),
+      Entity(kind="dna", sequence="CGATTACGAT"),
+  ))
+  ```
+
+  The same `ComplexSpec` accepts either engine — Boltz and Chai-1
+  are independent AF3 reimplementations from different teams, so
+  running both and comparing predictions is a meaningful cross-
+  check.
+
+  Returned metadata (in addition to the single-sequence metadata):
+
+  - `metadata["complex_spec"]`: the original `ComplexSpec` passed
+    in, for traceability.
+  - `metadata["per_chain_ptm"]`: per-chain pTM (when the engine
+    produces it; Boltz exposes it as `chains_ptm` in its
+    confidence JSON, Chai exposes it under `per_chain_ptm` in the
+    scores NPZ).
+  - `metadata["pair_chains_iptm"]` (Boltz) / `["per_chain_pair_iptm"]`
+    (Chai): pairwise interface pTM when present.
+  - `metadata["iptm"]`: now meaningful (was always 0 for single-
+    chain inputs). For complexes, iPTM is the headline confidence
+    signal — pLDDT alone can be high while interfaces are
+    badly-modelled.
+  - `metadata["provenance"]`: as before, with `provenance.inputs`
+    carrying a JSON-safe serialization of the spec (a list of
+    typed dicts with chain_ids resolved) so it round-trips through
+    `Provenance.to_json()`.
+
+  Backward compatibility: all five folding engines still expose
+  `predict(sequence) -> Protein` with unchanged metadata contracts.
+  For Boltz and Chai-1, `predict(sequence)` now internally
+  delegates to the spec-based path with a single-entity spec —
+  one canonical implementation, two entry points. The legacy
+  single-sequence `metadata["source_sequence"]` key continues to
+  be populated when called via `predict(sequence)`; for
+  `predict_complex(spec)` calls, that key is omitted and
+  `metadata["complex_spec"]` is populated instead.
+
+  Scope deliberately deferred:
+
+  - **Modified residues** (Boltz's `modifications` list, Chai's
+    per-residue overrides). The base `Entity` sequence is treated
+    as unmodified; modified-residue support will land as engine-
+    specific kwargs in a follow-up commit.
+  - **Restraints** (Boltz pocket constraints, Chai covalent bonds
+    or restraint files). Drop down to the engine's raw API for
+    now.
+  - **Custom MSAs per entity** — use `use_msa_server=True` for v1.
+  - **Templates** — use the engine's underlying API for v1.
+  - **Boltz-2 affinity prediction** (the `properties: affinity:`
+    YAML shape). Predicting binding affinity in addition to
+    structure deserves its own input field and output keys.
+  - **Multi-component prediction in RoseTTAFold-AA**. Has a
+    different input shape; will follow with its own commit when
+    needed.
+
+  Engine-specific serializer differences:
+
+  - **Boltz YAML** uses the `id: [A, B]` list shape for multi-copy
+    entities — Boltz's documented convention for declaring
+    identical chains share a single input sequence.
+  - **Chai FASTA** uses separate records per copy (Chai's typed-
+    FASTA format has no id-list shape). A homodimer becomes two
+    `>protein|name=...` records with the same sequence and
+    distinct `name=` suffixes embedding the chain_id.
+
+  Both serializers are module-level helpers
+  (`_boltz_yaml_entity(entity, chain_ids)`,
+  `_chai_fasta_entity(entity, chain_ids)`) testable in isolation
+  without a full engine instance.
+
+  Tests added:
+
+  - `tests/unit/test_folding.py` (51 tests). Entity validation
+    per kind (5 protein, 4 DNA, 2 RNA, 8 ligand, 4 copies, 4
+    chain_id, 1 kind), ComplexSpec validation (3), convenience
+    constructors (2 from_protein, 4 protein_ligand), chain-ID
+    assignment (5 spec patterns + 3 allocator), source-inspection
+    invariants (2).
+  - `tests/unit/wrappers/test_boltz.py` — `TestBoltzYamlFromSpec`
+    (6 tests covering single-protein backcompat, smiles ligand,
+    ccd ligand, DNA/RNA, homodimer id-list, mixed explicit+auto),
+    `TestBoltzPredictComplex` (3 tests: end-to-end with `_invoke`
+    mocked, legacy source_sequence key preserved, provenance
+    records serialized spec), `TestBoltzSpecHelpers` (4 tests on
+    `_boltz_yaml_entity` + `_serialize_spec_for_provenance`).
+  - `tests/unit/wrappers/test_chai.py` — `TestChaiFastaFromSpec`
+    (7 tests covering legacy single-protein, smiles + ccd ligand,
+    DNA/RNA, homodimer-as-two-records, user name override,
+    user name with multi-copy), `TestChaiPredictComplex` (4 tests
+    parallel to Boltz), `TestChaiSpecHelpers` (4 tests).
+
+  Total: 1,448 passed + 17 skipped (was 1,369 + 17 baseline;
+  +79 new tests). mypy `--strict` clean across 92 source files
+  (+1 for `folding.py`). ruff format + check + mkdocs `--strict`
+  all clean.
+
+  Cookbook:
+
+  - New `cookbook/multi-component-folding.md` recipe with four
+    worked examples (protein-ligand, antibody-antigen,
+    protein-DNA, homo-oligomer), a Boltz-vs-Chai cross-checking
+    snippet, a metadata-keys reference table, and explicit notes
+    on what's deliberately not in v1.
+  - `cookbook/choosing-folding.md` updated: "Predicting with
+    cofactors, ligands, or nucleic acids" section now points at
+    `predict_complex` and the new recipe; an example shows the
+    one-line engine swap.
+  - `cookbook/index.md` "If you want to..." table gains a
+    multi-component cofolding row.
+  - `mkdocs.yml` nav updated.
+
+  Roadmap "Folding" entry updated: multi-component cofolding
+  marked as shipped; modifications, restraints, per-entity MSAs,
+  and Boltz-2 affinity prediction noted as remaining follow-ups.
+
 - **Chai-1 folding wrapper.** Fifth folding engine, joining ESMFold,
   AlphaFold, Boltz, and RoseTTAFold. Chai-1 (Chai Discovery, October
   2024) is an open-weights re-implementation of AlphaFold-3-style
