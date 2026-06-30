@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] 2026-06-30
+
 ### Added
 - **Result caching across folding + generative engines.** The single
   largest "real-user pain" item from the roadmap, now shipped. Engines
