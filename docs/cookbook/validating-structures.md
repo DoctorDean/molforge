@@ -222,3 +222,37 @@ not mistaken for broken bonds.
 Bond-length and Ramachandran quality are independent: a model can have
 perfect bond lengths yet terrible backbone dihedrals (or vice versa), so
 it is worth running both gates.
+
+# D-amino acids (Cα chirality)
+
+Ribosomal proteins are built entirely from L-amino acids, so a D centre
+almost always means a flipped or mirror-built residue. molforge reads
+the Cα handedness from the heavy atoms (N, C, Cβ) — no hydrogens needed.
+
+```python
+from molforge.structure import chirality_outliers, has_chirality_outliers
+
+if has_chirality_outliers(model):
+    for r in chirality_outliers(model):
+        print(f"{r.residue[2]}{r.residue[1]} is {r.configuration}")
+```
+
+`chirality_outliers` returns the non-L residues (`D` plus the rare
+`Planar` degenerate case); `has_chirality_outliers` is the boolean gate.
+For a full picture, `classify_chirality` returns a `ChiralityResult` for
+every eligible residue — its `(chain, residue_id, residue_name)`, the
+Cα's global `ca_index`, the `configuration` (`L`/`D`/`Planar`), and the
+signed `volume` (positive for L). You can also classify raw coordinates:
+
+```python
+from molforge.structure import ca_chirality
+
+ca_chirality(n_xyz, ca_xyz, c_xyz, cb_xyz)   # "L" / "D" / "Planar"
+```
+
+Glycine (no Cβ) is achiral and skipped, as is any residue missing a
+backbone atom. This is a handedness test from geometry, not a CIP R/S
+assignment — cysteine, whose sulfur inverts its CIP label to R, still
+reads as `L` here because its spatial arrangement matches the other
+L-residues. If you are intentionally modelling D-peptides, this gate
+will (correctly) flag every residue.

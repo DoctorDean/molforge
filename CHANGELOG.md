@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Cα chirality checks (`molforge.structure`).** Detect D-amino acids
+  (flipped / mirror-built residues) from heavy-atom geometry alone.
+  `classify_chirality(protein)` returns a `ChiralityResult` per eligible
+  residue with its Cα handedness (`L`/`D`/`Planar`) and signed
+  tetrahedral volume; `chirality_outliers(protein)` filters to the
+  non-L residues; `has_chirality_outliers(protein)` is the boolean gate;
+  and `ca_chirality(n, ca, c, cb)` classifies raw coordinates. Handedness
+  is the sign of `(N-CA)·((C-CA)×(CB-CA))` — positive for the natural
+  L (S) configuration — so no hydrogens are needed. Glycine and any
+  residue missing N/CA/C/CB are skipped. This is a geometric handedness
+  test, not a CIP R/S assignment (cysteine reads as L). New public
+  names: `ca_chirality`, `classify_chirality`, `chirality_outliers`,
+  `has_chirality_outliers`, `ChiralityResult`, `ChiralityConfig`,
+  `DEFAULT_PLANAR_TOLERANCE`. The "Validate structure quality" recipe
+  gains a Cα-chirality section.
+
 - **Backbone bond-length validation (`molforge.structure`).** A
   standard-geometry quality gate against the Engh & Huber ideals.
   `check_bond_lengths(protein, max_z=4.0)` returns `BondLengthOutlier`

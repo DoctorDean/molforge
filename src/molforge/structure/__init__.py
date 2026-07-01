@@ -32,6 +32,15 @@ from molforge.structure.bond_geometry import (
     check_bond_lengths,
     has_bond_length_outliers,
 )
+from molforge.structure.chirality import (
+    DEFAULT_PLANAR_TOLERANCE,
+    ChiralityConfig,
+    ChiralityResult,
+    ca_chirality,
+    chirality_outliers,
+    classify_chirality,
+    has_chirality_outliers,
+)
 from molforge.structure.clashes import (
     DEFAULT_TOLERANCE,
     DEFAULT_VDW_RADIUS,
@@ -115,6 +124,14 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     "BondLengthOutlier",
     "IDEAL_BOND_LENGTHS",
     "DEFAULT_MAX_Z",
+    # chirality
+    "ca_chirality",
+    "classify_chirality",
+    "chirality_outliers",
+    "has_chirality_outliers",
+    "ChiralityResult",
+    "ChiralityConfig",
+    "DEFAULT_PLANAR_TOLERANCE",
     # Geometry
     "centroid",
     "center_of_mass",
