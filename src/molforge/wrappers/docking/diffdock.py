@@ -55,6 +55,7 @@ from typing import TYPE_CHECKING
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.cache import get_default_cache
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -160,8 +161,59 @@ class DiffDock(DockingEngine):
             RuntimeError: If the DiffDock subprocess fails or produces
                 no output.
         """
+        # Build Provenance upfront and consult the cache before
+        # resolving the install or spawning the DiffDock subprocess —
+        # an identical dock returns instantly, even on a machine
+        # without DiffDock set up.
+        provenance = self._build_provenance(receptor, ligand)
+        cache = get_default_cache()
+        cached: DockingResult | None = cache.get(provenance, "docking_result")
+        if cached is not None:
+            return cached
         repo = self._resolve_repo()
-        return self._run_cli(receptor=receptor, ligand=ligand, repo=repo, timeout=timeout)
+        result = self._run_cli(
+            receptor=receptor,
+            ligand=ligand,
+            repo=repo,
+            timeout=timeout,
+            provenance=provenance,
+        )
+        cache.put(provenance, result, "docking_result")
+        return result
+
+    def _build_provenance(
+        self,
+        receptor: Protein | str | PathLike[str],
+        ligand: str | PathLike[str],
+    ) -> Provenance:
+        """Construct the Provenance for a :meth:`dock` call.
+
+        Pure function of inputs + constructor parameters, built upfront
+        so the cache key and the stored result share one instance. The
+        input refs match what :meth:`_parse_outputs` would otherwise
+        derive (receptor name / path; ligand SMILES or path string).
+        """
+        receptor_ref = (
+            (receptor.name or "<Protein>") if isinstance(receptor, Protein) else str(receptor)
+        )
+        parent = (
+            receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
+        )
+        return Provenance.from_engine(
+            engine="DiffDock",
+            parameters={
+                "samples_per_complex": self.samples_per_complex,
+                "inference_steps": self.inference_steps,
+                "batch_size": self.batch_size,
+                "repo_dir": str(self.repo_dir) if self.repo_dir else None,
+                "python_executable": self.python_executable,
+            },
+            inputs={
+                "receptor": receptor_ref,
+                "ligand": str(ligand),
+            },
+            parent=parent if isinstance(parent, Provenance) else None,
+        )
 
     # ------------------------------------------------------------------
     # Installation resolution
@@ -202,11 +254,15 @@ class DiffDock(DockingEngine):
         ligand: str | PathLike[str],
         repo: Path,
         timeout: float | None,
+        provenance: Provenance | None = None,
     ) -> DockingResult:
         """Run the DiffDock ``inference`` module and parse its output.
 
         Separated from :meth:`dock` so tests can mock the subprocess
-        without repeating receptor/ligand materialization.
+        without repeating receptor/ligand materialization. A prebuilt
+        ``provenance`` (passed by :meth:`dock`) is threaded into the
+        parser; direct callers may omit it and one is built from the
+        receptor/ligand refs.
         """
         with tempfile.TemporaryDirectory() as td:
             tmpdir = Path(td)
@@ -261,6 +317,7 @@ class DiffDock(DockingEngine):
                 provenance_parent=(
                     receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
                 ),
+                provenance=provenance,
             )
 
     # ------------------------------------------------------------------
@@ -309,6 +366,7 @@ class DiffDock(DockingEngine):
         receptor_ref: str | None = None,
         ligand_ref: str | None = None,
         provenance_parent: Provenance | None = None,
+        provenance: Provenance | None = None,
     ) -> DockingResult:
         """Parse DiffDock's ranked SDF poses into a DockingResult.
 
@@ -352,14 +410,18 @@ class DiffDock(DockingEngine):
 
         # Build result-level metadata, with Provenance layered on top
         # of the ad-hoc config-echo keys for backwards compatibility.
-        # Inputs come through the call site (receptor_ref / ligand_ref);
-        # tests that call _parse_outputs directly without those refs
-        # still produce a result, just without provenance attached.
+        # A prebuilt ``provenance`` (passed by dock() so the cache key
+        # and the stored result share one instance) wins; otherwise the
+        # call-site refs (receptor_ref / ligand_ref) drive a fresh one.
+        # Tests that call _parse_outputs directly without either still
+        # produce a result, just without provenance attached.
         result_metadata: dict[str, object] = {
             "samples_per_complex": self.samples_per_complex,
             "inference_steps": self.inference_steps,
         }
-        if receptor_ref is not None or ligand_ref is not None:
+        if provenance is not None:
+            result_metadata[mk.PROVENANCE] = provenance
+        elif receptor_ref is not None or ligand_ref is not None:
             result_metadata[mk.PROVENANCE] = Provenance.from_engine(
                 engine="DiffDock",
                 parameters={

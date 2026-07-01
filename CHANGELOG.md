@@ -6,6 +6,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Docking-engine result caching (Vina, Gnina, DiffDock).** The
+  docking engines now participate in the same content-addressed cache
+  as folding and sequence design. Each engine builds its `Provenance`
+  upfront — a pure function of the receptor/ligand inputs, the search
+  box and engine settings, and constructor parameters — consults the
+  default cache *before* requiring its binary or spawning any
+  subprocess, and stores the `DockingResult` on success under the
+  `"docking_result"` type tag added in the previous commit.
+
+  Concrete impact: re-docking the same ligand into the same box
+  returns in milliseconds instead of re-running Vina/gnina/DiffDock,
+  and a result computed on one machine can be replayed on another
+  with no docking binary installed (copy the cache entry). Because the
+  receptor's `Provenance` is the docking result's `Provenance.parent`,
+  a fold-then-dock pipeline invalidates correctly: re-folding the
+  receptor differently makes the downstream dock a miss even with an
+  identical box.
+
+  This closes the last cache-relevant engine category — caching is now
+  complete across folding, generative, and docking. (MD trajectories
+  remain deliberately uncached; multi-GB per run, use the MD
+  framework's own checkpointing.)
+
+  Wiring details:
+
+  - Each engine gained a `_build_provenance(...)` helper (pure, no
+    engine calls) so `dock()` can build the key upfront for the
+    lookup and thread the *same* instance into the result — the cache
+    key and the stored result's `Provenance` are one object.
+  - The cache lookup precedes the install check (`_make_vina_handle`,
+    `_require_gnina`, `_resolve_repo`), so a hit never needs the
+    engine present.
+  - The pose parsers (`_parse_poses_pdbqt`, `_parse_sdf_output`,
+    `_parse_outputs`) gained an optional prebuilt-`provenance`
+    parameter. Direct callers (parser-in-isolation tests) that pass
+    only `provenance_parameters/inputs/parent` are unchanged — that
+    path still builds a `Provenance` itself.
+
+  Tests: new `tests/unit/wrappers/test_docking_cache.py` (9 tests) —
+  per-engine cache-hit read path (pre-seed the cache, patch the
+  compute seam to raise, assert `dock()` returns the cached result),
+  a different-params miss check, write-then-hit round-trips for the
+  subprocess-driven engines (gnina/DiffDock invoked exactly once
+  across two identical `dock()` calls), and a source-inspection net
+  asserting every `dock()` consults the cache (`get`/`put`,
+  read-before-write). Every pre-existing docking test passes unchanged
+  through the wiring. Suite 1,440 passed / 33 skipped; mypy `--strict`
+  clean across the three docking wrappers.
+
+  Docs: the [Caching results](docs/cookbook/caching-results.md)
+  cookbook recipe gains a Docking section (box-keyed hits, replay
+  without a binary, fold→dock invalidation) and the cache-directory
+  layout now shows a `docking_result` entry.
+
+
+  `"docking_result"` type tag — the foundation for caching docking
+  engines (Vina, Gnina, DiffDock). A docking entry stores the receptor
+  and each pose's ligand as mmCIF (`receptor.cif`, `pose_{i}.cif`),
+  scalar pose fields (score / rank / RMSD bounds) and all member
+  metadata in `payload.json`, and every numpy array across members in
+  one slot-namespaced `arrays.npz`. The result-level `Provenance`
+  round-trips as a real `Provenance` (it's what keys the cache), and
+  `None`-valued pose scores (e.g. Gnina's absent CNN keys) survive as
+  `None` rather than the string `"None"`. Corrupt entries are misses,
+  not crashes — same contract as the Protein/DesignedSequence
+  serializers. Engine wiring (the `get`/`put` calls inside `dock()`)
+  lands in a follow-up commit; this commit is the round-trip layer only.
+
 - **`DockingResult` cache serializer.** `molforge.cache` now knows how
   to serialize a `molforge.docking.DockingResult` under the
   `"docking_result"` type tag — the foundation for caching docking

@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING, Any
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.cache import get_default_cache
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -161,6 +162,24 @@ class Vina(DockingEngine):
         Raises:
             DockingEngineNotInstalledError: If ``vina`` is not installed.
         """
+        # Build the Provenance upfront from inputs + constructor params,
+        # before touching the (expensive) engine. If an identical dock
+        # has been cached, return it without spawning Vina at all.
+        provenance = self._build_provenance(
+            receptor,
+            ligand,
+            center=center,
+            box_size=box_size,
+            exhaustiveness=exhaustiveness,
+            n_poses=n_poses,
+            energy_range=energy_range,
+            min_rmsd=min_rmsd,
+        )
+        cache = get_default_cache()
+        cached: DockingResult | None = cache.get(provenance, "docking_result")
+        if cached is not None:
+            return cached
+
         vina_handle = self._make_vina_handle()
 
         with tempfile.TemporaryDirectory() as td:
@@ -189,7 +208,7 @@ class Vina(DockingEngine):
             )
             text = out_path.read_text(encoding="utf-8", errors="replace")
 
-        return self._parse_poses_pdbqt(
+        result = self._parse_poses_pdbqt(
             text,
             receptor=receptor if isinstance(receptor, Protein) else None,
             run_metadata={
@@ -199,7 +218,35 @@ class Vina(DockingEngine):
                 "scoring": self.scoring,
                 "seed": self.seed,
             },
-            provenance_parameters={
+            provenance=provenance,
+        )
+        cache.put(provenance, result, "docking_result")
+        return result
+
+    def _build_provenance(
+        self,
+        receptor: Protein | str | PathLike[str],
+        ligand: Protein | str | PathLike[str],
+        *,
+        center: tuple[float, float, float],
+        box_size: tuple[float, float, float],
+        exhaustiveness: int,
+        n_poses: int,
+        energy_range: float,
+        min_rmsd: float,
+    ) -> Provenance:
+        """Construct the Provenance for a :meth:`dock` call.
+
+        Factored out so :meth:`dock` can build it upfront for the cache
+        lookup and thread the same instance into the parser. Pure
+        function of inputs + constructor parameters — no engine calls.
+        """
+        parent = (
+            receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
+        )
+        return Provenance.from_engine(
+            engine="Vina",
+            parameters={
                 "center": list(center),
                 "box_size": list(box_size),
                 "exhaustiveness": exhaustiveness,
@@ -210,13 +257,11 @@ class Vina(DockingEngine):
                 "seed": self.seed,
                 "cpu": self.cpu,
             },
-            provenance_inputs={
+            inputs={
                 "receptor": _provenance_ref(receptor),
                 "ligand": _provenance_ref(ligand),
             },
-            provenance_parent=(
-                receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
-            ),
+            parent=parent if isinstance(parent, Provenance) else None,
         )
 
     # ------------------------------------------------------------------
@@ -300,6 +345,7 @@ class Vina(DockingEngine):
         provenance_parameters: dict[str, Any] | None = None,
         provenance_inputs: dict[str, Any] | None = None,
         provenance_parent: Provenance | None = None,
+        provenance: Provenance | None = None,
     ) -> DockingResult:
         """Parse Vina's multi-pose PDBQT output into a DockingResult.
 
@@ -394,8 +440,14 @@ class Vina(DockingEngine):
 
         # Build the result-level metadata, layering Provenance on top
         # of the ad-hoc run_metadata keys for backwards compatibility.
+        # A prebuilt ``provenance`` (passed by dock() so the cache key
+        # and the stored result share one instance) wins; otherwise we
+        # build from the parameters/inputs/parent kwargs for callers
+        # (tests) that drive the parser directly.
         result_metadata: dict[str, object] = dict(run_metadata or {})
-        if provenance_parameters is not None or provenance_inputs is not None:
+        if provenance is not None:
+            result_metadata[mk.PROVENANCE] = provenance
+        elif provenance_parameters is not None or provenance_inputs is not None:
             result_metadata[mk.PROVENANCE] = Provenance.from_engine(
                 engine="Vina",
                 parameters=provenance_parameters or {},

@@ -84,6 +84,7 @@ from typing import TYPE_CHECKING, Any
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.cache import get_default_cache
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -238,6 +239,23 @@ class Gnina(DockingEngine):
             RuntimeError: If gnina exits non-zero or fails to
                 produce parseable output.
         """
+        # Build Provenance upfront and consult the cache before
+        # requiring the binary or spawning gnina — an identical dock
+        # returns instantly, even on a machine without gnina installed.
+        provenance = self._build_provenance(
+            receptor,
+            ligand,
+            center=center,
+            box_size=box_size,
+            exhaustiveness=exhaustiveness,
+            n_poses=n_poses,
+            min_rmsd=min_rmsd,
+        )
+        cache = get_default_cache()
+        cached: DockingResult | None = cache.get(provenance, "docking_result")
+        if cached is not None:
+            return cached
+
         gnina_path = self._require_gnina()
 
         with tempfile.TemporaryDirectory(prefix="molforge_gnina_") as tmp:
@@ -286,7 +304,7 @@ class Gnina(DockingEngine):
 
             sdf_text = out_sdf.read_text(encoding="utf-8")
 
-        return self._parse_sdf_output(
+        result = self._parse_sdf_output(
             sdf_text,
             receptor=receptor if isinstance(receptor, Protein) else None,
             provenance_parameters={
@@ -313,6 +331,53 @@ class Gnina(DockingEngine):
                 and isinstance(receptor.metadata.get(mk.PROVENANCE), Provenance)
                 else None
             ),
+            provenance=provenance,
+        )
+        cache.put(provenance, result, "docking_result")
+        return result
+
+    def _build_provenance(
+        self,
+        receptor: Protein | str | PathLike[str],
+        ligand: Protein | str | PathLike[str],
+        *,
+        center: tuple[float, float, float],
+        box_size: tuple[float, float, float],
+        exhaustiveness: int,
+        n_poses: int,
+        min_rmsd: float,
+    ) -> Provenance:
+        """Construct the Provenance for a :meth:`dock` call.
+
+        Pure function of inputs + constructor parameters, factored out
+        so :meth:`dock` can build it upfront for the cache lookup and
+        thread the same instance into the parser. Mirrors exactly the
+        parameters the parser would otherwise build itself.
+        """
+        parent = (
+            receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
+        )
+        return Provenance.from_engine(
+            engine="Gnina",
+            parameters={
+                "cnn_scoring": self.cnn_scoring,
+                "cnn": self.cnn,
+                "sort_order": self.sort_order,
+                "scoring": self.scoring,
+                "center": list(center),
+                "box_size": list(box_size),
+                "exhaustiveness": exhaustiveness,
+                "n_poses": n_poses,
+                "min_rmsd": min_rmsd,
+                "seed": self.seed,
+                "cpu": self.cpu,
+                "gnina_executable": self.gnina_executable,
+            },
+            inputs={
+                "receptor": _provenance_ref(receptor),
+                "ligand": _provenance_ref(ligand),
+            },
+            parent=parent if isinstance(parent, Provenance) else None,
         )
 
     # ------------------------------------------------------------------
@@ -447,6 +512,7 @@ class Gnina(DockingEngine):
         provenance_parameters: dict[str, Any],
         provenance_inputs: dict[str, Any],
         provenance_parent: Provenance | None,
+        provenance: Provenance | None = None,
     ) -> DockingResult:
         """Parse gnina's SDF output into a :class:`DockingResult`.
 
@@ -474,12 +540,19 @@ class Gnina(DockingEngine):
                 per_pose_scores.append({})
 
         # All poses from one dock() call share a single Provenance.
-        # Same pattern as Vina / DiffDock / ProteinMPNN.
-        shared_prov = Provenance.from_engine(
-            engine="Gnina",
-            parameters=provenance_parameters,
-            inputs=provenance_inputs,
-            parent=provenance_parent,
+        # Same pattern as Vina / DiffDock / ProteinMPNN. A prebuilt
+        # ``provenance`` (passed by dock() so the cache key and the
+        # stored result share one instance) wins; direct callers that
+        # pass only parameters/inputs/parent get one built here.
+        shared_prov = (
+            provenance
+            if provenance is not None
+            else Provenance.from_engine(
+                engine="Gnina",
+                parameters=provenance_parameters,
+                inputs=provenance_inputs,
+                parent=provenance_parent,
+            )
         )
 
         poses: list[Pose] = []
