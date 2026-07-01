@@ -39,6 +39,10 @@ from molforge.structure.contacts import (
     residue_contacts,
 )
 from molforge.structure.dihedrals import (
+    RamachandranCategory,
+    RamachandranClass,
+    RamachandranResult,
+    classify_ramachandran,
     dihedral,
     dihedrals_batch,
     omega,
@@ -46,6 +50,9 @@ from molforge.structure.dihedrals import (
     phi_psi_omega,
     psi,
     ramachandran,
+    ramachandran_favored_fraction,
+    ramachandran_outliers,
+    ramachandran_type,
 )
 from molforge.structure.dssp import dssp, dssp_3state
 from molforge.structure.geometry import (
@@ -116,4 +123,12 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     "omega",
     "phi_psi_omega",
     "ramachandran",
+    # Ramachandran classification
+    "ramachandran_type",
+    "classify_ramachandran",
+    "ramachandran_outliers",
+    "ramachandran_favored_fraction",
+    "RamachandranResult",
+    "RamachandranClass",
+    "RamachandranCategory",
 ]

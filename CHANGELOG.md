@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Ramachandran classification (`molforge.structure`).** A simplified
+  backbone-quality gate on top of the existing φ/ψ machinery.
+  `ramachandran_type(phi, psi, category=...)` labels a single angle pair
+  as `Favored`/`Allowed`/`Outlier`; `classify_ramachandran(protein)`
+  returns a `RamachandranResult` per residue with a defined (φ, ψ)
+  (termini and chain breaks skipped); `ramachandran_outliers(protein)`
+  filters to the outliers; and `ramachandran_favored_fraction(protein)`
+  gives a MolProbity-style "% favored" quality signal. Separate region
+  sets handle **General**, **Glycine** (point-symmetric map) and
+  **Proline** (φ restricted by the ring); pre-proline uses the general
+  regions. The region model is a documented simplification (unions of
+  rectangles, not reference probability contours), intended to flag
+  gross outliers rather than reproduce MolProbity percentiles. New
+  public names: `ramachandran_type`, `classify_ramachandran`,
+  `ramachandran_outliers`, `ramachandran_favored_fraction`,
+  `RamachandranResult`, `RamachandranClass`, `RamachandranCategory`. The
+  "Validate structure quality" cookbook recipe gains a Ramachandran
+  section.
+
 - **Steric clash detection (`molforge.structure`).** A geometry-only
   structure-quality gate for folding / docking output — no topology
   file required. `find_clashes(protein)` returns the overlapping

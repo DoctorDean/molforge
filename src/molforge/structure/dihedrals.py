@@ -11,11 +11,19 @@ Conventions:
 All angles are returned in **degrees**, in the standard range
 ``[-180, 180]``. Where an angle is undefined (chain termini, missing
 backbone atoms), the corresponding entry is ``NaN``.
+
+This module also provides a simplified Ramachandran *classifier*
+(:func:`ramachandran_type`, :func:`classify_ramachandran`,
+:func:`ramachandran_outliers`, :func:`ramachandran_favored_fraction`)
+that labels each residue's (φ, ψ) as Favored / Allowed / Outlier — a
+coarse backbone-quality gate. See its section below for the region
+model and its limitations.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -203,3 +211,204 @@ def ramachandran(protein: Protein) -> NDArray[np.float64]:
     """
     phi_, psi_, _ = phi_psi_omega(protein)
     return np.stack([phi_, psi_], axis=1)
+
+
+# ---------------------------------------------------------------------
+# Ramachandran classification
+# ---------------------------------------------------------------------
+#
+# A residue's (φ, ψ) pair falls in one of three regions of the
+# Ramachandran plot: "Favored" (where the vast majority of well-refined
+# residues sit), "Allowed" (rarer but physically fine), or "Outlier"
+# (sparsely populated — a flag for a possible modelling error).
+#
+# A faithful classifier uses 2D probability contours estimated from tens
+# of thousands of reference residues (e.g. MolProbity's Top8000 grids).
+# molforge deliberately does not ship those data tables; instead it uses
+# a *simplified region model* — unions of rectangles in (φ, ψ) space,
+# tuned to the standard secondary-structure basins, with separate region
+# sets for glycine (achiral, so its map is point-symmetric) and proline
+# (φ pinned near −63° by the ring). Pre-proline is treated with the
+# general regions.
+#
+# This catches gross outliers (a non-glycine residue in the left-handed
+# or mirror-β regions, a proline with positive φ, etc.) and gives a
+# useful "% favored" quality signal, but it is not a MolProbity-grade
+# percentile classifier. For publication-quality validation, run a tool
+# with the reference distributions.
+
+RamachandranClass = Literal["Favored", "Allowed", "Outlier"]
+RamachandranCategory = Literal["General", "Glycine", "Proline"]
+
+# Each region is a rectangle (phi_min, phi_max, psi_min, psi_max) in
+# degrees, with angles in [-180, 180]. Regions that straddle the ψ = ±180
+# seam are split into two rectangles.
+_Box = tuple[float, float, float, float]
+
+_GENERAL_FAVORED: tuple[_Box, ...] = (
+    (-135.0, -40.0, -70.0, 5.0),      # right-handed α-helix
+    (-180.0, -40.0, 100.0, 180.0),    # β-sheet / polyproline-II
+    (-180.0, -40.0, -180.0, -165.0),  # β-sheet (ψ wrap)
+)
+_GENERAL_ALLOWED: tuple[_Box, ...] = (
+    (-165.0, -35.0, -100.0, 40.0),    # α-helix (broad)
+    (-180.0, -35.0, 60.0, 180.0),     # β / PPII (broad)
+    (-180.0, -35.0, -180.0, -150.0),  # β (broad, ψ wrap)
+    (35.0, 80.0, 5.0, 85.0),          # left-handed α (rare but real)
+)
+
+# Proline: φ confined near −63° by the pyrrolidine ring; two ψ basins.
+_PROLINE_FAVORED: tuple[_Box, ...] = (
+    (-90.0, -35.0, -55.0, 5.0),       # α
+    (-90.0, -35.0, 120.0, 180.0),     # PPII
+)
+_PROLINE_ALLOWED: tuple[_Box, ...] = (
+    (-100.0, -30.0, -80.0, 30.0),
+    (-100.0, -30.0, 100.0, 180.0),
+)
+
+
+def _reflect(boxes: tuple[_Box, ...]) -> tuple[_Box, ...]:
+    """Point-reflect boxes through the origin (φ,ψ) → (−φ,−ψ)."""
+    return tuple(
+        (-pmax, -pmin, -smax, -smin) for (pmin, pmax, smin, smax) in boxes
+    )
+
+
+# Glycine is achiral: its Ramachandran map is symmetric under
+# (φ, ψ) → (−φ, −ψ), so the region set is the general set unioned with
+# its reflection.
+_GLYCINE_FAVORED: tuple[_Box, ...] = _GENERAL_FAVORED + _reflect(_GENERAL_FAVORED)
+_GLYCINE_ALLOWED: tuple[_Box, ...] = _GENERAL_ALLOWED + _reflect(_GENERAL_ALLOWED)
+
+_REGIONS: dict[RamachandranCategory, tuple[tuple[_Box, ...], tuple[_Box, ...]]] = {
+    "General": (_GENERAL_FAVORED, _GENERAL_ALLOWED),
+    "Glycine": (_GLYCINE_FAVORED, _GLYCINE_ALLOWED),
+    "Proline": (_PROLINE_FAVORED, _PROLINE_ALLOWED),
+}
+
+
+@dataclass(frozen=True)
+class RamachandranResult:
+    """Classification of one residue's backbone conformation.
+
+    Attributes:
+        residue: ``(chain_id, residue_id, residue_name)``.
+        phi, psi: Backbone dihedrals in degrees.
+        category: Which region set was used (``General``/``Glycine``/
+            ``Proline``).
+        classification: ``Favored``/``Allowed``/``Outlier``.
+    """
+
+    residue: tuple[str, int, str]
+    phi: float
+    psi: float
+    category: RamachandranCategory
+    classification: RamachandranClass
+
+
+def _in_boxes(phi: float, psi: float, boxes: tuple[_Box, ...]) -> bool:
+    for pmin, pmax, smin, smax in boxes:
+        if pmin <= phi <= pmax and smin <= psi <= smax:
+            return True
+    return False
+
+
+def _category_for(residue_name: str) -> RamachandranCategory:
+    name = residue_name.upper()
+    if name == "GLY":
+        return "Glycine"
+    if name == "PRO":
+        return "Proline"
+    return "General"
+
+
+def ramachandran_type(
+    phi: float,
+    psi: float,
+    *,
+    category: RamachandranCategory = "General",
+) -> RamachandranClass:
+    """Classify a single (φ, ψ) pair as Favored / Allowed / Outlier.
+
+    Args:
+        phi, psi: Backbone dihedrals in degrees, each in ``[-180, 180]``.
+        category: Region set to use — ``General`` (default), ``Glycine``
+            (symmetric map), or ``Proline`` (restricted φ).
+
+    Returns:
+        The region the pair falls in.
+
+    Raises:
+        ValueError: If ``phi`` or ``psi`` is not finite.
+    """
+    if not (np.isfinite(phi) and np.isfinite(psi)):
+        raise ValueError("phi and psi must be finite; got NaN/inf")
+    favored, allowed = _REGIONS[category]
+    if _in_boxes(phi, psi, favored):
+        return "Favored"
+    if _in_boxes(phi, psi, allowed):
+        return "Allowed"
+    return "Outlier"
+
+
+def classify_ramachandran(protein: Protein) -> list[RamachandranResult]:
+    """Classify every residue with a defined (φ, ψ) pair.
+
+    Residues at chain termini or across chain breaks (where φ or ψ is
+    undefined) are skipped, so the result holds one entry per residue
+    that actually has a backbone conformation to judge.
+
+    Args:
+        protein: Structure to analyze.
+
+    Returns:
+        One :class:`RamachandranResult` per classifiable residue, in
+        chain/sequence order.
+    """
+    arr = protein.atom_array
+    slices = list(arr.iter_residue_slices())
+    phi_, psi_, _ = phi_psi_omega(protein)
+
+    results: list[RamachandranResult] = []
+    for i, sl in enumerate(slices):
+        phi_i = float(phi_[i])
+        psi_i = float(psi_[i])
+        if not (np.isfinite(phi_i) and np.isfinite(psi_i)):
+            continue
+        resname = str(arr.residue_name[sl.start])
+        category = _category_for(resname)
+        results.append(
+            RamachandranResult(
+                residue=(
+                    str(arr.chain_id[sl.start]),
+                    int(arr.residue_id[sl.start]),
+                    resname,
+                ),
+                phi=phi_i,
+                psi=psi_i,
+                category=category,
+                classification=ramachandran_type(phi_i, psi_i, category=category),
+            )
+        )
+    return results
+
+
+def ramachandran_outliers(protein: Protein) -> list[RamachandranResult]:
+    """Just the residues classified as Ramachandran outliers."""
+    return [r for r in classify_ramachandran(protein) if r.classification == "Outlier"]
+
+
+def ramachandran_favored_fraction(protein: Protein) -> float:
+    """Fraction of classifiable residues in the favored region.
+
+    A quality metric in the spirit of MolProbity's "Ramachandran
+    favored" percentage (here from the simplified region model). Returns
+    ``1.0`` for a structure with no classifiable residues (nothing to
+    fault).
+    """
+    results = classify_ramachandran(protein)
+    if not results:
+        return 1.0
+    favored = sum(1 for r in results if r.classification == "Favored")
+    return favored / len(results)

@@ -1,12 +1,19 @@
-# Check a structure for steric clashes
+# Validate structure quality
 
 Folding and docking engines can hand back structures with atoms jammed
-into each other — bad rotamers, backbone overlaps, a ligand pose that
-bumps the receptor. A quick **clash check** is a cheap gate to run
-before you spend compute on anything downstream.
+into each other, backbone conformations that shouldn't exist, or worse.
+molforge's `structure` module has a set of cheap, geometry-only quality
+gates — steric clashes and Ramachandran outliers today — that run on any
+`Protein` without a separate topology file, so you can reject bad models
+before spending compute on anything downstream.
 
-molforge scores clashes from geometry alone (coordinates + elements),
-so it works on any `Protein` without a separate topology file.
+This recipe covers each check in turn.
+
+# Steric clashes
+
+Bad rotamers, backbone overlaps, a ligand pose that bumps the receptor —
+all show up as pairs of non-bonded atoms whose van der Waals shells
+overlap.
 
 ## The one-liner gate
 
@@ -99,7 +106,7 @@ for design in designs:
         keep.append((design, refolded))
 ```
 
-## Limitations
+## Clash detection limitations
 
 Because bonds are inferred by distance, two genuinely non-bonded atoms
 closer than normal bonding distance (roughly < 2 Å for heavy atoms)
@@ -108,3 +115,72 @@ a duplicate-atom check. Clashes in the range that actually matters
 (≈ 2.0–3.2 Å heavy-atom overlaps) are detected reliably. For
 topology-aware validation with explicit hydrogens, reach for a
 dedicated tool such as MolProbity.
+
+# Ramachandran outliers
+
+Every residue's backbone conformation is summarised by two dihedral
+angles, φ and ψ. Real proteins only populate a few regions of that
+plane; a residue sitting far outside them is a red flag for a modelling
+error.
+
+## Favored fraction and outliers
+
+```python
+from molforge.structure import (
+    ramachandran_favored_fraction,
+    ramachandran_outliers,
+)
+
+print("favored:", ramachandran_favored_fraction(model))  # 1.0 is perfect
+
+for r in ramachandran_outliers(model):
+    chain, resid, resname = r.residue
+    print(f"{resname}{resid} ({chain})  φ={r.phi:.0f}  ψ={r.psi:.0f}")
+```
+
+`ramachandran_favored_fraction` is a single-number quality signal in the
+spirit of MolProbity's "Ramachandran favored %": a well-refined
+structure scores near 1.0, and a model full of impossible backbone
+angles scores near 0.
+
+## Per-residue classification
+
+`classify_ramachandran` returns one record per residue that has a
+defined (φ, ψ) — chain termini and residues across a chain break are
+skipped:
+
+```python
+from molforge.structure import classify_ramachandran
+
+for r in classify_ramachandran(model):
+    print(r.residue, r.category, r.classification)
+```
+
+Each `RamachandranResult` carries the `(chain, residue_id, residue_name)`
+label, the `phi`/`psi` angles, the `category` used to judge it, and the
+`classification` (`Favored` / `Allowed` / `Outlier`). You can also
+classify a bare angle pair:
+
+```python
+from molforge.structure import ramachandran_type
+
+ramachandran_type(-63, -43)                      # "Favored"  (α-helix)
+ramachandran_type(60, 45)                        # "Allowed"  (left-handed α)
+ramachandran_type(60, 45, category="Glycine")    # "Favored"  (fine for Gly)
+ramachandran_type(60, 45, category="Proline")    # "Outlier"  (ring forbids +φ)
+```
+
+The classifier splits residues into three region sets — **General**,
+**Glycine** (whose plot is point-symmetric, since glycine is achiral),
+and **Proline** (whose φ is pinned near −63° by its ring). Pre-proline
+residues use the general regions.
+
+## Ramachandran limitations
+
+This is a *simplified* region model — unions of rectangles tuned to the
+standard basins — not the 2D probability contours that MolProbity
+estimates from tens of thousands of reference residues. It reliably
+flags gross outliers and gives a useful favored fraction, but the exact
+favored/allowed boundary is approximate. For publication-grade
+percentiles, use a tool that ships the reference distributions.
+
