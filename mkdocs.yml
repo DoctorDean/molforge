@@ -59,6 +59,7 @@ nav:
       - MD and RMSD: cookbook/md-and-rmsd.md
       - Design then refold: cookbook/design-then-refold.md
       - Inspect provenance: cookbook/inspect-provenance.md
+      - Validate structures: cookbook/validating-structures.md
       - Caching results: cookbook/caching-results.md
       - "Choosing: folding engines": cookbook/choosing-folding.md
       - "Choosing: docking engines": cookbook/choosing-docking.md

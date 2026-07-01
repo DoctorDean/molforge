@@ -1,4 +1,4 @@
-"""Structural analysis: superposition, RMSD, contacts, geometry, DSSP, SASA, dihedrals.
+"""Structural analysis: superposition, RMSD, contacts, geometry, DSSP, SASA, dihedrals, clashes.
 
 Workhorses for analyzing the geometric properties of protein
 structures and comparing them.
@@ -24,6 +24,15 @@ Common entry points:
 
 from __future__ import annotations
 
+from molforge.structure.clashes import (
+    DEFAULT_TOLERANCE,
+    DEFAULT_VDW_RADIUS,
+    VDW_RADII,
+    Clash,
+    clash_score,
+    find_clashes,
+    has_clashes,
+)
 from molforge.structure.contacts import (
     contact_map,
     distance_map,
@@ -76,6 +85,14 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     "contact_map",
     "distance_map",
     "residue_contacts",
+    # clashes
+    "find_clashes",
+    "clash_score",
+    "has_clashes",
+    "Clash",
+    "VDW_RADII",
+    "DEFAULT_VDW_RADIUS",
+    "DEFAULT_TOLERANCE",
     # Geometry
     "centroid",
     "center_of_mass",

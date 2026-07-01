@@ -17,6 +17,7 @@ covers concrete workflows.
 | Run a short MD simulation and analyse it                        | [MD and RMSD](md-and-rmsd.md)                             |
 | Design sequences for a backbone, then validate by re-folding    | [Design then refold](design-then-refold.md)               |
 | Trace what produced an output across a multi-step workflow      | [Inspect provenance](inspect-provenance.md)               |
+| Check a folded or docked structure for steric clashes           | [Validate structures](validating-structures.md)           |
 | Skip recomputing expensive engine calls you've already run      | [Caching results](caching-results.md)                     |
 
 ## If you're choosing between options...

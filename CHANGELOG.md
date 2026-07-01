@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Steric clash detection (`molforge.structure`).** A geometry-only
+  structure-quality gate for folding / docking output — no topology
+  file required. `find_clashes(protein)` returns the overlapping
+  non-bonded atom pairs (worst first) as `Clash` records (atom indices,
+  elements, distance, van der Waals sum, overlap, residue labels);
+  `clash_score(protein)` reports clashes per 1000 atoms in the
+  MolProbity sense; `has_clashes(protein)` is the boolean gate. A pair
+  clashes when its van der Waals shells overlap by at least `tolerance`
+  (default 0.4 Å). Because molforge carries no bond graph, covalent
+  bonds are *inferred from geometry* and any pair within
+  `bonded_separation` bonds (default 3 → 1-2, 1-3, 1-4 neighbours) is
+  excluded — transparently covering intra-residue bonds, the peptide
+  bond, disulfides and intra-ligand bonds. Hydrogens are ignored by
+  default. New public names: `find_clashes`, `clash_score`,
+  `has_clashes`, `Clash`, `VDW_RADII`, `DEFAULT_VDW_RADIUS`,
+  `DEFAULT_TOLERANCE`. New cookbook recipe: "Check a structure for
+  steric clashes."
 
 ## [0.5.1] 2026-07-01
 
