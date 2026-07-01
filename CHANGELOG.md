@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **`DockingResult` cache serializer.** `molforge.cache` now knows how
+  to serialize a `molforge.docking.DockingResult` under the
+  `"docking_result"` type tag — the foundation for caching docking
+  engines (Vina, Gnina, DiffDock). A docking entry stores the receptor
+  and each pose's ligand as mmCIF (`receptor.cif`, `pose_{i}.cif`),
+  scalar pose fields (score / rank / RMSD bounds) and all member
+  metadata in `payload.json`, and every numpy array across members in
+  one slot-namespaced `arrays.npz`. The result-level `Provenance`
+  round-trips as a real `Provenance` (it's what keys the cache), and
+  `None`-valued pose scores (e.g. Gnina's absent CNN keys) survive as
+  `None` rather than the string `"None"`. Corrupt entries are misses,
+  not crashes — same contract as the Protein/DesignedSequence
+  serializers. Engine wiring (the `get`/`put` calls inside `dock()`)
+  lands in a follow-up commit; this commit is the round-trip layer only.
 
 ## [0.5.0] 2026-06-30
 

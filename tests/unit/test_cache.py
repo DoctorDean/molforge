@@ -14,6 +14,8 @@ What we test:
 - Molforge version is part of the key
 - Round-trip Protein (atom array + metadata + numpy arrays + Provenance)
 - Round-trip DesignedSequence list
+- Round-trip DockingResult (poses + ligand/receptor structures +
+  per-pose arrays + Provenance; empty + no-receptor edges)
 - ComplexSpec round-trips through metadata
 - Corruption recovery (missing files, wrong type tag) → miss, not crash
 - Env-var control (disabled, dir override)
@@ -43,6 +45,7 @@ from molforge.cache import (
 from molforge.core import AtomArray, Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.docking import DockingResult, Pose
 from molforge.folding import ComplexSpec
 from molforge.generative import DesignedSequence
 
@@ -75,6 +78,49 @@ def _make_protein(name: str = "test", n_atoms: int = 3) -> Protein:
     arr.chain_id[:] = "A"
     arr.b_factor[:] = 80.0
     return Protein(arr, name=name)
+
+
+def _make_ligand(name: str = "lig", n_atoms: int = 3) -> Protein:
+    """A small HETATM 'ligand' Protein, the shape a docking pose holds."""
+    arr = AtomArray(n_atoms)
+    arr.coords[:] = np.array([[i * 1.4, 0.0, 0.0] for i in range(n_atoms)], dtype=np.float32)
+    arr.element[:] = ["C", "O", "N"][:n_atoms]
+    arr.atom_name[:] = ["C1", "O1", "N1"][:n_atoms]
+    arr.residue_name[:] = "LIG"
+    arr.residue_id[:] = 1
+    arr.chain_id[:] = "X"
+    arr.record_type[:] = "HETATM"
+    arr.entity_type[:] = "ligand"
+    return Protein(arr, name=name)
+
+
+def _make_docking_result(
+    *,
+    engine: str = "Vina",
+    n_poses: int = 2,
+    with_receptor: bool = True,
+    provenance: Provenance | None = None,
+) -> DockingResult:
+    poses = [
+        Pose(
+            ligand=_make_ligand(f"pose{i}"),
+            score=-8.0 + i,
+            rank=i,
+            rmsd_lb=0.0 if i == 0 else float(i),
+            rmsd_ub=0.0 if i == 0 else float(i) + 1.0,
+            metadata={"engine": engine},
+        )
+        for i in range(n_poses)
+    ]
+    metadata: dict = {"center": [10.0, 5.0, -2.0]}
+    if provenance is not None:
+        metadata[mk.PROVENANCE] = provenance
+    return DockingResult(
+        poses=poses,
+        receptor=_make_protein("receptor") if with_receptor else None,
+        engine=engine,
+        metadata=metadata,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -288,6 +334,194 @@ class TestDesignedSequenceRoundTrip:
         restored = cache.get(prov, "designed_sequences")
         np.testing.assert_array_equal(restored[0].metadata["per_pos_score"], [0.5, 0.6, 0.7, 0.8])
         np.testing.assert_array_equal(restored[1].metadata["per_pos_score"], [0.1, 0.2, 0.3, 0.4])
+
+
+# ---------------------------------------------------------------------
+# Round-trip: DockingResult
+# ---------------------------------------------------------------------
+
+
+class TestDockingResultRoundTrip:
+    def test_basic_result(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Vina")
+        result = _make_docking_result(engine="Vina", n_poses=3)
+
+        assert cache.get(prov, "docking_result") is None  # miss
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        assert restored is not None
+        assert restored.engine == "Vina"
+        assert len(restored) == 3
+        # Poses keep order + scalar fields.
+        assert restored.best.rank == 0
+        assert restored.best.score == pytest.approx(-8.0)
+        assert restored.poses[1].rmsd_lb == pytest.approx(1.0)
+        assert restored.poses[1].rmsd_ub == pytest.approx(2.0)
+        # Ligand structures survive as Proteins.
+        assert restored.poses[0].ligand.name == "pose0"
+        assert restored.poses[0].ligand.atom_array.n_atoms == 3
+        assert list(restored.poses[0].ligand.atom_array.element) == ["C", "O", "N"]
+
+    def test_receptor_round_trips(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Gnina")
+        result = _make_docking_result(engine="Gnina", with_receptor=True)
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        assert restored.receptor is not None
+        assert restored.receptor.name == "receptor"
+        assert restored.receptor.atom_array.n_atoms == 3
+
+    def test_no_receptor(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="DiffDock")
+        result = _make_docking_result(engine="DiffDock", with_receptor=False)
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        assert restored.receptor is None
+        assert len(restored) == 2
+
+    def test_empty_result(self, tmp_path: Path) -> None:
+        """A DockingResult with no poses and no receptor round-trips."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Vina")
+        result = DockingResult(poses=[], receptor=None, engine="Vina", metadata={})
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        assert restored is not None
+        assert restored.engine == "Vina"
+        assert len(restored) == 0
+        assert restored.receptor is None
+
+    def test_provenance_rebuilt(self, tmp_path: Path) -> None:
+        """Result-level Provenance survives as a real Provenance (the
+        thing the cache keys on), not a dict."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(
+            engine="Vina",
+            parameters={"exhaustiveness": 8, "n_poses": 9},
+        )
+        result = _make_docking_result(engine="Vina", provenance=prov)
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        restored_prov = restored.metadata[mk.PROVENANCE]
+        assert isinstance(restored_prov, Provenance)
+        assert restored_prov.engine == "Vina"
+        assert restored_prov.parameters == {"exhaustiveness": 8, "n_poses": 9}
+
+    def test_result_metadata_preserved(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Gnina")
+        result = _make_docking_result(engine="Gnina")
+        result.metadata["cnn_scoring"] = "rescore"
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        assert restored.metadata["center"] == [10.0, 5.0, -2.0]
+        assert restored.metadata["cnn_scoring"] == "rescore"
+
+    def test_none_in_pose_metadata(self, tmp_path: Path) -> None:
+        """Gnina-style poses carry None scores for absent CNN keys;
+        None must round-trip as None, not the string 'None'."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Gnina")
+        result = DockingResult(
+            poses=[
+                Pose(
+                    ligand=_make_ligand("p0"),
+                    score=0.85,
+                    rank=0,
+                    metadata={"cnn_score": 0.85, "cnn_affinity": None},
+                )
+            ],
+            receptor=None,
+            engine="Gnina",
+        )
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        assert restored.poses[0].metadata["cnn_score"] == pytest.approx(0.85)
+        assert restored.poses[0].metadata["cnn_affinity"] is None
+
+    def test_arrays_per_pose_distinct(self, tmp_path: Path) -> None:
+        """Per-pose numpy arrays in pose metadata survive and stay
+        distinct across poses (no cross-pose array bleed)."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Vina")
+        result = DockingResult(
+            poses=[
+                Pose(
+                    ligand=_make_ligand("p0"),
+                    score=-8.4,
+                    rank=0,
+                    metadata={"per_atom": np.array([1.0, 2.0, 3.0], dtype=np.float32)},
+                ),
+                Pose(
+                    ligand=_make_ligand("p1"),
+                    score=-7.9,
+                    rank=1,
+                    metadata={"per_atom": np.array([4.0, 5.0, 6.0], dtype=np.float32)},
+                ),
+            ],
+            receptor=None,
+            engine="Vina",
+        )
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        np.testing.assert_array_equal(restored.poses[0].metadata["per_atom"], [1.0, 2.0, 3.0])
+        np.testing.assert_array_equal(restored.poses[1].metadata["per_atom"], [4.0, 5.0, 6.0])
+
+    def test_arrays_in_ligand_metadata(self, tmp_path: Path) -> None:
+        """Arrays attached to a pose's *ligand* Protein metadata (not
+        the Pose.metadata) also round-trip per-pose."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Vina")
+        lig0 = _make_ligand("p0")
+        lig0.metadata["charges"] = np.array([-0.4, 0.1, 0.3], dtype=np.float32)
+        lig1 = _make_ligand("p1")
+        lig1.metadata["charges"] = np.array([0.2, -0.2, 0.0], dtype=np.float32)
+        result = DockingResult(
+            poses=[
+                Pose(ligand=lig0, score=-8.4, rank=0),
+                Pose(ligand=lig1, score=-7.9, rank=1),
+            ],
+            receptor=None,
+            engine="Vina",
+        )
+
+        cache.put(prov, result, "docking_result")
+        restored = cache.get(prov, "docking_result")
+
+        np.testing.assert_allclose(
+            restored.poses[0].ligand.metadata["charges"], [-0.4, 0.1, 0.3], rtol=1e-6
+        )
+        np.testing.assert_allclose(
+            restored.poses[1].ligand.metadata["charges"], [0.2, -0.2, 0.0], rtol=1e-6
+        )
+
+    def test_corrupt_payload_is_miss(self, tmp_path: Path) -> None:
+        """A docking entry with garbage payload.json is a miss, not a crash."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Vina")
+        result = _make_docking_result()
+        cache.put(prov, result, "docking_result")
+
+        (cache.path_for(prov) / "payload.json").write_text("{not json", encoding="utf-8")
+        assert cache.get(prov, "docking_result") is None
 
 
 # ---------------------------------------------------------------------

@@ -20,7 +20,9 @@ Integration on the engine side is a few lines per method::
 What gets cached:
     - :class:`molforge.core.Protein` from folding wrappers.
     - ``list[DesignedSequence]`` from generative wrappers.
-    - Future docking results (extensions via :func:`register_serializer`).
+    - :class:`molforge.docking.DockingResult` from docking wrappers
+      (Vina, Gnina, DiffDock). Extra result types register via
+      :func:`register_serializer`.
 
 What deliberately doesn't get cached:
     - :class:`molforge.md.Trajectory`. Multi-GB per simulation; users
@@ -41,6 +43,9 @@ Cache layout:
       replaced by markers)
     - ``structure.cif`` (for Protein only): the AtomArray as mmCIF
     - ``payload.json`` (for DesignedSequence list): the design list
+    - ``receptor.cif`` + ``pose_{i}.cif`` (for DockingResult): the
+      receptor and each pose ligand as mmCIF, with scalar pose fields
+      and metadata in ``payload.json``
     - ``arrays.npz``: numpy arrays from metadata when present
 
 Safety:
@@ -71,6 +76,7 @@ from molforge.core.provenance import Provenance
 
 if TYPE_CHECKING:
     from molforge.core import Protein
+    from molforge.docking import DockingResult, Pose
     from molforge.generative import DesignedSequence
 
 
@@ -543,6 +549,187 @@ def _deserialize_designed_sequences(entry: Path) -> list[DesignedSequence]:
 
 
 # ---------------------------------------------------------------------
+# DockingResult serializer
+# ---------------------------------------------------------------------
+
+
+def _serialize_protein_member(
+    protein: Protein,
+    entry: Path,
+    *,
+    cif_name: str,
+    array_slot: str,
+    arrays_out: dict[str, Any],
+) -> dict[str, Any]:
+    """Serialize one Protein embedded in a larger result.
+
+    Writes the structure to ``cif_name`` and returns a JSON-safe
+    ``{"name", "metadata"}`` payload. Any numpy arrays in the
+    protein's metadata are funnelled into the shared ``arrays_out``
+    dict under ``f"{array_slot}__{key}"`` so a single ``arrays.npz``
+    holds every array in the entry (one npz per entry, keyed by slot).
+    """
+    from molforge.io.mmcif import write_cif_string
+
+    (entry / cif_name).write_text(write_cif_string(protein), encoding="utf-8")
+    metadata_safe, arrays = _split_arrays(protein.metadata)
+    for key, value in arrays.items():
+        arrays_out[f"{array_slot}__{key}"] = value
+    return {"name": protein.name, "metadata": metadata_safe}
+
+
+def _deserialize_protein_member(
+    entry: Path,
+    payload: dict[str, Any],
+    *,
+    cif_name: str,
+    slot_arrays: dict[str, Any],
+) -> Protein:
+    """Inverse of :func:`_serialize_protein_member`.
+
+    ``slot_arrays`` is the per-slot array dict already partitioned out
+    of the entry's ``arrays.npz`` (keys are the real metadata keys,
+    with the slot prefix stripped).
+    """
+    from molforge.io.mmcif import read_cif_string
+
+    protein = read_cif_string((entry / cif_name).read_text(encoding="utf-8"))
+    metadata = _restore_metadata(payload["metadata"])
+    metadata.update(slot_arrays)
+    if payload["name"]:
+        protein.name = payload["name"]
+    protein.metadata.update(metadata)
+    return protein
+
+
+def _serialize_docking_result(result: DockingResult, entry: Path) -> None:
+    """Write a DockingResult as per-member mmCIF + JSON + npz.
+
+    Layout inside ``entry``:
+
+    - ``receptor.cif`` — the receptor structure (omitted when the
+      result has no receptor).
+    - ``pose_{i}.cif`` — each pose's ligand structure.
+    - ``payload.json`` — engine name, scalar pose fields
+      (score / rank / rmsd bounds), and every member's name + metadata
+      with arrays and Provenance replaced by markers.
+    - ``arrays.npz`` — all numpy arrays from any member's metadata,
+      namespaced by slot (``receptor``, ``ligand{i}``, ``pose{i}``,
+      ``result``) so they survive the round-trip without colliding.
+
+    The result-level Provenance (under ``metadata["provenance"]``)
+    round-trips through :func:`_split_arrays` like any other
+    Provenance value — that's what keys the cache, so it must come
+    back as a real :class:`Provenance`.
+    """
+    all_arrays: dict[str, Any] = {}
+
+    receptor_payload: dict[str, Any] | None = None
+    if result.receptor is not None:
+        receptor_payload = _serialize_protein_member(
+            result.receptor,
+            entry,
+            cif_name="receptor.cif",
+            array_slot="receptor",
+            arrays_out=all_arrays,
+        )
+
+    pose_payloads: list[dict[str, Any]] = []
+    for i, pose in enumerate(result.poses):
+        ligand_payload = _serialize_protein_member(
+            pose.ligand,
+            entry,
+            cif_name=f"pose_{i}.cif",
+            array_slot=f"ligand{i}",
+            arrays_out=all_arrays,
+        )
+        pose_metadata_safe, pose_arrays = _split_arrays(pose.metadata)
+        for key, value in pose_arrays.items():
+            all_arrays[f"pose{i}__{key}"] = value
+        pose_payloads.append(
+            {
+                "score": float(pose.score),
+                "rank": int(pose.rank),
+                "rmsd_lb": None if pose.rmsd_lb is None else float(pose.rmsd_lb),
+                "rmsd_ub": None if pose.rmsd_ub is None else float(pose.rmsd_ub),
+                "ligand": ligand_payload,
+                "metadata": pose_metadata_safe,
+            }
+        )
+
+    result_metadata_safe, result_arrays = _split_arrays(result.metadata)
+    for key, value in result_arrays.items():
+        all_arrays[f"result__{key}"] = value
+
+    payload = {
+        "engine": result.engine,
+        "receptor": receptor_payload,
+        "poses": pose_payloads,
+        "metadata": result_metadata_safe,
+    }
+    (entry / "payload.json").write_text(json.dumps(payload), encoding="utf-8")
+    if all_arrays:
+        np.savez(entry / "arrays.npz", **all_arrays)
+
+
+def _deserialize_docking_result(entry: Path) -> DockingResult:
+    """Inverse of :func:`_serialize_docking_result`."""
+    from molforge.docking import DockingResult, Pose
+
+    payload = json.loads((entry / "payload.json").read_text(encoding="utf-8"))
+
+    # Partition the shared npz back into per-slot array dicts.
+    arrays_by_slot: dict[str, dict[str, Any]] = {}
+    arrays_path = entry / "arrays.npz"
+    if arrays_path.is_file():
+        with np.load(arrays_path, allow_pickle=False) as npz:
+            for key in npz.files:
+                slot, _, real_key = key.partition("__")
+                arrays_by_slot.setdefault(slot, {})[real_key] = npz[key]
+
+    receptor: Protein | None = None
+    receptor_payload = payload.get("receptor")
+    if receptor_payload is not None:
+        receptor = _deserialize_protein_member(
+            entry,
+            receptor_payload,
+            cif_name="receptor.cif",
+            slot_arrays=arrays_by_slot.get("receptor", {}),
+        )
+
+    poses: list[Pose] = []
+    for i, pose_payload in enumerate(payload["poses"]):
+        ligand = _deserialize_protein_member(
+            entry,
+            pose_payload["ligand"],
+            cif_name=f"pose_{i}.cif",
+            slot_arrays=arrays_by_slot.get(f"ligand{i}", {}),
+        )
+        pose_metadata = _restore_metadata(pose_payload["metadata"])
+        pose_metadata.update(arrays_by_slot.get(f"pose{i}", {}))
+        poses.append(
+            Pose(
+                ligand=ligand,
+                score=pose_payload["score"],
+                rank=pose_payload["rank"],
+                rmsd_lb=pose_payload.get("rmsd_lb"),
+                rmsd_ub=pose_payload.get("rmsd_ub"),
+                metadata=pose_metadata,
+            )
+        )
+
+    result_metadata = _restore_metadata(payload["metadata"])
+    result_metadata.update(arrays_by_slot.get("result", {}))
+
+    return DockingResult(
+        poses=poses,
+        receptor=receptor,
+        engine=payload["engine"],
+        metadata=result_metadata,
+    )
+
+
+# ---------------------------------------------------------------------
 # Register built-ins
 # ---------------------------------------------------------------------
 
@@ -551,4 +738,9 @@ register_serializer(
     "designed_sequences",
     _serialize_designed_sequences,
     _deserialize_designed_sequences,
+)
+register_serializer(
+    "docking_result",
+    _serialize_docking_result,
+    _deserialize_docking_result,
 )
