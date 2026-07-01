@@ -24,6 +24,14 @@ Common entry points:
 
 from __future__ import annotations
 
+from molforge.structure.bond_geometry import (
+    DEFAULT_MAX_Z,
+    IDEAL_BOND_LENGTHS,
+    BondLengthOutlier,
+    bond_length_rmsd,
+    check_bond_lengths,
+    has_bond_length_outliers,
+)
 from molforge.structure.clashes import (
     DEFAULT_TOLERANCE,
     DEFAULT_VDW_RADIUS,
@@ -100,6 +108,13 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     "VDW_RADII",
     "DEFAULT_VDW_RADIUS",
     "DEFAULT_TOLERANCE",
+    # bond geometry
+    "check_bond_lengths",
+    "bond_length_rmsd",
+    "has_bond_length_outliers",
+    "BondLengthOutlier",
+    "IDEAL_BOND_LENGTHS",
+    "DEFAULT_MAX_Z",
     # Geometry
     "centroid",
     "center_of_mass",

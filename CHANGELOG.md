@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+- **Backbone bond-length validation (`molforge.structure`).** A
+  standard-geometry quality gate against the Engh & Huber ideals.
+  `check_bond_lengths(protein, max_z=4.0)` returns `BondLengthOutlier`
+  records (worst z-score first) for the mainchain bonds `N-CA`, `CA-C`,
+  `C-O`, the peptide `C-N`, and `CA-CB` where present — each with the
+  two atoms, residue labels, measured length, ideal, sigma, signed
+  deviation and z-score. `bond_length_rmsd(protein)` is the RMS
+  deviation from ideal (a single-number metric near zero for a
+  well-refined model); `has_bond_length_outliers(protein)` is the
+  boolean gate. The peptide bond is only checked between same-chain
+  consecutively-numbered residues, so chain breaks and gaps aren't
+  mistaken for broken bonds. New public names: `check_bond_lengths`,
+  `bond_length_rmsd`, `has_bond_length_outliers`, `BondLengthOutlier`,
+  `IDEAL_BOND_LENGTHS`, `DEFAULT_MAX_Z`. The "Validate structure
+  quality" recipe gains a bond-length section.
+
 - **Ramachandran classification (`molforge.structure`).** A simplified
   backbone-quality gate on top of the existing φ/ψ machinery.
   `ramachandran_type(phi, psi, category=...)` labels a single angle pair

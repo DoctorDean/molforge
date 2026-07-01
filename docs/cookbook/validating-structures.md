@@ -184,3 +184,41 @@ flags gross outliers and gives a useful favored fraction, but the exact
 favored/allowed boundary is approximate. For publication-grade
 percentiles, use a tool that ships the reference distributions.
 
+
+# Bond-length outliers
+
+Refinement restrains every covalent bond to a tight ideal, so a bond
+that strays far from its target is a sign of distorted or badly-built
+geometry. molforge checks the mainchain bonds (`N-CA`, `CA-C`, `C-O`,
+the peptide `C-N`, and `CA-CB` where a Cβ exists) against the Engh &
+Huber standard-geometry values.
+
+## RMSD and outliers
+
+```python
+from molforge.structure import bond_length_rmsd, check_bond_lengths
+
+print("bond-length RMSD:", bond_length_rmsd(model))  # ~0.01 Å is tight
+
+for o in check_bond_lengths(model):
+    print(
+        f"{o.bond} in {o.residue_i[2]}{o.residue_i[1]}: "
+        f"{o.length:.3f} Å  (ideal {o.ideal:.3f}, {o.z_score:+.1f}σ)"
+    )
+```
+
+`bond_length_rmsd` is the standard-geometry summary — the RMS deviation
+of every checked bond from its ideal, near zero for a well-refined
+model. `check_bond_lengths` returns the individual `BondLengthOutlier`
+records (worst z-score first); each carries the two atoms, their residue
+labels, the bond type, the measured `length`, the `ideal` and `sigma`,
+and the signed `deviation` / `z_score`. The threshold is `max_z`
+(default 4σ). `has_bond_length_outliers` is the boolean gate.
+
+The peptide `C-N` bond is only checked between residues in the same
+chain with consecutive numbering, so ordinary chain breaks and gaps are
+not mistaken for broken bonds.
+
+Bond-length and Ramachandran quality are independent: a model can have
+perfect bond lengths yet terrible backbone dihedrals (or vice versa), so
+it is worth running both gates.
