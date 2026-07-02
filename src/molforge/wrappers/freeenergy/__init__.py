@@ -8,6 +8,10 @@ and invoke the tools are layered on top.
 
 from __future__ import annotations
 
-from molforge.wrappers.freeenergy.amber import parse_mmpbsa_dat
+from molforge.wrappers.freeenergy.amber import (
+    build_mmpbsa_input,
+    parse_mmpbsa_dat,
+    selection_to_amber_mask,
+)
 
-__all__ = ["parse_mmpbsa_dat"]
+__all__ = ["build_mmpbsa_input", "parse_mmpbsa_dat", "selection_to_amber_mask"]

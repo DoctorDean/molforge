@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **MMPBSA input preparation (`molforge.wrappers.freeenergy`).** Two
+  pure helpers the Amber engine will build on. `selection_to_amber_mask(
+  topology, selection)` converts a molforge selection (field filters or
+  a boolean atom mask) into an Amber residue-number mask (e.g. `":1-3"`,
+  `":1,3,5"`) over the topology's sequential residue numbering, raising
+  if the selection matches nothing or splits a residue (endpoint masks
+  must be whole-residue). `build_mmpbsa_input(...)` writes the
+  `mmpbsa.in` namelist text — `&general` plus `&gb` (MM/GBSA, default)
+  or `&pb` (MM/PBSA) — from frame range, salt concentration and GB
+  model, validating the model and frame range/interval.
 - **Amber `MMPBSA.py` results parser (`molforge.wrappers.freeenergy`).**
   `parse_mmpbsa_dat(text, solvent_model="gb")` reads a
   `FINAL_RESULTS_MMPBSA.dat` file's final averaged block into a

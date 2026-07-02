@@ -29,8 +29,20 @@ parsed yet, so ``delta_g`` here is the enthalpic total and
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
+
+import numpy as np
 
 from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from numpy.typing import NDArray
+
+    from molforge.core import Protein
+
+    Selection = Mapping[str, object] | NDArray[np.bool_]
 
 # One numeric field: optional sign, digits, optional fraction/exponent.
 _NUM = r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
@@ -159,4 +171,136 @@ def parse_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyResul
     )
 
 
-__all__ = ["parse_mmpbsa_dat"]
+__all__ = ["build_mmpbsa_input", "parse_mmpbsa_dat", "selection_to_amber_mask"]
+
+
+# ---------------------------------------------------------------------
+# Input preparation
+# ---------------------------------------------------------------------
+
+
+def _resolve_mask(topology: Protein, selection: Selection) -> NDArray[np.bool_]:
+    """Resolve a selection to a boolean atom mask over the topology."""
+    from collections.abc import Mapping
+
+    arr = topology.atom_array
+    if isinstance(selection, Mapping):
+        mask = arr.where(**selection)
+    else:
+        mask = np.asarray(selection, dtype=bool)
+        if mask.shape != (len(arr),):
+            raise ValueError(
+                f"boolean selection has shape {mask.shape}, expected ({len(arr)},)"
+            )
+    return np.asarray(mask, dtype=bool)
+
+
+def _collapse_ranges(numbers: Sequence[int]) -> str:
+    """Collapse sorted 1-based indices to Amber range syntax (``1-3,5``)."""
+    parts: list[str] = []
+    start = prev = numbers[0]
+    for n in numbers[1:]:
+        if n == prev + 1:
+            prev = n
+            continue
+        parts.append(f"{start}-{prev}" if start != prev else f"{start}")
+        start = prev = n
+    parts.append(f"{start}-{prev}" if start != prev else f"{start}")
+    return ",".join(parts)
+
+
+def selection_to_amber_mask(topology: Protein, selection: Selection) -> str:
+    """Convert a molforge selection to an Amber residue mask.
+
+    The selection (a field-filter mapping like ``{"entity_type":
+    "ligand"}``, forwarded to :meth:`~molforge.core.AtomArray.where`, or a
+    boolean atom mask) is resolved against ``topology`` and expressed as a
+    residue-number mask over the topology's sequential 1-based residue
+    numbering — e.g. ``":1-120"`` or ``":121"``. This is the numbering
+    Amber's ``ambmask`` uses, and the form MM/PB(GB)SA expects for
+    splitting a complex into receptor and ligand.
+
+    Args:
+        topology: Structure the selection is resolved against (the
+            complex).
+        selection: Field filters or a boolean atom mask.
+
+    Returns:
+        An Amber residue mask string beginning with ``":"``.
+
+    Raises:
+        ValueError: If the selection matches no atoms, or splits a
+            residue (endpoint masks must cover whole residues).
+    """
+    arr = topology.atom_array
+    mask = _resolve_mask(topology, selection)
+    if not mask.any():
+        raise ValueError("selection matches no atoms")
+
+    residues: list[int] = []
+    for position, sl in enumerate(arr.iter_residue_slices(), start=1):
+        in_residue = mask[sl]
+        if bool(in_residue.all()):
+            residues.append(position)
+        elif bool(in_residue.any()):
+            raise ValueError(
+                f"selection splits residue at position {position}; "
+                "MM/PB(GB)SA masks must cover whole residues"
+            )
+    return ":" + _collapse_ranges(residues)
+
+
+def build_mmpbsa_input(
+    *,
+    solvent_model: str = "gb",
+    start_frame: int = 1,
+    end_frame: int,
+    interval: int = 1,
+    salt_conc: float = 0.0,
+    igb: int = 5,
+    verbose: int = 1,
+) -> str:
+    """Build the ``mmpbsa.in`` namelist text for an MM/PB(GB)SA run.
+
+    Args:
+        solvent_model: ``"gb"`` (writes a ``&gb`` namelist, MM/GBSA) or
+            ``"pb"`` (writes a ``&pb`` namelist, MM/PBSA).
+        start_frame: First trajectory frame to analyze (1-based).
+        end_frame: Last trajectory frame to analyze (inclusive).
+        interval: Stride between analyzed frames.
+        salt_conc: Salt concentration in mol/L (``saltcon`` for GB,
+            ``istrng`` for PB).
+        igb: Generalized Born model index (GB only; 5 = OBC-II, a common
+            default).
+        verbose: MMPBSA.py ``verbose`` level.
+
+    Returns:
+        The input-file text, ready to write to ``mmpbsa.in``.
+
+    Raises:
+        ValueError: On an unknown ``solvent_model`` or an invalid frame
+            range / interval.
+    """
+    model = solvent_model.lower()
+    if model not in ("gb", "pb"):
+        raise ValueError(f"solvent_model must be 'gb' or 'pb', got {solvent_model!r}")
+    if start_frame < 1:
+        raise ValueError(f"start_frame must be >= 1, got {start_frame}")
+    if end_frame < start_frame:
+        raise ValueError(f"end_frame ({end_frame}) must be >= start_frame ({start_frame})")
+    if interval < 1:
+        raise ValueError(f"interval must be >= 1, got {interval}")
+
+    title = "molforge MM/GBSA input" if model == "gb" else "molforge MM/PBSA input"
+    lines = [
+        title,
+        "&general",
+        f"   startframe={start_frame}, endframe={end_frame}, "
+        f"interval={interval}, verbose={verbose},",
+        "/",
+    ]
+    if model == "gb":
+        lines += ["&gb", f"   igb={igb}, saltcon={salt_conc:g},", "/"]
+    else:
+        lines += ["&pb", f"   istrng={salt_conc:g},", "/"]
+    return "\n".join(lines) + "\n"
