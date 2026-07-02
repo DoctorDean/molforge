@@ -279,8 +279,10 @@ def dockq(
     Args:
         model: predicted complex.
         reference: native complex (same chain IDs).
-        chain_a, chain_b: which two chains to compare. Defaults to the
-            first two common chains.
+        chain_a: first chain to compare. Defaults to the first common
+            chain.
+        chain_b: second chain to compare. Defaults to the second common
+            chain.
 
     Returns:
         Dict with keys ``"DockQ"`` (the combined 0-1 score), ``"fnat"``,

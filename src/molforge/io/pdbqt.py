@@ -76,10 +76,9 @@ def read_pdbqt(
 
     Returns:
         A :class:`Protein` with coordinates and the standard PDB
-        attributes populated, plus:
-          - ``protein.atom_array.charge`` from the PDBQT charge column
-          - ``protein.metadata["autodock_types"]`` — a list of the
-            per-atom AutoDock type strings, in atom order.
+        attributes populated, plus ``protein.atom_array.charge`` from the
+        PDBQT charge column and ``protein.metadata["autodock_types"]`` — a
+        list of the per-atom AutoDock type strings, in atom order.
 
     Notes:
         ROOT / BRANCH / TORSDOF lines (the rotatable-bond tree) are

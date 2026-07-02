@@ -79,10 +79,9 @@ def read_pqr(
 
     Returns:
         A :class:`Protein` with coordinates and the standard PDB
-        attributes populated, plus:
-          - ``protein.atom_array.charge`` from the PQR charge column
-          - ``protein.metadata["radii"]`` — a list of per-atom radii
-            (Ångström), in atom order.
+        attributes populated, plus ``protein.atom_array.charge`` from the
+        PQR charge column and ``protein.metadata["radii"]`` — a list of
+        per-atom radii (Ångström), in atom order.
     """
     text = Path(path).read_text(encoding="utf-8")
     return read_pqr_string(

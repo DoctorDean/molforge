@@ -80,8 +80,10 @@ def ca_chirality(
     """Classify a Cα centre as ``L`` / ``D`` / ``Planar``.
 
     Args:
-        n, ca, c, cb: Cartesian coordinates of the backbone N, Cα,
-            carbonyl C and Cβ.
+        n: Cartesian coordinates of the backbone N.
+        ca: Cartesian coordinates of the Cα.
+        c: Cartesian coordinates of the carbonyl C.
+        cb: Cartesian coordinates of the Cβ.
         planar_tolerance: |signed volume| (Å³) at or below which the
             centre is reported as ``Planar``.
 

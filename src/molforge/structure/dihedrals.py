@@ -332,7 +332,8 @@ def ramachandran_type(
     """Classify a single (φ, ψ) pair as Favored / Allowed / Outlier.
 
     Args:
-        phi, psi: Backbone dihedrals in degrees, each in ``[-180, 180]``.
+        phi: Backbone φ dihedral in degrees, in ``[-180, 180]``.
+        psi: Backbone ψ dihedral in degrees, in ``[-180, 180]``.
         category: Region set to use — ``General`` (default), ``Glycine``
             (symmetric map), or ``Proline`` (restricted φ).
 

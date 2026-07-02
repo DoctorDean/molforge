@@ -80,10 +80,12 @@ def rmsd(
     """RMSD between two structures, optionally with optimal superposition.
 
     Args:
-        mobile, reference: The two structures. They must contain the same
-            number of atoms in the requested subset, in matching order
-            (typically same chain, same residue range, both with their
-            CAs in residue-sequence order).
+        mobile: First structure (the one superposed onto ``reference``
+            when ``align`` is true).
+        reference: Second structure to compare against. Must contain the
+            same number of atoms as ``mobile`` in the requested subset,
+            in matching order (typically same chain and residue range,
+            both with their CAs in residue-sequence order).
         subset: Which atoms to compare:
 
             - ``"ca"`` (default): alpha-carbons only. Standard for

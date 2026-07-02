@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Fixed
+- **Docs strict build (griffe docstring warnings).** The mkdocstrings
+  API build runs griffe's Google-style parser in `--strict` mode, where
+  any warning aborts. Several docstrings grouped multiple parameters on
+  one `Args:` line (`a, b: ...`), which griffe reads as a single
+  parameter named `"a, b"` — flagged as unannotated and absent from the
+  signature. Fixed in `ramachandran_type` and `ca_chirality` (this
+  release's regression) and in the pre-existing `rmsd`, `dockq`
+  docstrings; also fixed mis-indented `Returns:` lists in the PDBQT/PQR
+  readers. Added `tests/unit/test_docstrings.py`, which parses every
+  docstring under griffe and fails on any warning (skips where griffe,
+  a docs-only dependency, isn't installed).
+
+### Added
 - **Cα chirality checks (`molforge.structure`).** Detect D-amino acids
   (flipped / mirror-built residues) from heavy-atom geometry alone.
   `classify_chirality(protein)` returns a `ChiralityResult` per eligible
