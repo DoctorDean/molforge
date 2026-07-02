@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Amber `MMPBSA.py` results parser (`molforge.wrappers.freeenergy`).**
+  `parse_mmpbsa_dat(text, solvent_model="gb")` reads a
+  `FINAL_RESULTS_MMPBSA.dat` file's final averaged block into a
+  `FreeEnergyResult`: `DELTA TOTAL` gives ΔG (Average) and uncertainty
+  (Std. Err. of Mean), and the `Differences (Complex − Receptor −
+  Ligand)` terms map to `FreeEnergyComponents` — GB uses `EGB`/`ESURF`
+  for polar/nonpolar, PB uses `EPB` and `ENPOLAR`+`EDISPER`. Reads the
+  Differences block (not the per-endpoint blocks), anchors row labels so
+  `EEL` doesn't match `1-4 EEL`, records frame count and the total's
+  std. dev. in metadata, and raises clear `ValueError`s on unknown
+  model / missing section / missing row. Entropy is not parsed yet, so
+  `delta_g` is the enthalpic total and `components.entropy` is `None`.
+  New reference page `molforge.wrappers.freeenergy`.
 - **Binding free energy foundation (`molforge.freeenergy`).** The value
   types and engine base for endpoint free-energy methods (MM/GBSA,
   MM/PBSA), designed around ranking rather than absolute affinity.

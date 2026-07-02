@@ -99,6 +99,7 @@ nav:
           - molforge.wrappers.folding: reference/wrappers/folding.md
           - molforge.wrappers.docking: reference/wrappers/docking.md
           - molforge.wrappers.md: reference/wrappers/md.md
+          - molforge.wrappers.freeenergy: reference/wrappers/freeenergy.md
           - molforge.wrappers.generative: reference/wrappers/generative.md
   - Project:
       - Releasing: RELEASING.md
