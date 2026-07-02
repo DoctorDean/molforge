@@ -92,6 +92,7 @@ nav:
       - molforge.md: reference/md.md
       - molforge.prep: reference/prep.md
       - molforge.docking: reference/docking.md
+      - molforge.freeenergy: reference/freeenergy.md
       - molforge.plugins: reference/plugins.md
       - molforge.wrappers:
           - Overview: reference/wrappers.md

@@ -54,28 +54,28 @@ each modality would solidify molforge as *the* swap-engines abstraction
 layer.
 
 - **Folding.** Chai-1 is **shipped**
-  - (post-0.4.0; Python-API wrapper for
+  - (Python-API wrapper for
     the chai_lab package; mirrors Boltz's interface for cross-engine
     uniformity). Both AF3-style models molforge supports — Boltz and
     Chai-1 — are independent reimplementations from different teams,
     making cross-checks meaningful. 
-  - **Multi-component cofolding is now
-  shipped via `ComplexSpec` + `predict_complex()` on Boltz and Chai-1**
+- **Multi-component cofolding with Boltz and Chai are **shipped**
+  - `ComplexSpec` + `predict_complex()` on Boltz and Chai-1
     — protein + ligand, protein-protein, protein-DNA/RNA, homo-oligomers
     via a unified engine-agnostic input. 
-    - Modifications, restraints,
-      per-entity MSAs, and Boltz-2 affinity prediction remain follow-ups.
-    - ESM3 and AlphaFold-3 (DeepMind
-      release) remain on the wishlist; Protenix is the next AF3
-      reimplementation to consider.
+  - Modifications, restraints,
+    per-entity MSAs, and Boltz-2 affinity prediction remain follow-ups.
+  - ESM3 and AlphaFold-3 (DeepMind
+    release) remain on the wishlist; Protenix is the next AF3
+    reimplementation to consider.
 - **Docking.** Gnina is **shipped**
-  - (post-0.4.0; CNN-rescored Vina via
+  - (CNN-rescored Vina via
     the `gnina` binary). Smina remains unwrapped — Gnina with
     `cnn_scoring="none"` is effectively smina, so a dedicated wrapper
     is low priority. AutoDock-GPU and Uni-Dock (GPU-accelerated Vina
     variants) remain on the wishlist.
 - **MD.** AMBER is **shipped**
-  - (post-0.4.0; wraps `tleap` + `sander` + optional `pmemd`); 
+  - (wraps `tleap` + `sander` + optional `pmemd`); 
     NAMD and LAMMPS for non-bio workloads remain on the wishlist.
 - **Generative.** ESM-IF1 is **shipped**
   - (post-0.4.0; pip-installable
@@ -99,7 +99,7 @@ stitch them together.
   decorators and let users compose with Prefect/Hydra/Snakemake?
   Default answer probably the latter — fight that battle only if no
   existing tool fits.
-- **Provenance tracking.** **Done.** 
+- **Provenance tracking.** **Shipped.** 
   - `molforge.core.Provenance` is
     the canonical "what produced this output" record — frozen
     dataclass with engine / version / parameters / inputs / recursive
@@ -121,7 +121,7 @@ stitch them together.
   up writing the same `multiprocessing.Pool` loop. Tie this to the
   wrappers so each engine declares whether it parallelizes across
   processes (CPU engines) or within one process (GPU engines).
-- **Caching layer (shipped post-0.4.0).** **Done** 
+- **Caching layer.** **Shipped** 
   - Content-addressed result
     cache keyed on `(engine, parameters, inputs, parent_chain)` via
     `Provenance`. Folding (ESMFold, Boltz, Chai-1) and sequence design
@@ -150,7 +150,7 @@ Where existing functionality could be deeper, not wider.
   multiple scorers, or score AlphaFold-folded structures with a
   scorer.
 - **Active-site / pocket detection.** 
-  - `fpocket` is shipped (post-0.4.0); 
+  - `fpocket` is **shipped**; 
   - P2Rank and SiteHound remain unwrapped. P2Rank in
     particular is the ML-based modern counterpart to fpocket and
     the natural next pocket detector to add when its install path
@@ -246,30 +246,6 @@ These are the long-horizon items.
   its plugin system is most of its value.
 
 ---
-
-## Working order toward `1.0`
-
-A rough sequencing:
-
-1. ~~**Finish the format I/O stubs.** SDF, MOL2, PDBQT,
-   PQR all real; DiffDock parses through `molforge.io.sdf` and Vina
-   through `molforge.io.pdbqt`.~~
-2. ~~**Automatic system preparation.** `molforge.prep` —
-   `remove_heterogens` / `fix_missing_atoms` / `add_caps` /
-   `add_hydrogens` / `prepare_for_md`.~~
-3. ~~**Trajectory I/O.** `molforge.io.read_trajectory` /
-   `iter_trajectory` / `write_trajectory` via mdtraj. XTC, TRR, DCD,
-   NetCDF, HDF5, multi-MODEL PDB. Eager + streaming.~~
-5. **Caching layer + provenance tracking.** Compounds everywhere
-   downstream.
-6. ~~**Cookbook + engine comparison tables.** Turn the existing surface
-   into something people can find.~~
-7. **Horizontal engine expansion.** Gnina, ESM-IF1, AMBER, pocket
-   detection, MMPBSA. One session per engine.
-
-Post-1.0, the identity items (cross-engine ensembles, design loop,
-plugin ecosystem) become the 1.x roadmap and the long-term
-differentiation work.
 
 ## Open questions
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Binding free energy foundation (`molforge.freeenergy`).** The value
+  types and engine base for endpoint free-energy methods (MM/GBSA,
+  MM/PBSA), designed around ranking rather than absolute affinity.
+  `FreeEnergyResult` carries ΔG with a required `uncertainty`, an
+  optional `FreeEnergyComponents` breakdown (vdW, electrostatic, polar/
+  nonpolar solvation, and entropy as `None`-when-uncomputed rather than
+  a silent zero), an optional per-frame `convergence` trace, and
+  provenance/metadata. `FreeEnergyComponents.enthalpy` sums the four
+  energetic terms. `FreeEnergyRanking` orders labelled results
+  tightest-first and exposes pairwise `DeltaDeltaG` with propagated
+  uncertainty (`sqrt(σ_a²+σ_b²)`), deliberately stopping short of a
+  significance verdict. `MMGBSAEngine` is the abstract base concrete
+  tool wrappers implement (`run(trajectory, *, receptor, ligand,
+  solvent_model="gb")`), with `MMGBSAEngineNotInstalledError` for absent
+  tools; receptor/ligand are molforge selections, and PB is the
+  documented off-default. New reference page `molforge.freeenergy`.
+
 ### Fixed
 - **Docs strict build (griffe docstring warnings).** The mkdocstrings
   API build runs griffe's Google-style parser in `--strict` mode, where
