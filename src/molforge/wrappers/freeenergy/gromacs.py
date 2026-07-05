@@ -23,10 +23,14 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from molforge.wrappers.freeenergy import _common
 
 if TYPE_CHECKING:
+    from molforge.core import Protein
     from molforge.freeenergy import FreeEnergyResult
+    from molforge.wrappers.freeenergy._common import Selection
 
 # gmx_MMPBSA delta-section term labels (Δ-prefixed), per solvent model.
 _SOLVENT_MODELS = {
@@ -113,4 +117,38 @@ def parse_gmx_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyR
     )
 
 
-__all__ = ["parse_gmx_mmpbsa_dat"]
+def selection_to_ndx_group(
+    topology: Protein, selection: Selection, name: str, *, per_line: int = 15
+) -> str:
+    """Render a molforge selection as a GROMACS ``.ndx`` index group.
+
+    gmx_MMPBSA identifies the receptor and ligand by index-group number
+    (``-cg <receptor> <ligand>``), so a selection is resolved against the
+    topology and written as a named group of 1-based atom numbers — the
+    numbering GROMACS uses, which matches the topology's atom order (as
+    produced by the GROMACS MD wrapper).
+
+    Args:
+        topology: Structure the selection is resolved against.
+        selection: Field filters or a boolean atom mask.
+        name: Group name, written as ``[ name ]``.
+        per_line: Atom numbers per line (GROMACS wraps long groups).
+
+    Returns:
+        The ``.ndx`` group block (header line plus wrapped atom numbers).
+
+    Raises:
+        ValueError: If the selection matches no atoms.
+    """
+    mask = _common.resolve_selection_mask(topology, selection)
+    atoms = np.nonzero(mask)[0] + 1  # GROMACS index files are 1-based
+    if atoms.size == 0:
+        raise ValueError("selection matches no atoms")
+
+    lines = [f"[ {name} ]"]
+    for i in range(0, atoms.size, per_line):
+        lines.append(" ".join(str(int(a)) for a in atoms[i : i + per_line]))
+    return "\n".join(lines) + "\n"
+
+
+__all__ = ["parse_gmx_mmpbsa_dat", "selection_to_ndx_group"]

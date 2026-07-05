@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **gmx_MMPBSA input prep (`molforge.wrappers.freeenergy`).**
+  `selection_to_ndx_group(topology, selection, name)` renders a molforge
+  selection as a GROMACS `.ndx` index group — a `[ name ]` header plus
+  1-based atom numbers, wrapped — since gmx_MMPBSA identifies receptor
+  and ligand by index-group number (`-cg`). Reuses the shared selection
+  resolver; raises on an empty selection. (`mmpbsa.in` is already shared
+  via `build_mmpbsa_input`.)
 - **gmx_MMPBSA results parser (`molforge.wrappers.freeenergy`).**
   `parse_gmx_mmpbsa_dat(text, solvent_model="gb")` reads a `gmx_MMPBSA`
   `FINAL_RESULTS_MMPBSA.dat` into a `FreeEnergyResult`. gmx_MMPBSA is
