@@ -41,11 +41,12 @@ from molforge.cache import get_default_cache
 from molforge.core import Provenance
 from molforge.core import metadata_keys as mk
 from molforge.freeenergy import (
-    FreeEnergyComponents,
     FreeEnergyResult,
     MMGBSAEngine,
     MMGBSAEngineNotInstalledError,
 )
+from molforge.wrappers.freeenergy import _common
+from molforge.wrappers.freeenergy._common import build_mmpbsa_input
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -58,12 +59,7 @@ if TYPE_CHECKING:
 
     Selection = Mapping[str, object] | NDArray[np.bool_]
 
-# One numeric field: optional sign, digits, optional fraction/exponent.
-_NUM = r"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?"
-
-# The two top-level solvent sections, used to bound each one.
-_SECTION_HEADERS = ("GENERALIZED BORN:", "POISSON BOLTZMANN:")
-
+# Amber MMPBSA.py delta-section term labels, per solvent model.
 _SOLVENT_MODELS = {
     "gb": {
         "header": "GENERALIZED BORN:",
@@ -78,50 +74,6 @@ _SOLVENT_MODELS = {
         "method": "MM/PBSA",
     },
 }
-
-
-def _section(text: str, header: str) -> str:
-    """The slice of ``text`` from ``header`` to the next section/EOF."""
-    start = text.find(header)
-    if start == -1:
-        raise ValueError(f"section {header!r} not found in MMPBSA output")
-    rest = text[start + len(header) :]
-    cut = len(rest)
-    for other in _SECTION_HEADERS:
-        if other == header:
-            continue
-        idx = rest.find(other)
-        if idx != -1:
-            cut = min(cut, idx)
-    return rest[:cut]
-
-
-def _differences_block(section: str) -> str:
-    """The ``Differences/Delta (Complex - Receptor - Ligand)`` block."""
-    marker = re.search(r"(?im)^.*Complex - Receptor - Ligand.*$", section)
-    if marker is None:
-        raise ValueError("no 'Complex - Receptor - Ligand' block in section")
-    return section[marker.end() :]
-
-
-def _row(block: str, label: str) -> tuple[float, float, float]:
-    """Return ``(average, std_dev, std_err)`` for a labelled row.
-
-    The label is matched at the start of a line, so ``EEL`` does not
-    match ``1-4 EEL`` and ``DELTA TOTAL`` does not match ``DELTA G gas``.
-    """
-    pattern = rf"(?m)^\s*{re.escape(label)}\s+({_NUM})\s+({_NUM})\s+({_NUM})\s*$"
-    match = re.search(pattern, block)
-    if match is None:
-        raise ValueError(f"row {label!r} not found in differences block")
-    return float(match.group(1)), float(match.group(2)), float(match.group(3))
-
-
-def _optional_row(block: str, label: str) -> tuple[float, float, float] | None:
-    try:
-        return _row(block, label)
-    except ValueError:
-        return None
 
 
 def parse_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyResult:
@@ -150,37 +102,36 @@ def parse_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyResul
     if spec is None:
         raise ValueError(f"solvent_model must be 'gb' or 'pb', got {solvent_model!r}")
 
-    block = _differences_block(_section(text, str(spec["header"])))
+    block = _common.differences_block(_common.section(text, str(spec["header"])))
 
-    vdw = _row(block, "VDWAALS")[0]
-    electrostatic = _row(block, "EEL")[0]
-    polar = _row(block, str(spec["polar"]))[0]
+    vdw = _common.row_values(block, "VDWAALS")[0]
+    electrostatic = _common.row_values(block, "EEL")[0]
+    polar = _common.row_values(block, str(spec["polar"]))[0]
 
     nonpolar_rows = [
-        row for term in spec["nonpolar"] if (row := _optional_row(block, term)) is not None
+        vals
+        for term in spec["nonpolar"]
+        if (vals := _common.optional_row_values(block, term)) is not None
     ]
     if not nonpolar_rows:
         raise ValueError("no nonpolar solvation term found in differences block")
-    nonpolar = sum(row[0] for row in nonpolar_rows)
+    nonpolar = sum(vals[0] for vals in nonpolar_rows)
 
-    total_avg, total_sd, total_sem = _row(block, "DELTA TOTAL")
+    total = _common.row_values(block, "DELTA TOTAL")
 
-    metadata: dict[str, object] = {"solvent_model": model, "delta_total_std_dev": total_sd}
+    metadata: dict[str, object] = {"solvent_model": model, "delta_total_std_dev": total[1]}
     frames = re.search(r"using\s+(\d+)\s+complex frames", text)
     if frames is not None:
         metadata["n_frames"] = int(frames.group(1))
 
-    return FreeEnergyResult(
-        delta_g=total_avg,
-        uncertainty=total_sem,
+    return _common.build_free_energy_result(
+        vdw=vdw,
+        electrostatic=electrostatic,
+        polar=polar,
+        nonpolar=nonpolar,
+        delta_g=total[0],
+        uncertainty=total[-1],
         method=str(spec["method"]),
-        components=FreeEnergyComponents(
-            vdw=vdw,
-            electrostatic=electrostatic,
-            polar_solvation=polar,
-            nonpolar_solvation=nonpolar,
-            entropy=None,
-        ),
         metadata=metadata,
     )
 
@@ -196,22 +147,6 @@ __all__ = [
 # ---------------------------------------------------------------------
 # Input preparation
 # ---------------------------------------------------------------------
-
-
-def _resolve_mask(topology: Protein, selection: Selection) -> NDArray[np.bool_]:
-    """Resolve a selection to a boolean atom mask over the topology."""
-    from collections.abc import Mapping
-
-    arr = topology.atom_array
-    if isinstance(selection, Mapping):
-        mask = arr.where(**selection)
-    else:
-        mask = np.asarray(selection, dtype=bool)
-        if mask.shape != (len(arr),):
-            raise ValueError(
-                f"boolean selection has shape {mask.shape}, expected ({len(arr)},)"
-            )
-    return np.asarray(mask, dtype=bool)
 
 
 def _collapse_ranges(numbers: Sequence[int]) -> str:
@@ -252,7 +187,7 @@ def selection_to_amber_mask(topology: Protein, selection: Selection) -> str:
             residue (endpoint masks must cover whole residues).
     """
     arr = topology.atom_array
-    mask = _resolve_mask(topology, selection)
+    mask = _common.resolve_selection_mask(topology, selection)
     if not mask.any():
         raise ValueError("selection matches no atoms")
 
@@ -267,62 +202,6 @@ def selection_to_amber_mask(topology: Protein, selection: Selection) -> str:
                 "MM/PB(GB)SA masks must cover whole residues"
             )
     return ":" + _collapse_ranges(residues)
-
-
-def build_mmpbsa_input(
-    *,
-    solvent_model: str = "gb",
-    start_frame: int = 1,
-    end_frame: int,
-    interval: int = 1,
-    salt_conc: float = 0.0,
-    igb: int = 5,
-    verbose: int = 1,
-) -> str:
-    """Build the ``mmpbsa.in`` namelist text for an MM/PB(GB)SA run.
-
-    Args:
-        solvent_model: ``"gb"`` (writes a ``&gb`` namelist, MM/GBSA) or
-            ``"pb"`` (writes a ``&pb`` namelist, MM/PBSA).
-        start_frame: First trajectory frame to analyze (1-based).
-        end_frame: Last trajectory frame to analyze (inclusive).
-        interval: Stride between analyzed frames.
-        salt_conc: Salt concentration in mol/L (``saltcon`` for GB,
-            ``istrng`` for PB).
-        igb: Generalized Born model index (GB only; 5 = OBC-II, a common
-            default).
-        verbose: MMPBSA.py ``verbose`` level.
-
-    Returns:
-        The input-file text, ready to write to ``mmpbsa.in``.
-
-    Raises:
-        ValueError: On an unknown ``solvent_model`` or an invalid frame
-            range / interval.
-    """
-    model = solvent_model.lower()
-    if model not in ("gb", "pb"):
-        raise ValueError(f"solvent_model must be 'gb' or 'pb', got {solvent_model!r}")
-    if start_frame < 1:
-        raise ValueError(f"start_frame must be >= 1, got {start_frame}")
-    if end_frame < start_frame:
-        raise ValueError(f"end_frame ({end_frame}) must be >= start_frame ({start_frame})")
-    if interval < 1:
-        raise ValueError(f"interval must be >= 1, got {interval}")
-
-    title = "molforge MM/GBSA input" if model == "gb" else "molforge MM/PBSA input"
-    lines = [
-        title,
-        "&general",
-        f"   startframe={start_frame}, endframe={end_frame}, "
-        f"interval={interval}, verbose={verbose},",
-        "/",
-    ]
-    if model == "gb":
-        lines += ["&gb", f"   igb={igb}, saltcon={salt_conc:g},", "/"]
-    else:
-        lines += ["&pb", f"   istrng={salt_conc:g},", "/"]
-    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------
