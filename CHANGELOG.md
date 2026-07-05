@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **FEP/TI ingest via alchemlyb (`molforge.wrappers.freeenergy`).**
+  `from_alchemlyb(estimator)` and `from_delta_f(delta_f, d_delta_f)`
+  ingest the output of an alchemlyb estimator (MBAR/BAR/TI) into the same
+  `FreeEnergyResult` the endpoint engines produce, so alchemical and
+  MM/PB(GB)SA estimates rank through one `FreeEnergyRanking`. Reads the
+  full first-state -> last-state transformation (the `[0, -1]` corner of
+  `delta_f_`) and its error, converting kT/kJ->kcal/mol (kB from the
+  CODATA gas constant, matching alchemlyb's `to_kcalmol`); temperature
+  and unit come from the DataFrame's `.attrs` unless passed explicitly.
+  `components` is `None` (an alchemical ΔG has no MM/GBSA-style
+  breakdown); `method` is the estimator name. Duck-typed via
+  `numpy.asarray` + `.attrs`, so molforge takes on no pandas/alchemlyb
+  dependency.
 - **GROMACS path in the "Rank binders with MM/GBSA" recipe.** The
   ranking recipe now shows `GromacsMMGBSA` as a drop-in for the Amber
   engine (identical `run` call and downstream ranking) and documents the
