@@ -14,9 +14,10 @@ pairwise ΔΔG with propagated error so ties don't masquerade as wins.
 ## Requirements
 
 ```bash
-pip install "molforge[md]"        # for the MD step (OpenMM/AMBER)
-# plus AmberTools on PATH: MMPBSA.py and ante-MMPBSA.py
-#   conda install -c conda-forge ambertools
+pip install "molforge[md]"        # for the MD step (OpenMM/AMBER/GROMACS)
+# plus the endpoint tool on PATH, matching your MD backend:
+#   AmberTools (MMPBSA.py + ante-MMPBSA.py):  conda install -c conda-forge ambertools
+#   or gmx_MMPBSA (for GROMACS trajectories):  conda install -c conda-forge gmx_mmpbsa
 ```
 
 ## The recipe
@@ -49,6 +50,12 @@ ranking = FreeEnergyRanking(results)
 you'd pass to `.select()` — resolved against the complex topology, not
 chain IDs (which drift across files). Here the target is the protein and
 the analog is the one non-polymer entity.
+
+The engine is the only thing that changes between MD backends:
+`GromacsMMGBSA` (driving `gmx_MMPBSA`) takes the same `run(traj, *,
+receptor, ligand, solvent_model)` call and returns the same
+`FreeEnergyResult`, so a GROMACS series ranks with identical downstream
+code — only the constructor and the trajectory source differ.
 
 ## Reading the ranking
 
@@ -141,6 +148,35 @@ result = AmberMMGBSA().run(
     trajectory_file="prod.nc",
 )
 ```
+
+### From GROMACS
+
+`GromacsMMGBSA` is the same story with GROMACS inputs: it needs a
+structure (`.tpr`) and trajectory (`.xtc`), and finds them automatically
+in a trajectory produced by the GROMACS MD wrapper (whose run directory
+holds `md.tpr`, `md.xtc`, and `topol.top`):
+
+```python
+from molforge.wrappers.md import GROMACS
+from molforge.wrappers.freeenergy import GromacsMMGBSA
+
+md = GROMACS(water_model="tip3p")
+sim = md.prepare(complex_ready, force_field="amber99sb-ildn")
+sim = md.minimize(sim)
+traj = md.run(sim, n_steps=250_000, save_every=1_000)
+
+result = GromacsMMGBSA().run(
+    traj,
+    receptor={"entity_type": "protein"},
+    ligand={"entity_type": "ligand"},
+)
+```
+
+The selections are resolved to GROMACS index groups internally, so you
+never write an `.ndx` by hand. As with Amber, point at files explicitly
+(`structure=...`, `trajectory_file=...`, optional `topology=...`) when
+the trajectory came from elsewhere. Ligand parameterization is again part
+of building `complex_ready`.
 
 ## GB or PB
 

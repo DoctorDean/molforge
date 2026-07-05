@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **GROMACS path in the "Rank binders with MM/GBSA" recipe.** The
+  ranking recipe now shows `GromacsMMGBSA` as a drop-in for the Amber
+  engine (identical `run` call and downstream ranking) and documents the
+  GROMACS trajectory source (`.tpr`/`.xtc` from the GROMACS MD wrapper,
+  or explicit `structure=`/`trajectory_file=`), plus the `gmx_MMPBSA`
+  install line. Docs only.
 - **`GromacsMMGBSA` engine (`molforge.wrappers.freeenergy`).** The second
   concrete `MMGBSAEngine`, driving `gmx_MMPBSA` — the GROMACS sibling of
   `AmberMMGBSA`, sharing the value types, cache, and ranking. `run()`
