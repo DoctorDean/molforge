@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **gmx_MMPBSA results parser (`molforge.wrappers.freeenergy`).**
+  `parse_gmx_mmpbsa_dat(text, solvent_model="gb")` reads a `gmx_MMPBSA`
+  `FINAL_RESULTS_MMPBSA.dat` into a `FreeEnergyResult`. gmx_MMPBSA is
+  based on MMPBSA.py and shares the file structure, so this reuses the
+  shared `_common` helpers; it handles the two output differences — the
+  delta rows are Δ-prefixed (`ΔVDWAALS`, `ΔEEL`, `ΔEGB`/`ΔEPB`,
+  `ΔESURF`/`ΔENPOLAR`+`ΔEDISPER`, `ΔTOTAL`) and have five numeric columns
+  (`Average SD(Prop.) SD SEM(Prop.) SEM`), with ΔG the first and the SEM
+  the last. Label anchoring keeps `ΔVDWAALS` from matching `Δ1-4 VDW`.
+  Entropy isn't parsed, so `delta_g` is the enthalpic total.
 - **"Rank binders with MM/GBSA" cookbook recipe.** A worked
   ranking-first workflow: run MM/GBSA per complex with `AmberMMGBSA`,
   collect into a `FreeEnergyRanking`, and compare analogs with pairwise
