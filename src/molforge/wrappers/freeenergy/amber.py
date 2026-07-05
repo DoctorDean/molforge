@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from molforge.cache import get_default_cache
 from molforge.core import Provenance
 from molforge.core import metadata_keys as mk
 from molforge.freeenergy import (
@@ -388,6 +389,10 @@ class AmberMMGBSA(MMGBSAEngine):
     ) -> FreeEnergyResult:
         """Estimate ΔG_bind from ``trajectory`` with MM/GBSA or MM/PBSA.
 
+        Results are cached on the run's :class:`~molforge.core.Provenance`;
+        an identical repeat returns the cached result without invoking the
+        tools.
+
         Args:
             trajectory: The ensemble to average over; its topology
                 defines the complex and its metadata may locate the
@@ -439,6 +444,13 @@ class AmberMMGBSA(MMGBSAEngine):
             parent=_as_provenance(trajectory.metadata.get(mk.PROVENANCE)),
         )
 
+        # An identical run is keyed by this Provenance; return it without
+        # touching the tools if we've computed it before.
+        cache = get_default_cache()
+        cached: FreeEnergyResult | None = cache.get(provenance, "free_energy_result")
+        if cached is not None:
+            return cached
+
         self._require_tools()
 
         with tempfile.TemporaryDirectory() as td:
@@ -467,6 +479,7 @@ class AmberMMGBSA(MMGBSAEngine):
                 mk.PROVENANCE: provenance,
             }
         )
+        cache.put(provenance, result, "free_energy_result")
         return result
 
     # -- input resolution ---------------------------------------------

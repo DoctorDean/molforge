@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from molforge.cache import CACHE_DIR_ENV, _reset_default_cache_for_testing
 from molforge.core import AtomArray, Protein, Provenance
 from molforge.core import metadata_keys as mk
 from molforge.md import Trajectory
@@ -23,6 +24,14 @@ from molforge.wrappers.freeenergy import AmberMMGBSA
 FIXTURE = (
     Path(__file__).resolve().parents[2] / "fixtures" / "freeenergy" / "FINAL_RESULTS_MMPBSA.dat"
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the default cache at a per-test dir so run() never touches
+    the real one and tests don't cross-contaminate."""
+    monkeypatch.setenv(CACHE_DIR_ENV, str(tmp_path / "cache"))
+    _reset_default_cache_for_testing()
 
 
 def _topology() -> Protein:
@@ -188,3 +197,48 @@ class TestPipeline:
         assert result.provenance.parameters["receptor_mask"] == ":1-3"
         assert result.provenance.parent is not None
         assert result.provenance.parent.engine == "AMBER.run"
+
+
+class TestCaching:
+    def test_second_run_hits_cache_without_tools(self, tmp_path: Path) -> None:
+        # First run populates the cache (tools stubbed). Second run uses a
+        # fresh engine with NO stub — real _require_tools would raise
+        # NotInstalled — so returning a result proves the cache short-
+        # circuits before the tools.
+        traj = _trajectory(_inputs(tmp_path))
+
+        warm = AmberMMGBSA()
+        _install_stub(warm, FIXTURE.read_text())
+        first = warm.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+
+        cold = AmberMMGBSA()  # tools absent in sandbox, no stub
+        second = cold.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+
+        assert second.delta_g == pytest.approx(first.delta_g)
+        assert second.method == first.method
+        assert second.metadata["receptor_mask"] == ":1-3"
+
+    def test_cache_hit_skips_subprocess(self, tmp_path: Path) -> None:
+        traj = _trajectory(_inputs(tmp_path))
+        engine = AmberMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+        calls_after_first = len(record["calls"])
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)  # identical -> hit
+
+        assert calls_after_first > 0
+        assert len(record["calls"]) == calls_after_first  # no new tool calls
+
+    def test_different_params_miss(self, tmp_path: Path) -> None:
+        # GB then PB over the same trajectory are distinct runs -> both
+        # invoke the tools (two sets of subprocess calls, not one).
+        traj = _trajectory(_inputs(tmp_path))
+        engine = AmberMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND, solvent_model="gb")
+        after_gb = len(record["calls"])
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND, solvent_model="pb")
+
+        assert len(record["calls"]) > after_gb  # PB was not served from GB's entry

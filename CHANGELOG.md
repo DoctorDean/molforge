@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`AmberMMGBSA` result caching.** `run()` now short-circuits on the
+  cache: it builds the run's `Provenance`, checks the
+  `free_energy_result` cache, and returns a hit without invoking (or even
+  requiring) the tools. On a miss it runs as before and stores the
+  result. Keyed on the provenance (masks, parameters, input paths,
+  parent) — which excludes the timestamp — so an identical repeat hits,
+  while a different solvent model or selection misses. Completes the
+  MM/GBSA backend to parity with the docking engines.
 - **`free_energy_result` cache serializer (`molforge.cache`).** Registers
   a serializer/deserializer pair so `FreeEnergyResult`s round-trip
   through the on-disk cache, mirroring the `docking_result` serializer.
