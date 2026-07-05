@@ -61,6 +61,7 @@ nav:
       - Inspect provenance: cookbook/inspect-provenance.md
       - Validate structures: cookbook/validating-structures.md
       - Caching results: cookbook/caching-results.md
+      - Rank binders (MM/GBSA): cookbook/ranking-binders.md
       - "Choosing: folding engines": cookbook/choosing-folding.md
       - "Choosing: docking engines": cookbook/choosing-docking.md
       - "Choosing: generative engines": cookbook/choosing-generative.md

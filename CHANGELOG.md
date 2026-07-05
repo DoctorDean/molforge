@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"Rank binders with MM/GBSA" cookbook recipe.** A worked
+  ranking-first workflow: run MM/GBSA per complex with `AmberMMGBSA`,
+  collect into a `FreeEnergyRanking`, and compare analogs with pairwise
+  `delta_delta_g` (ΔΔG ± propagated error) rather than a bare order.
+  Covers reading the components breakdown, where the trajectories come
+  from (the AMBER MD wrapper, or explicit `prmtop`/`trajectory_file`),
+  GB vs PB, caching, and an honest "what MM/GBSA is and isn't for"
+  (ranking yes, absolute affinity no; reach for FEP when you need
+  rigor). Linked in the cookbook index and nav.
 - **`AmberMMGBSA` result caching.** `run()` now short-circuits on the
   cache: it builds the run's `Provenance`, checks the
   `free_energy_result` cache, and returns a hit without invoking (or even
