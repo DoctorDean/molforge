@@ -77,6 +77,7 @@ from molforge.core.provenance import Provenance
 if TYPE_CHECKING:
     from molforge.core import Protein
     from molforge.docking import DockingResult, Pose
+    from molforge.freeenergy import FreeEnergyResult
     from molforge.generative import DesignedSequence
 
 
@@ -730,6 +731,90 @@ def _deserialize_docking_result(entry: Path) -> DockingResult:
 
 
 # ---------------------------------------------------------------------
+# Free-energy serializer
+# ---------------------------------------------------------------------
+
+
+def _serialize_free_energy_result(result: FreeEnergyResult, entry: Path) -> None:
+    """Write a FreeEnergyResult as JSON + npz.
+
+    ``payload.json`` holds the scalars (delta_g, uncertainty, method),
+    the component breakdown (or ``null``), the top-level Provenance as a
+    dict (it keys the cache, so it must come back real), and the
+    JSON-safe metadata. ``arrays.npz`` holds the optional convergence
+    trace plus any numpy arrays from metadata, namespaced by slot.
+    """
+    components = None
+    if result.components is not None:
+        c = result.components
+        components = {
+            "vdw": float(c.vdw),
+            "electrostatic": float(c.electrostatic),
+            "polar_solvation": float(c.polar_solvation),
+            "nonpolar_solvation": float(c.nonpolar_solvation),
+            "entropy": None if c.entropy is None else float(c.entropy),
+        }
+
+    metadata_safe, metadata_arrays = _split_arrays(result.metadata)
+
+    payload = {
+        "delta_g": float(result.delta_g),
+        "uncertainty": float(result.uncertainty),
+        "method": result.method,
+        "components": components,
+        "provenance": None if result.provenance is None else result.provenance.to_dict(),
+        "metadata": metadata_safe,
+    }
+    (entry / "payload.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    arrays: dict[str, Any] = {f"meta__{k}": v for k, v in metadata_arrays.items()}
+    if result.convergence is not None:
+        arrays["convergence"] = np.asarray(result.convergence)
+    if arrays:
+        np.savez(entry / "arrays.npz", **arrays)
+
+
+def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
+    """Inverse of :func:`_serialize_free_energy_result`."""
+    from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
+
+    payload = json.loads((entry / "payload.json").read_text(encoding="utf-8"))
+
+    convergence = None
+    meta_arrays: dict[str, Any] = {}
+    arrays_path = entry / "arrays.npz"
+    if arrays_path.is_file():
+        with np.load(arrays_path, allow_pickle=False) as npz:
+            for key in npz.files:
+                if key == "convergence":
+                    convergence = npz[key]
+                else:
+                    _, _, real_key = key.partition("__")
+                    meta_arrays[real_key] = npz[key]
+
+    components = None
+    if payload["components"] is not None:
+        components = FreeEnergyComponents(**payload["components"])
+
+    provenance = None
+    if payload["provenance"] is not None:
+        provenance = Provenance.from_dict(payload["provenance"])
+
+    metadata = _restore_metadata(payload["metadata"])
+    metadata.update(meta_arrays)
+
+    return FreeEnergyResult(
+        delta_g=payload["delta_g"],
+        uncertainty=payload["uncertainty"],
+        method=payload["method"],
+        components=components,
+        convergence=convergence,
+        provenance=provenance,
+        metadata=metadata,
+    )
+
+
+# ---------------------------------------------------------------------
 # Register built-ins
 # ---------------------------------------------------------------------
 
@@ -743,4 +828,9 @@ register_serializer(
     "docking_result",
     _serialize_docking_result,
     _deserialize_docking_result,
+)
+register_serializer(
+    "free_energy_result",
+    _serialize_free_energy_result,
+    _deserialize_free_energy_result,
 )

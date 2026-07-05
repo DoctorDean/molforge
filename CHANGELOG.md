@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`free_energy_result` cache serializer (`molforge.cache`).** Registers
+  a serializer/deserializer pair so `FreeEnergyResult`s round-trip
+  through the on-disk cache, mirroring the `docking_result` serializer.
+  `payload.json` holds the scalars (ΔG, uncertainty, method), the
+  component breakdown (or null, with entropy preserved as `None` vs a
+  value), and the top-level `Provenance` as a dict; `arrays.npz` holds
+  the optional convergence trace and any numpy arrays from metadata.
+  Metadata `Provenance` values and arrays round-trip via the existing
+  `_split_arrays`/`_restore_metadata` helpers. Not yet wired into the
+  engine — that's the next commit.
 - **`AmberMMGBSA` engine (`molforge.wrappers.freeenergy`).** The first
   concrete `MMGBSAEngine`, orchestrating Amber's tools:
   `run(trajectory, *, receptor, ligand, solvent_model="gb")` resolves

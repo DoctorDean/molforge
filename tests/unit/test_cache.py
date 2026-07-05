@@ -47,6 +47,7 @@ from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
 from molforge.docking import DockingResult, Pose
 from molforge.folding import ComplexSpec
+from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
 from molforge.generative import DesignedSequence
 
 # ---------------------------------------------------------------------
@@ -725,3 +726,117 @@ class TestSourceInspection:
 
         assert "protein" in _SERIALIZERS
         assert "designed_sequences" in _SERIALIZERS
+
+
+class TestFreeEnergyResultRoundTrip:
+    def test_basic_result(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        result = FreeEnergyResult(delta_g=-21.0, uncertainty=0.7, method="MM/GBSA")
+
+        assert cache.get(prov, "free_energy_result") is None  # miss
+        cache.put(prov, result, "free_energy_result")
+        restored = cache.get(prov, "free_energy_result")
+
+        assert restored is not None
+        assert restored.delta_g == pytest.approx(-21.0)
+        assert restored.uncertainty == pytest.approx(0.7)
+        assert restored.method == "MM/GBSA"
+
+    def test_components_entropy_none_preserved(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        result = FreeEnergyResult(
+            delta_g=-21.0,
+            uncertainty=0.7,
+            method="MM/GBSA",
+            components=FreeEnergyComponents(-45.0, -30.0, 60.0, -6.0, entropy=None),
+        )
+        cache.put(prov, result, "free_energy_result")
+        c = cache.get(prov, "free_energy_result").components
+
+        assert c is not None
+        assert c.vdw == pytest.approx(-45.0)
+        assert c.entropy is None  # unknown, not zero
+        assert c.enthalpy == pytest.approx(-21.0)
+
+    def test_entropy_value_preserved(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        result = FreeEnergyResult(
+            delta_g=-9.0,
+            uncertainty=0.5,
+            method="MM/GBSA",
+            components=FreeEnergyComponents(-1.0, -1.0, -1.0, -1.0, entropy=12.5),
+        )
+        cache.put(prov, result, "free_energy_result")
+        assert cache.get(prov, "free_energy_result").components.entropy == pytest.approx(12.5)
+
+    def test_convergence_array(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        trace = np.array([-5.0, -15.0, -21.0])
+        result = FreeEnergyResult(
+            delta_g=-21.0, uncertainty=0.7, method="MM/GBSA", convergence=trace
+        )
+        cache.put(prov, result, "free_energy_result")
+        restored = cache.get(prov, "free_energy_result")
+
+        assert restored.convergence is not None
+        np.testing.assert_allclose(restored.convergence, trace)
+
+    def test_provenance_with_parent(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        parent = _make_provenance(engine="AMBER.run")
+        prov = _make_provenance(engine="AmberMMGBSA.run", parent=parent)
+        result = FreeEnergyResult(
+            delta_g=-21.0, uncertainty=0.7, method="MM/GBSA", provenance=prov
+        )
+        cache.put(prov, result, "free_energy_result")
+        restored = cache.get(prov, "free_energy_result")
+
+        assert restored.provenance is not None
+        assert restored.provenance.engine == "AmberMMGBSA.run"
+        assert restored.provenance.parent is not None
+        assert restored.provenance.parent.engine == "AMBER.run"
+
+    def test_metadata_with_provenance_and_arrays(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        result = FreeEnergyResult(
+            delta_g=-21.0,
+            uncertainty=0.7,
+            method="MM/GBSA",
+            metadata={
+                "receptor_mask": ":1-3",
+                "ligand_mask": ":4",
+                mk.PROVENANCE: prov,
+                "per_frame": np.arange(3),
+            },
+        )
+        cache.put(prov, result, "free_energy_result")
+        meta = cache.get(prov, "free_energy_result").metadata
+
+        assert meta["receptor_mask"] == ":1-3"
+        assert meta["ligand_mask"] == ":4"
+        assert isinstance(meta[mk.PROVENANCE], Provenance)  # rebuilt, not a dict
+        np.testing.assert_array_equal(meta["per_frame"], np.arange(3))
+
+    def test_minimal_result_no_arrays_file(self, tmp_path: Path) -> None:
+        # No components, convergence, or array metadata -> only payload.json.
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        cache.put(
+            prov,
+            FreeEnergyResult(delta_g=-9.0, uncertainty=0.0, method="MM/PBSA"),
+            "free_energy_result",
+        )
+        entry = cache.path_for(prov)
+        assert (entry / "payload.json").is_file()
+        assert not (entry / "arrays.npz").is_file()
+        assert cache.get(prov, "free_energy_result").components is None
+
+    def test_registered(self) -> None:
+        from molforge.cache import _SERIALIZERS
+
+        assert "free_energy_result" in _SERIALIZERS
