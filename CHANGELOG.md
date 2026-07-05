@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`GromacsMMGBSA` engine (`molforge.wrappers.freeenergy`).** The second
+  concrete `MMGBSAEngine`, driving `gmx_MMPBSA` — the GROMACS sibling of
+  `AmberMMGBSA`, sharing the value types, cache, and ranking. `run()`
+  resolves the receptor/ligand selections to `.ndx` index groups
+  (receptor group 0, ligand group 1), locates the GROMACS structure
+  (`.tpr`) and trajectory (`.xtc`) — explicit args or from a trajectory
+  produced by `molforge.wrappers.md.GROMACS` — invokes
+  `gmx_MMPBSA -cs/-ci/-cg/-ct` (with `-cp topol.top` when available), and
+  parses with `parse_gmx_mmpbsa_dat`. Like the Amber engine it
+  orchestrates rather than parameterizes (missing inputs → clear
+  `ValueError`; absent tool → `MMGBSAEngineNotInstalledError`), funnels
+  every call through one mockable `_run_subprocess`, and caches on the
+  run's provenance (index groups keyed by a compact atom-count + hash
+  signature). Also lifts the shared trajectory-metadata input resolver
+  and `as_provenance` into `_common`.
 - **gmx_MMPBSA input prep (`molforge.wrappers.freeenergy`).**
   `selection_to_ndx_group(topology, selection, name)` renders a molforge
   selection as a GROMACS `.ndx` index group — a `[ name ]` header plus

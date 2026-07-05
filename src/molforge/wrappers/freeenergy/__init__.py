@@ -15,12 +15,14 @@ from molforge.wrappers.freeenergy.amber import (
     selection_to_amber_mask,
 )
 from molforge.wrappers.freeenergy.gromacs import (
+    GromacsMMGBSA,
     parse_gmx_mmpbsa_dat,
     selection_to_ndx_group,
 )
 
 __all__ = [
     "AmberMMGBSA",
+    "GromacsMMGBSA",
     "build_mmpbsa_input",
     "parse_gmx_mmpbsa_dat",
     "parse_mmpbsa_dat",

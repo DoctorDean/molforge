@@ -13,8 +13,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from molforge.core import AtomArray, Protein
-from molforge.wrappers.freeenergy import parse_gmx_mmpbsa_dat, selection_to_ndx_group
+from molforge.cache import CACHE_DIR_ENV, _reset_default_cache_for_testing
+from molforge.core import AtomArray, Protein, Provenance
+from molforge.core import metadata_keys as mk
+from molforge.freeenergy import MMGBSAEngineNotInstalledError
+from molforge.md import Trajectory
+from molforge.wrappers.freeenergy import (
+    GromacsMMGBSA,
+    parse_gmx_mmpbsa_dat,
+    selection_to_ndx_group,
+)
 
 FIXTURE = (
     Path(__file__).resolve().parents[2]
@@ -145,3 +153,180 @@ class TestNdxGroup:
     def test_empty_selection_raises(self) -> None:
         with pytest.raises(ValueError, match="matches no atoms"):
             selection_to_ndx_group(_complex(), {"residue_name": "ZZZ"}, "x")
+
+
+# ---------------------------------------------------------------------
+# Engine
+# ---------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the default cache at a per-test dir so run() never touches
+    the real one and tests don't cross-contaminate."""
+    monkeypatch.setenv(CACHE_DIR_ENV, str(tmp_path / "cache"))
+    _reset_default_cache_for_testing()
+
+
+def _trajectory(metadata: dict | None = None, n_frames: int = 5) -> Trajectory:
+    top = _complex()
+    coords = np.zeros((n_frames, top.n_atoms, 3), dtype=np.float32)
+    return Trajectory(topology=top, coordinates=coords, metadata=metadata or {})
+
+
+def _inputs(tmp_path: Path, *, with_top: bool = True) -> dict:
+    (tmp_path / "md.tpr").write_text("tpr")
+    (tmp_path / "md.xtc").write_text("xtc")
+    meta = {"structure": str(tmp_path / "md.tpr"), "trajectory_file": str(tmp_path / "md.xtc")}
+    if with_top:
+        (tmp_path / "topol.top").write_text("top")
+        meta["topology"] = str(tmp_path / "topol.top")
+    return meta
+
+
+RECEPTOR = {"entity_type": "protein"}
+LIGAND = {"entity_type": "ligand"}
+
+
+def _install_stub(engine: GromacsMMGBSA, results_text: str) -> dict:
+    record: dict = {"calls": [], "ndx": None, "mmpbsa_in": None}
+
+    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+        record["calls"].append((step, list(cmd)))
+        cwd = Path(cwd)
+        record["ndx"] = (cwd / "index.ndx").read_text()
+        record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
+        (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text)
+
+    engine._require_tool = lambda: None  # type: ignore[method-assign]
+    engine._run_subprocess = fake_run  # type: ignore[assignment]
+    return record
+
+
+class TestGromacsResolveInputs:
+    def test_from_run_dir_metadata(self, tmp_path: Path) -> None:
+        (tmp_path / "md.tpr").write_text("s")
+        (tmp_path / "md.xtc").write_text("t")
+        (tmp_path / "topol.top").write_text("p")
+        traj = _trajectory({"run_dir": str(tmp_path)})
+        s, t, top = GromacsMMGBSA()._resolve_inputs(traj, None, None, None)
+        assert s.name == "md.tpr" and t.name == "md.xtc" and top.name == "topol.top"
+
+    def test_explicit_paths(self, tmp_path: Path) -> None:
+        meta = _inputs(tmp_path)
+        s, t, top = GromacsMMGBSA()._resolve_inputs(_trajectory(), meta["structure"], meta["trajectory_file"], meta["topology"])
+        assert (s.name, t.name, top.name) == ("md.tpr", "md.xtc", "topol.top")
+
+    def test_topology_optional(self, tmp_path: Path) -> None:
+        meta = _inputs(tmp_path, with_top=False)
+        s, t, top = GromacsMMGBSA()._resolve_inputs(_trajectory(meta), None, None, None)
+        assert top is None  # no topol.top -> -cp omitted
+
+    def test_missing_structure_raises(self) -> None:
+        with pytest.raises(ValueError, match="no GROMACS structure"):
+            GromacsMMGBSA()._resolve_inputs(_trajectory(), None, "some.xtc", None)
+
+    def test_nonexistent_file_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            GromacsMMGBSA()._resolve_inputs(
+                _trajectory(), tmp_path / "missing.tpr", tmp_path / "missing.xtc", None
+            )
+
+
+class TestGromacsNotInstalled:
+    def test_run_without_tool_raises(self, tmp_path: Path) -> None:
+        traj = _trajectory(_inputs(tmp_path))
+        with pytest.raises(MMGBSAEngineNotInstalledError, match="gmx_MMPBSA|PATH"):
+            GromacsMMGBSA().run(traj, receptor=RECEPTOR, ligand=LIGAND)
+
+    def test_empty_selection_raises(self, tmp_path: Path) -> None:
+        traj = _trajectory(_inputs(tmp_path))
+        with pytest.raises(ValueError, match="ligand selection matches no atoms"):
+            GromacsMMGBSA().run(traj, receptor=RECEPTOR, ligand={"residue_name": "ZZZ"})
+
+
+class TestGromacsPipeline:
+    def test_gb_end_to_end(self, tmp_path: Path) -> None:
+        engine = GromacsMMGBSA()
+        _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
+        assert result.method == "MM/GBSA"
+        assert result.delta_g == pytest.approx(-21.0)
+        assert result.uncertainty == pytest.approx(0.7)
+        assert result.metadata["receptor_natoms"] == 9
+        assert result.metadata["ligand_natoms"] == 2
+
+    def test_pb_selected(self, tmp_path: Path) -> None:
+        engine = GromacsMMGBSA()
+        _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(
+            _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND, solvent_model="pb"
+        )
+        assert result.method == "MM/PBSA"
+        assert result.delta_g == pytest.approx(-24.0)
+
+    def test_command_and_written_inputs(self, tmp_path: Path) -> None:
+        engine = GromacsMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+        engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
+
+        (step, cmd) = record["calls"][0]
+        assert step == "gmx_MMPBSA"
+        for flag in ("-cs", "-ci", "-cg", "-ct", "-i", "-cp", "-nogui"):
+            assert flag in cmd
+        cg = cmd.index("-cg")
+        assert cmd[cg + 1 : cg + 3] == ["0", "1"]  # receptor group 0, ligand group 1
+        # index.ndx has both groups; receptor first (9 atoms), ligand (2).
+        assert record["ndx"] == "[ receptor ]\n1 2 3 4 5 6 7 8 9\n[ ligand ]\n10 11\n"
+        assert "&gb" in record["mmpbsa_in"]
+
+    def test_topology_omitted_drops_cp(self, tmp_path: Path) -> None:
+        engine = GromacsMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+        engine.run(_trajectory(_inputs(tmp_path, with_top=False)), receptor=RECEPTOR, ligand=LIGAND)
+        assert "-cp" not in record["calls"][0][1]
+
+    def test_provenance_attached_with_parent(self, tmp_path: Path) -> None:
+        parent = Provenance.from_engine(engine="GROMACS.run")
+        engine = GromacsMMGBSA()
+        _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(
+            _trajectory({**_inputs(tmp_path), mk.PROVENANCE: parent}),
+            receptor=RECEPTOR,
+            ligand=LIGAND,
+        )
+        assert result.provenance is not None
+        assert result.provenance.engine == "GromacsMMGBSA.run"
+        assert result.provenance.parent is not None
+        assert result.provenance.parent.engine == "GROMACS.run"
+
+
+class TestGromacsCaching:
+    def test_second_run_hits_cache_without_tool(self, tmp_path: Path) -> None:
+        traj = _trajectory(_inputs(tmp_path))
+        warm = GromacsMMGBSA()
+        _install_stub(warm, FIXTURE.read_text())
+        first = warm.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+
+        cold = GromacsMMGBSA()  # no stub; real _require_tool would raise
+        second = cold.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+        assert second.delta_g == pytest.approx(first.delta_g)
+
+    def test_cache_hit_skips_subprocess(self, tmp_path: Path) -> None:
+        traj = _trajectory(_inputs(tmp_path))
+        engine = GromacsMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+        after_first = len(record["calls"])
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+        assert after_first == 1
+        assert len(record["calls"]) == after_first  # no new tool call
+
+    def test_different_selection_misses(self, tmp_path: Path) -> None:
+        traj = _trajectory(_inputs(tmp_path))
+        engine = GromacsMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+        engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
+        # Swap receptor/ligand -> different index groups -> different key.
+        engine.run(traj, receptor=LIGAND, ligand=RECEPTOR)
+        assert len(record["calls"]) == 2

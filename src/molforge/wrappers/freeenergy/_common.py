@@ -17,10 +17,12 @@ error of the mean) regardless of how many columns lie between.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from molforge.core import Provenance
 from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
 
 if TYPE_CHECKING:
@@ -207,3 +209,34 @@ def build_free_energy_result(
         ),
         metadata=metadata,
     )
+
+
+# ---------------------------------------------------------------------
+# Trajectory-metadata input resolution
+# ---------------------------------------------------------------------
+
+
+def input_from_metadata(
+    metadata: Mapping[str, object], explicit_key: str, run_dir_name: str
+) -> Path | None:
+    """Locate a tool input file from trajectory metadata.
+
+    Prefers an explicit metadata key; falls back to ``<run_dir>/<name>``
+    when the trajectory records a ``run_dir`` (the MD wrappers do). Used
+    by both MM/PB(GB)SA engines to find their structure/topology and
+    trajectory files.
+    """
+    value = metadata.get(explicit_key)
+    if isinstance(value, (str, Path)):
+        return Path(value)
+    run_dir = metadata.get("run_dir")
+    if isinstance(run_dir, (str, Path)):
+        candidate = Path(run_dir) / run_dir_name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def as_provenance(value: object) -> Provenance | None:
+    """Return ``value`` if it is a :class:`Provenance`, else ``None``."""
+    return value if isinstance(value, Provenance) else None

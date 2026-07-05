@@ -320,7 +320,7 @@ class AmberMMGBSA(MMGBSAEngine):
                 "strip_mask": self.strip_mask,
             },
             inputs={"prmtop": str(prmtop_path), "trajectory_file": str(traj_path)},
-            parent=_as_provenance(trajectory.metadata.get(mk.PROVENANCE)),
+            parent=_common.as_provenance(trajectory.metadata.get(mk.PROVENANCE)),
         )
 
         # An identical run is keyed by this Provenance; return it without
@@ -369,13 +369,13 @@ class AmberMMGBSA(MMGBSAEngine):
         prmtop: str | PathLike[str] | None,
         trajectory_file: str | PathLike[str] | None,
     ) -> tuple[Path, Path]:
-        prmtop_path = Path(prmtop) if prmtop is not None else _topology_from_metadata(
+        prmtop_path = Path(prmtop) if prmtop is not None else _common.input_from_metadata(
             trajectory.metadata, "prmtop", "system.prmtop"
         )
         traj_path = (
             Path(trajectory_file)
             if trajectory_file is not None
-            else _topology_from_metadata(trajectory.metadata, "trajectory_file", "prod.nc")
+            else _common.input_from_metadata(trajectory.metadata, "trajectory_file", "prod.nc")
         )
         if prmtop_path is None:
             raise ValueError(
@@ -464,26 +464,3 @@ class AmberMMGBSA(MMGBSAEngine):
                 f"MMPBSA step `{step}` failed (exit {e.returncode}).\n"
                 f"command: {' '.join(cmd)}\nstderr:\n{stderr}"
             ) from e
-
-
-def _topology_from_metadata(
-    metadata: Mapping[str, object], explicit_key: str, run_dir_name: str
-) -> Path | None:
-    """Locate an Amber input from trajectory metadata.
-
-    Prefers an explicit metadata key; falls back to ``<run_dir>/<name>``
-    when the trajectory records a ``run_dir`` (the AMBER wrapper does).
-    """
-    value = metadata.get(explicit_key)
-    if isinstance(value, (str, Path)):
-        return Path(value)
-    run_dir = metadata.get("run_dir")
-    if isinstance(run_dir, (str, Path)):
-        candidate = Path(run_dir) / run_dir_name
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def _as_provenance(value: object) -> Provenance | None:
-    return value if isinstance(value, Provenance) else None
