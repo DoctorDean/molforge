@@ -1,0 +1,190 @@
+"""Tests for the AmberMMGBSA engine.
+
+No AmberTools in the sandbox, so the pipeline is exercised the way the
+AMBER MD wrapper tests itself: by replacing the single ``_run_subprocess``
+choke point with a stub that simulates the tools writing their outputs
+(dummy split topologies, and the results ``.dat`` copied from the
+fixture). The tool-detection and input-resolution seams are tested
+directly.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from molforge.core import AtomArray, Protein, Provenance
+from molforge.core import metadata_keys as mk
+from molforge.md import Trajectory
+from molforge.wrappers.freeenergy import AmberMMGBSA
+
+FIXTURE = (
+    Path(__file__).resolve().parents[2] / "fixtures" / "freeenergy" / "FINAL_RESULTS_MMPBSA.dat"
+)
+
+
+def _topology() -> Protein:
+    spec = [
+        (["N", "CA", "C"], "A", 1, "ALA", "protein"),
+        (["N", "CA", "C"], "A", 2, "GLY", "protein"),
+        (["N", "CA", "C"], "A", 3, "LEU", "protein"),
+        (["C1", "C2"], "B", 1, "LIG", "ligand"),
+    ]
+    rows = [(nm, ch, rid, rn, ent) for atoms, ch, rid, rn, ent in spec for nm in atoms]
+    n = len(rows)
+    arr = AtomArray(n)
+    arr.coords[:] = np.zeros((n, 3), dtype=np.float32)
+    arr.atom_name[:] = [r[0] for r in rows]
+    arr.chain_id[:] = [r[1] for r in rows]
+    arr.residue_id[:] = [r[2] for r in rows]
+    arr.residue_name[:] = [r[3] for r in rows]
+    arr.entity_type[:] = [r[4] for r in rows]
+    arr.element[:] = [r[0][0] for r in rows]
+    return Protein(arr, name="cplx")
+
+
+def _trajectory(metadata: dict | None = None, n_frames: int = 5) -> Trajectory:
+    top = _topology()
+    coords = np.zeros((n_frames, top.n_atoms, 3), dtype=np.float32)
+    return Trajectory(topology=top, coordinates=coords, metadata=metadata or {})
+
+
+RECEPTOR = {"entity_type": "protein"}
+LIGAND = {"entity_type": "ligand"}
+
+
+def _install_stub(engine: AmberMMGBSA, results_text: str) -> dict:
+    """Replace the tool seams; return a record of what happened."""
+    record: dict = {"calls": [], "mmpbsa_in": None}
+
+    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+        record["calls"].append((step, list(cmd)))
+        cwd = Path(cwd)
+        if step == "ante-MMPBSA":
+            for name in ("complex.prmtop", "receptor.prmtop", "ligand.prmtop"):
+                (cwd / name).write_text("dummy topology")
+        elif step == "MMPBSA":
+            record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
+            (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text)
+
+    engine._require_tools = lambda: None  # type: ignore[method-assign]
+    engine._run_subprocess = fake_run  # type: ignore[assignment]
+    return record
+
+
+def _inputs(tmp_path: Path) -> dict:
+    prmtop = tmp_path / "system.prmtop"
+    traj = tmp_path / "prod.nc"
+    prmtop.write_text("prmtop")
+    traj.write_text("traj")
+    return {"prmtop": str(prmtop), "trajectory_file": str(traj)}
+
+
+class TestResolveInputs:
+    def test_explicit_paths(self, tmp_path: Path) -> None:
+        prmtop = tmp_path / "c.prmtop"
+        traj = tmp_path / "t.nc"
+        prmtop.write_text("x")
+        traj.write_text("y")
+        p, t = AmberMMGBSA()._resolve_amber_inputs(_trajectory(), prmtop, traj)
+        assert (p, t) == (prmtop, traj)
+
+    def test_from_run_dir_metadata(self, tmp_path: Path) -> None:
+        (tmp_path / "system.prmtop").write_text("x")
+        (tmp_path / "prod.nc").write_text("y")
+        traj = _trajectory({"run_dir": str(tmp_path)})
+        p, t = AmberMMGBSA()._resolve_amber_inputs(traj, None, None)
+        assert p.name == "system.prmtop" and t.name == "prod.nc"
+
+    def test_from_explicit_metadata_keys(self, tmp_path: Path) -> None:
+        meta = _inputs(tmp_path)
+        p, t = AmberMMGBSA()._resolve_amber_inputs(_trajectory(meta), None, None)
+        assert p == Path(meta["prmtop"]) and t == Path(meta["trajectory_file"])
+
+    def test_missing_prmtop_raises(self) -> None:
+        with pytest.raises(ValueError, match="no Amber topology"):
+            AmberMMGBSA()._resolve_amber_inputs(_trajectory(), None, "somewhere.nc")
+
+    def test_missing_trajectory_raises(self, tmp_path: Path) -> None:
+        prmtop = tmp_path / "c.prmtop"
+        prmtop.write_text("x")
+        with pytest.raises(ValueError, match="no trajectory file"):
+            AmberMMGBSA()._resolve_amber_inputs(_trajectory(), prmtop, None)
+
+    def test_nonexistent_file_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            AmberMMGBSA()._resolve_amber_inputs(
+                _trajectory(), tmp_path / "missing.prmtop", tmp_path / "missing.nc"
+            )
+
+
+class TestNotInstalled:
+    def test_run_without_tools_raises(self, tmp_path: Path) -> None:
+        # Valid inputs, but MMPBSA.py isn't on PATH in the sandbox.
+        from molforge.freeenergy import MMGBSAEngineNotInstalledError
+
+        traj = _trajectory(_inputs(tmp_path))
+        with pytest.raises(MMGBSAEngineNotInstalledError, match="AmberTools|PATH"):
+            AmberMMGBSA().run(traj, receptor=RECEPTOR, ligand=LIGAND)
+
+
+class TestPipeline:
+    def test_gb_end_to_end(self, tmp_path: Path) -> None:
+        engine = AmberMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(
+            _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND
+        )
+        assert result.method == "MM/GBSA"
+        assert result.delta_g == pytest.approx(-21.0)
+        assert result.uncertainty == pytest.approx(0.7)
+        assert result.metadata["receptor_mask"] == ":1-3"
+        assert result.metadata["ligand_mask"] == ":4"
+
+    def test_pb_selected(self, tmp_path: Path) -> None:
+        engine = AmberMMGBSA()
+        _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(
+            _trajectory(_inputs(tmp_path)),
+            receptor=RECEPTOR,
+            ligand=LIGAND,
+            solvent_model="pb",
+        )
+        assert result.method == "MM/PBSA"
+        assert result.delta_g == pytest.approx(-24.0)
+
+    def test_commands_and_input_file(self, tmp_path: Path) -> None:
+        engine = AmberMMGBSA()
+        record = _install_stub(engine, FIXTURE.read_text())
+        engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
+
+        steps = {step: cmd for step, cmd in record["calls"]}
+        assert set(steps) == {"ante-MMPBSA", "MMPBSA"}
+        # ante-MMPBSA carries the resolved masks and strip mask.
+        ante = steps["ante-MMPBSA"]
+        assert ante[ante.index("-m") + 1] == ":1-3"
+        assert ante[ante.index("-n") + 1] == ":4"
+        assert "-s" in ante
+        # MMPBSA.py gets the three split topologies and the input file.
+        mmpbsa = steps["MMPBSA"]
+        for flag in ("-cp", "-rp", "-lp", "-y", "-i"):
+            assert flag in mmpbsa
+        # mmpbsa.in was written before MMPBSA.py ran.
+        assert "&gb" in record["mmpbsa_in"]
+
+    def test_provenance_attached_with_parent(self, tmp_path: Path) -> None:
+        parent = Provenance.from_engine(engine="AMBER.run")
+        engine = AmberMMGBSA()
+        _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(
+            _trajectory({**_inputs(tmp_path), mk.PROVENANCE: parent}),
+            receptor=RECEPTOR,
+            ligand=LIGAND,
+        )
+        assert result.provenance is not None
+        assert result.provenance.engine == "AmberMMGBSA.run"
+        assert result.provenance.parameters["receptor_mask"] == ":1-3"
+        assert result.provenance.parent is not None
+        assert result.provenance.parent.engine == "AMBER.run"

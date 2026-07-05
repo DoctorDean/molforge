@@ -29,18 +29,31 @@ parsed yet, so ``delta_g`` here is the enthalpic total and
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
+from molforge.core import Provenance
+from molforge.core import metadata_keys as mk
+from molforge.freeenergy import (
+    FreeEnergyComponents,
+    FreeEnergyResult,
+    MMGBSAEngine,
+    MMGBSAEngineNotInstalledError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from os import PathLike
 
     from numpy.typing import NDArray
 
     from molforge.core import Protein
+    from molforge.md import Trajectory
 
     Selection = Mapping[str, object] | NDArray[np.bool_]
 
@@ -171,7 +184,12 @@ def parse_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyResul
     )
 
 
-__all__ = ["build_mmpbsa_input", "parse_mmpbsa_dat", "selection_to_amber_mask"]
+__all__ = [
+    "AmberMMGBSA",
+    "build_mmpbsa_input",
+    "parse_mmpbsa_dat",
+    "selection_to_amber_mask",
+]
 
 
 # ---------------------------------------------------------------------
@@ -304,3 +322,276 @@ def build_mmpbsa_input(
     else:
         lines += ["&pb", f"   istrng={salt_conc:g},", "/"]
     return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------
+# Engine
+# ---------------------------------------------------------------------
+
+
+class AmberMMGBSA(MMGBSAEngine):
+    """Endpoint free energy via Amber's ``MMPBSA.py``.
+
+    Post-processes an MD trajectory: splits the complex topology into
+    complex/receptor/ligand with ``ante-MMPBSA.py`` (using masks derived
+    from the ``receptor`` / ``ligand`` selections), runs ``MMPBSA.py``,
+    and parses its ``FINAL_RESULTS_MMPBSA.dat``.
+
+    This engine *orchestrates* the tools; it does not parameterize a
+    system. It needs an Amber topology (``prmtop``) and a matching
+    trajectory file on disk — either passed explicitly or carried by a
+    trajectory produced by :class:`molforge.wrappers.md.AMBER` (whose
+    metadata records the run directory holding ``system.prmtop`` and
+    ``prod.nc``). Anything else raises a clear error rather than trying
+    to build a topology.
+
+    Args:
+        mmpbsa_executable: ``MMPBSA.py`` binary name or path.
+        antemmpbsa_executable: ``ante-MMPBSA.py`` binary name or path.
+        igb: Generalized Born model index passed to MM/GBSA runs.
+        strip_mask: Amber mask of atoms stripped from the complex before
+            splitting (solvent/ions), or ``None`` to strip nothing.
+        verbose: If true, stream tool stdout/stderr instead of capturing.
+    """
+
+    name = "AmberMMGBSA"
+
+    def __init__(
+        self,
+        *,
+        mmpbsa_executable: str = "MMPBSA.py",
+        antemmpbsa_executable: str = "ante-MMPBSA.py",
+        igb: int = 5,
+        strip_mask: str | None = ":WAT,HOH,Na+,Cl-,K+",
+        verbose: bool = False,
+    ) -> None:
+        self.mmpbsa_executable = mmpbsa_executable
+        self.antemmpbsa_executable = antemmpbsa_executable
+        self.igb = igb
+        self.strip_mask = strip_mask
+        self.verbose = verbose
+
+    def run(  # type: ignore[override]  # concrete kwargs refine the ABC's **kwargs
+        self,
+        trajectory: Trajectory,
+        *,
+        receptor: Selection,
+        ligand: Selection,
+        solvent_model: str = "gb",
+        prmtop: str | PathLike[str] | None = None,
+        trajectory_file: str | PathLike[str] | None = None,
+        start_frame: int = 1,
+        end_frame: int | None = None,
+        interval: int = 1,
+        salt_conc: float = 0.0,
+        **_kwargs: object,
+    ) -> FreeEnergyResult:
+        """Estimate ΔG_bind from ``trajectory`` with MM/GBSA or MM/PBSA.
+
+        Args:
+            trajectory: The ensemble to average over; its topology
+                defines the complex and its metadata may locate the
+                Amber inputs.
+            receptor: Selection identifying the receptor atoms.
+            ligand: Selection identifying the ligand atoms.
+            solvent_model: ``"gb"`` (MM/GBSA, default) or ``"pb"``.
+            prmtop: Explicit Amber complex topology; overrides metadata.
+            trajectory_file: Explicit trajectory file; overrides metadata.
+            start_frame: First frame to analyze (1-based).
+            end_frame: Last frame to analyze; defaults to the trajectory
+                length.
+            interval: Stride between analyzed frames.
+            salt_conc: Salt concentration (mol/L).
+
+        Returns:
+            A :class:`FreeEnergyResult` from the tool's final block, with
+            provenance attached.
+
+        Raises:
+            ValueError: If a selection is empty/splits a residue, or the
+                Amber topology / trajectory file can't be located.
+            MMGBSAEngineNotInstalledError: If the tools aren't installed.
+        """
+        # Masks first: resolving them needs only the topology and fails
+        # fast on a bad selection, and the strings go into provenance.
+        receptor_mask = selection_to_amber_mask(trajectory.topology, receptor)
+        ligand_mask = selection_to_amber_mask(trajectory.topology, ligand)
+
+        prmtop_path, traj_path = self._resolve_amber_inputs(
+            trajectory, prmtop, trajectory_file
+        )
+        end = end_frame if end_frame is not None else trajectory.n_frames
+
+        provenance = Provenance.from_engine(
+            engine="AmberMMGBSA.run",
+            parameters={
+                "solvent_model": solvent_model.lower(),
+                "receptor_mask": receptor_mask,
+                "ligand_mask": ligand_mask,
+                "start_frame": start_frame,
+                "end_frame": end,
+                "interval": interval,
+                "salt_conc": salt_conc,
+                "igb": self.igb,
+                "strip_mask": self.strip_mask,
+            },
+            inputs={"prmtop": str(prmtop_path), "trajectory_file": str(traj_path)},
+            parent=_as_provenance(trajectory.metadata.get(mk.PROVENANCE)),
+        )
+
+        self._require_tools()
+
+        with tempfile.TemporaryDirectory() as td:
+            run_dir = Path(td)
+            (run_dir / "mmpbsa.in").write_text(
+                build_mmpbsa_input(
+                    solvent_model=solvent_model,
+                    start_frame=start_frame,
+                    end_frame=end,
+                    interval=interval,
+                    salt_conc=salt_conc,
+                    igb=self.igb,
+                )
+            )
+            results_text = self._invoke(
+                run_dir, prmtop_path, traj_path, receptor_mask, ligand_mask
+            )
+
+        result = parse_mmpbsa_dat(results_text, solvent_model=solvent_model)
+        result.provenance = provenance
+        result.metadata.update(
+            {
+                "engine": self.name,
+                "receptor_mask": receptor_mask,
+                "ligand_mask": ligand_mask,
+                mk.PROVENANCE: provenance,
+            }
+        )
+        return result
+
+    # -- input resolution ---------------------------------------------
+
+    def _resolve_amber_inputs(
+        self,
+        trajectory: Trajectory,
+        prmtop: str | PathLike[str] | None,
+        trajectory_file: str | PathLike[str] | None,
+    ) -> tuple[Path, Path]:
+        prmtop_path = Path(prmtop) if prmtop is not None else _topology_from_metadata(
+            trajectory.metadata, "prmtop", "system.prmtop"
+        )
+        traj_path = (
+            Path(trajectory_file)
+            if trajectory_file is not None
+            else _topology_from_metadata(trajectory.metadata, "trajectory_file", "prod.nc")
+        )
+        if prmtop_path is None:
+            raise ValueError(
+                "no Amber topology (prmtop) available. Pass prmtop=..., or use a "
+                "trajectory produced by molforge.wrappers.md.AMBER (which records one)."
+            )
+        if traj_path is None:
+            raise ValueError(
+                "no trajectory file available. Pass trajectory_file=..., or use a "
+                "trajectory produced by molforge.wrappers.md.AMBER."
+            )
+        if not prmtop_path.is_file():
+            raise ValueError(f"Amber topology not found: {prmtop_path}")
+        if not traj_path.is_file():
+            raise ValueError(f"trajectory file not found: {traj_path}")
+        return prmtop_path, traj_path
+
+    # -- tool invocation ----------------------------------------------
+
+    def _require_tools(self) -> None:
+        for exe in (self.antemmpbsa_executable, self.mmpbsa_executable):
+            if shutil.which(exe) is None:
+                raise MMGBSAEngineNotInstalledError(
+                    f"executable {exe!r} was not found on PATH.\n"
+                    "Install AmberTools (e.g. `conda install -c conda-forge ambertools`, "
+                    "or build from https://ambermd.org/AmberTools.php), or pass "
+                    "mmpbsa_executable=/antemmpbsa_executable= to the constructor."
+                )
+
+    def _invoke(
+        self,
+        run_dir: Path,
+        prmtop: Path,
+        traj: Path,
+        receptor_mask: str,
+        ligand_mask: str,
+    ) -> str:
+        """Split the topology and run MMPBSA.py; return the results text."""
+        complex_p, receptor_p, ligand_p = "complex.prmtop", "receptor.prmtop", "ligand.prmtop"
+        ante = [
+            self.antemmpbsa_executable,
+            "-p", str(prmtop),
+            "-c", complex_p,
+            "-r", receptor_p,
+            "-l", ligand_p,
+            "-m", receptor_mask,
+            "-n", ligand_mask,
+        ]
+        if self.strip_mask:
+            ante += ["-s", self.strip_mask]
+        self._run_subprocess(ante, cwd=run_dir, step="ante-MMPBSA")
+
+        results = "FINAL_RESULTS_MMPBSA.dat"
+        self._run_subprocess(
+            [
+                self.mmpbsa_executable,
+                "-O",
+                "-i", "mmpbsa.in",
+                "-o", results,
+                "-cp", complex_p,
+                "-rp", receptor_p,
+                "-lp", ligand_p,
+                "-y", str(traj),
+            ],
+            cwd=run_dir,
+            step="MMPBSA",
+        )
+        out = run_dir / results
+        if not out.is_file():
+            raise RuntimeError(f"MMPBSA.py did not produce {results} in {run_dir}")
+        return out.read_text()
+
+    def _run_subprocess(self, cmd: list[str], *, cwd: Path, step: str) -> None:
+        """Single choke point for tool invocation (mockable in tests)."""
+        try:
+            subprocess.run(
+                cmd,
+                check=True,
+                cwd=str(cwd),
+                capture_output=not self.verbose,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr or "(stderr not captured)"
+            raise RuntimeError(
+                f"MMPBSA step `{step}` failed (exit {e.returncode}).\n"
+                f"command: {' '.join(cmd)}\nstderr:\n{stderr}"
+            ) from e
+
+
+def _topology_from_metadata(
+    metadata: Mapping[str, object], explicit_key: str, run_dir_name: str
+) -> Path | None:
+    """Locate an Amber input from trajectory metadata.
+
+    Prefers an explicit metadata key; falls back to ``<run_dir>/<name>``
+    when the trajectory records a ``run_dir`` (the AMBER wrapper does).
+    """
+    value = metadata.get(explicit_key)
+    if isinstance(value, (str, Path)):
+        return Path(value)
+    run_dir = metadata.get("run_dir")
+    if isinstance(run_dir, (str, Path)):
+        candidate = Path(run_dir) / run_dir_name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _as_provenance(value: object) -> Provenance | None:
+    return value if isinstance(value, Provenance) else None

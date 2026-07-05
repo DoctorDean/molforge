@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`AmberMMGBSA` engine (`molforge.wrappers.freeenergy`).** The first
+  concrete `MMGBSAEngine`, orchestrating Amber's tools:
+  `run(trajectory, *, receptor, ligand, solvent_model="gb")` resolves
+  the receptor/ligand selections to Amber masks, locates the complex
+  `prmtop` and trajectory file (explicit args, or from a trajectory
+  produced by `molforge.wrappers.md.AMBER`), splits the topology with
+  `ante-MMPBSA.py`, runs `MMPBSA.py`, and parses the result — with a
+  `Provenance` (parented to the trajectory's) attached. It orchestrates
+  the tools rather than parameterizing a system: a missing topology /
+  trajectory raises a clear `ValueError`, and absent tools raise
+  `MMGBSAEngineNotInstalledError`. All tool calls funnel through one
+  mockable `_run_subprocess`, so the full pipeline is tested without
+  AmberTools. Caching is not wired in yet (needs a `free_energy_result`
+  cache serializer, a follow-up).
 - **MMPBSA input preparation (`molforge.wrappers.freeenergy`).** Two
   pure helpers the Amber engine will build on. `selection_to_amber_mask(
   topology, selection)` converts a molforge selection (field filters or
