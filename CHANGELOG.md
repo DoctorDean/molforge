@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **MMPBSA.py per-residue decomposition parser (`molforge.wrappers.freeenergy`).**
+  `parse_mmpbsa_decomp(text, *, section="delta")` reads a
+  `FINAL_DECOMP_MMPBSA.dat` and returns a `Decomposition` over the
+  requested species' Total Energy Decomposition block (default `"delta"` —
+  the per-residue binding contribution). Shared row/block helpers now live
+  in `_common` (`parse_decomp_row`, `parse_decomp_block`,
+  `decomp_species_block`): a data row is recognised structurally (a label
+  plus 18 trailing floats), so header rows are skipped and both the
+  comma-separated MMPBSA.py and whitespace gmx renderings parse — the
+  gmx decomp parser will reuse them.
 - **Per-residue decomposition value types (`molforge.freeenergy`).**
   `ResidueContribution` (frozen: residue label, total, uncertainty, and
   the internal/vdw/electrostatic/polar/nonpolar breakdown) and

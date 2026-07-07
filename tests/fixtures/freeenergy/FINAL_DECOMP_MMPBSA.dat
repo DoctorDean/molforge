@@ -1,0 +1,23 @@
+| Run on Wed Jun  1 12:00:00 2022
+|idecomp = 1 Per-residue decomp adding 1-4 interactions to internal.
+|Energy Decomposition Analysis (All units kcal/mol): Generalized Born solvent
+-------------------------------------------------------------------------------
+Complex:
+Total Energy Decomposition:
+Residue,Internal,,,van der Waals,,,Electrostatic,,,Polar Solvation,,,Non-Polar Solv.,,,TOTAL,,
+,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean
+LEU 40,900.00,5.0,1.2,-90.00,2.0,0.5,-500.00,3.0,0.7,-10.00,1.0,0.3,5.00,0.5,0.1,305.00,6.0,1.5
+
+DELTAS:
+Total Energy Decomposition:
+Residue,Internal,,,van der Waals,,,Electrostatic,,,Polar Solvation,,,Non-Polar Solv.,,,TOTAL,,
+,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean
+LEU 40,1.00,0.5,0.30,-6.00,1.0,0.30,-3.00,0.5,0.20,2.00,0.4,0.10,-0.50,0.1,0.05,-6.50,1.2,0.30
+THR 41,0.50,0.4,0.20,-4.00,0.9,0.25,-5.00,0.6,0.20,3.00,0.5,0.12,-0.20,0.1,0.03,-5.70,1.0,0.20
+ALA 44,0.00,0.1,0.05,-1.00,0.3,0.10,0.50,0.2,0.05,1.00,0.2,0.05,0.00,0.0,0.00,0.50,0.5,0.40
+LIG 241,2.00,0.8,0.40,-8.00,1.5,0.45,-2.00,0.7,0.25,1.00,0.3,0.10,-0.30,0.1,0.04,-7.30,1.8,0.50
+
+Sidechain Energy Decomposition:
+Residue,Internal,,,van der Waals,,,Electrostatic,,,Polar Solvation,,,Non-Polar Solv.,,,TOTAL,,
+,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean,Avg.,Std. Dev.,Std. Err. of Mean
+LEU 40,0.50,0.3,0.10,-3.00,0.8,0.20,-1.50,0.4,0.10,1.00,0.2,0.05,-0.20,0.1,0.02,-3.20,0.9,0.22

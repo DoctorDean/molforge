@@ -41,6 +41,7 @@ from molforge.cache import get_default_cache
 from molforge.core import Provenance
 from molforge.core import metadata_keys as mk
 from molforge.freeenergy import (
+    Decomposition,
     FreeEnergyResult,
     MMGBSAEngine,
     MMGBSAEngineNotInstalledError,
@@ -136,10 +137,50 @@ def parse_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyResul
     )
 
 
+_DECOMP_SECTIONS = {
+    "delta": "DELTAS:",
+    "complex": "Complex:",
+    "receptor": "Receptor:",
+    "ligand": "Ligand:",
+}
+
+
+def parse_mmpbsa_decomp(text: str, *, section: str = "delta") -> Decomposition:
+    """Parse a ``MMPBSA.py`` per-residue decomposition.
+
+    Reads ``FINAL_DECOMP_MMPBSA.dat`` (written when ``idecomp`` is set) and
+    returns the per-residue contributions from the requested species'
+    "Total Energy Decomposition" block. The default ``"delta"`` section is
+    the binding contribution (complex − receptor − ligand) — the one that
+    answers which residues drive the affinity.
+
+    Args:
+        text: Contents of ``FINAL_DECOMP_MMPBSA.dat``.
+        section: Which species block to read — ``"delta"`` (default),
+            ``"complex"``, ``"receptor"``, or ``"ligand"``.
+
+    Returns:
+        A :class:`~molforge.freeenergy.Decomposition` over the residues in
+        that block, in report order.
+
+    Raises:
+        ValueError: If ``section`` is unknown or the block is absent.
+    """
+    try:
+        marker = _DECOMP_SECTIONS[section.lower()]
+    except KeyError:
+        raise ValueError(
+            f"unknown section {section!r}; choose from {sorted(_DECOMP_SECTIONS)}"
+        ) from None
+    block = _common.decomp_species_block(text, marker)
+    return Decomposition(_common.parse_decomp_block(block))
+
+
 __all__ = [
     "AmberMMGBSA",
     "build_mmpbsa_input",
     "parse_mmpbsa_dat",
+    "parse_mmpbsa_decomp",
     "selection_to_amber_mask",
 ]
 

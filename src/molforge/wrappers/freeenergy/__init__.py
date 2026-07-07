@@ -18,6 +18,7 @@ from molforge.wrappers.freeenergy.amber import (
     AmberMMGBSA,
     build_mmpbsa_input,
     parse_mmpbsa_dat,
+    parse_mmpbsa_decomp,
     selection_to_amber_mask,
 )
 from molforge.wrappers.freeenergy.cinnabar import from_cinnabar
@@ -37,6 +38,7 @@ __all__ = [
     "from_delta_f",
     "parse_gmx_mmpbsa_dat",
     "parse_mmpbsa_dat",
+    "parse_mmpbsa_decomp",
     "relative_binding_free_energy",
     "selection_to_amber_mask",
     "selection_to_ndx_group",
