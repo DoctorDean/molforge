@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Relative-FEP cycle helper (`molforge.wrappers.freeenergy`).**
+  `relative_binding_free_energy(complex_leg, solvent_leg, *, reference,
+  other)` closes a relative-FEP thermodynamic cycle into a binding ΔΔG:
+  ΔΔG_bind = ΔG_complex − ΔG_solvent, returned as a
+  `molforge.freeenergy.DeltaDeltaG` (signed, with the two legs' errors
+  propagated in quadrature, and `tighter` following the same tie→reference
+  convention as `FreeEnergyRanking.delta_delta_g`). This is the quantity
+  relative FEP actually reports — a single ingested leg's ΔG is not a
+  binding affinity, only the cycle is. A star map of edges plugs into
+  `FreeEnergyRanking` for reference-relative ranking.
 - **FEP/TI ingest via alchemlyb (`molforge.wrappers.freeenergy`).**
   `from_alchemlyb(estimator)` and `from_delta_f(delta_f, d_delta_f)`
   ingest the output of an alchemlyb estimator (MBAR/BAR/TI) into the same

@@ -20,16 +20,17 @@ molforge takes on no dependency — the caller brings alchemlyb.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from molforge.freeenergy import FreeEnergyResult
+from molforge.freeenergy import DeltaDeltaG, FreeEnergyResult
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-__all__ = ["from_alchemlyb", "from_delta_f"]
+__all__ = ["from_alchemlyb", "from_delta_f", "relative_binding_free_energy"]
 
 # Boltzmann constant in kcal/(mol·K), = R / 4184 with the CODATA gas
 # constant R = 8.314462618 J/(mol·K); this is what alchemlyb's to_kcalmol
@@ -179,4 +180,54 @@ def from_alchemlyb(
         energy_unit=energy_unit,
         method=method if method is not None else estimator_name,
         metadata=merged,
+    )
+
+
+def relative_binding_free_energy(
+    complex_leg: FreeEnergyResult,
+    solvent_leg: FreeEnergyResult,
+    *,
+    reference: str,
+    other: str,
+) -> DeltaDeltaG:
+    """Close a relative-FEP thermodynamic cycle into a binding ΔΔG.
+
+    A relative FEP perturbation transforms one ligand into another
+    (``reference`` → ``other``) along two legs: bound to the receptor (the
+    *complex* leg) and free in solution (the *solvent* leg). The
+    thermodynamic cycle gives the relative binding free energy
+
+        ΔΔG_bind = ΔG_complex − ΔG_solvent
+                 = ΔG_bind(other) − ΔG_bind(reference)
+
+    so a single perturbation's two ingested legs become the binding ΔΔG
+    between the two ligands — the quantity relative FEP actually reports.
+    A single leg's ΔG is not a binding affinity; only the cycle is.
+
+    Both legs must be the *same* perturbation direction (reference →
+    other) and in the same units (kcal/mol, as returned by
+    :func:`from_alchemlyb` / :func:`from_delta_f`).
+
+    Args:
+        complex_leg: ΔG of the reference → other transformation in the
+            complex.
+        solvent_leg: ΔG of the same transformation in solvent.
+        reference: Label of the reference ligand.
+        other: Label of the ligand it is perturbed into.
+
+    Returns:
+        A :class:`~molforge.freeenergy.DeltaDeltaG`: the signed ΔΔG_bind
+        (negative means ``other`` binds more tightly) with the two legs'
+        errors propagated in quadrature. Treat a difference within its
+        uncertainty as a tie.
+    """
+    value = complex_leg.delta_g - solvent_leg.delta_g
+    uncertainty = math.hypot(complex_leg.uncertainty, solvent_leg.uncertainty)
+    tighter = other if value < 0 else reference
+    return DeltaDeltaG(
+        reference=reference,
+        other=other,
+        value=value,
+        uncertainty=uncertainty,
+        tighter=tighter,
     )

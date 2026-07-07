@@ -8,7 +8,11 @@ and invoke the tools are layered on top.
 
 from __future__ import annotations
 
-from molforge.wrappers.freeenergy.alchemlyb import from_alchemlyb, from_delta_f
+from molforge.wrappers.freeenergy.alchemlyb import (
+    from_alchemlyb,
+    from_delta_f,
+    relative_binding_free_energy,
+)
 from molforge.wrappers.freeenergy.amber import (
     AmberMMGBSA,
     build_mmpbsa_input,
@@ -29,6 +33,7 @@ __all__ = [
     "from_delta_f",
     "parse_gmx_mmpbsa_dat",
     "parse_mmpbsa_dat",
+    "relative_binding_free_energy",
     "selection_to_amber_mask",
     "selection_to_ndx_group",
 ]

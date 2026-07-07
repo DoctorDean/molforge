@@ -13,7 +13,11 @@ import numpy as np
 import pytest
 
 from molforge.freeenergy import FreeEnergyRanking
-from molforge.wrappers.freeenergy import from_alchemlyb, from_delta_f
+from molforge.wrappers.freeenergy import (
+    from_alchemlyb,
+    from_delta_f,
+    relative_binding_free_energy,
+)
 
 # alchemlyb docs' MBAR (Coulomb) example: delta_f_ row 0, and its errors.
 DELTA_F = np.array(
@@ -165,3 +169,53 @@ class TestRankingIntegration:
         ddg = ranking.delta_delta_g("lig_a", "lig_b")
         assert ddg.value == pytest.approx(-2.0)
         assert ddg.uncertainty == pytest.approx((0.3**2 + 0.4**2) ** 0.5)
+
+
+class TestRelativeBindingFreeEnergy:
+    def _leg(self, dg: float, unc: float):
+        return from_delta_f(
+            np.array([[0.0, dg]]), np.array([[0.0, unc]]), energy_unit="kcal/mol"
+        )
+
+    def test_cycle_value_and_propagation(self) -> None:
+        # complex leg -12, solvent leg -3 -> ΔΔG = -9 (B tighter), σ = hypot(.3,.4)
+        ddg = relative_binding_free_energy(
+            self._leg(-12.0, 0.3), self._leg(-3.0, 0.4), reference="A", other="B"
+        )
+        assert ddg.value == pytest.approx(-9.0)
+        assert ddg.uncertainty == pytest.approx(0.5)
+        assert ddg.reference == "A" and ddg.other == "B"
+        assert ddg.tighter == "B"
+
+    def test_reference_tighter(self) -> None:
+        # complex leg less favorable than solvent -> positive ΔΔG, reference tighter
+        ddg = relative_binding_free_energy(
+            self._leg(-3.0, 0.2), self._leg(-12.0, 0.2), reference="A", other="B"
+        )
+        assert ddg.value == pytest.approx(9.0)
+        assert ddg.tighter == "A"
+
+    def test_exact_tie_is_reference(self) -> None:
+        ddg = relative_binding_free_energy(
+            self._leg(-5.0, 0.1), self._leg(-5.0, 0.1), reference="A", other="B"
+        )
+        assert ddg.value == pytest.approx(0.0)
+        assert ddg.tighter == "A"  # tie -> reference
+
+    def test_star_map_ranks_relative_to_reference(self) -> None:
+        # A star map (edges from a reference) -> reference-relative results
+        # plug into FreeEnergyRanking.
+        edges = {
+            "B": relative_binding_free_energy(self._leg(-12.0, 0.3), self._leg(-3.0, 0.3), reference="A", other="B"),
+            "C": relative_binding_free_energy(self._leg(-7.0, 0.3), self._leg(-3.0, 0.3), reference="A", other="C"),
+        }
+        results = {"A": from_delta_f(np.array([[0.0, 0.0]]), np.array([[0.0, 0.0]]), energy_unit="kcal/mol")}
+        for name, ddg in edges.items():
+            results[name] = from_delta_f(
+                np.array([[0.0, ddg.value]]),
+                np.array([[0.0, ddg.uncertainty]]),
+                energy_unit="kcal/mol",
+                method="FEP (ΔΔG)",
+            )
+        ranking = FreeEnergyRanking(results)
+        assert [name for name, _ in ranking.ranked] == ["B", "C", "A"]  # B (-9) < C (-4) < A (0)
