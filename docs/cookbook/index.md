@@ -20,6 +20,7 @@ covers concrete workflows.
 | Check a folded or docked structure for quality problems         | [Validate structures](validating-structures.md)           |
 | Skip recomputing expensive engine calls you've already run      | [Caching results](caching-results.md)                     |
 | Rank a series of analogs by binding affinity (MM/GBSA)          | [Rank binders with MM/GBSA](ranking-binders.md)           |
+| Rank analogs by rigorous relative affinity (FEP, via alchemlyb) | [Rank binders with FEP](rank-binders-fep.md)              |
 
 ## If you're choosing between options...
 

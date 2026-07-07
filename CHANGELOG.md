@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"Rank binders with FEP" cookbook recipe.** The rigorous sibling of the
+  MM/GBSA recipe: ingest each FEP edge's two legs with `from_alchemlyb`,
+  close the cycle with `relative_binding_free_energy`, read the per-edge
+  `DeltaDeltaG`, and rank a star map through `FreeEnergyRanking` by
+  anchoring the lead at zero. Covers the kT→kcal/mol unit handling, ties
+  at ~1 kcal/mol, the non-star-network caveat (points at cinnabar), TI/BAR
+  and absolute-FEP notes, and when to reach for FEP vs MM/GBSA. Linked in
+  the cookbook index and nav. Docs only.
 - **Relative-FEP cycle helper (`molforge.wrappers.freeenergy`).**
   `relative_binding_free_energy(complex_leg, solvent_leg, *, reference,
   other)` closes a relative-FEP thermodynamic cycle into a binding ΔΔG:
