@@ -242,3 +242,85 @@ class TestCaching:
         engine.run(traj, receptor=RECEPTOR, ligand=LIGAND, solvent_model="pb")
 
         assert len(record["calls"]) > after_gb  # PB was not served from GB's entry
+
+
+DECOMP_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "freeenergy"
+    / "FINAL_DECOMP_MMPBSA.dat"
+)
+
+
+def _install_stub_with_decomp(
+    engine: AmberMMGBSA, results_text: str, decomp_text: str
+) -> dict:
+    """Stub that also writes FINAL_DECOMP_MMPBSA.dat when -do is passed."""
+    record: dict = {"calls": [], "mmpbsa_in": None, "wrote_decomp": False}
+
+    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+        record["calls"].append((step, list(cmd)))
+        cwd = Path(cwd)
+        if step == "ante-MMPBSA":
+            for name in ("complex.prmtop", "receptor.prmtop", "ligand.prmtop"):
+                (cwd / name).write_text("dummy topology")
+        elif step == "MMPBSA":
+            record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
+            (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text)
+            if "-do" in cmd:
+                record["wrote_decomp"] = True
+                (cwd / "FINAL_DECOMP_MMPBSA.dat").write_text(decomp_text)
+
+    engine._require_tools = lambda: None  # type: ignore[method-assign]
+    engine._run_subprocess = fake_run  # type: ignore[assignment]
+    return record
+
+
+class TestDecomposition:
+    def test_run_with_idecomp_attaches_decomposition(self, tmp_path: Path) -> None:
+        engine = AmberMMGBSA()
+        record = _install_stub_with_decomp(
+            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
+        )
+        result = engine.run(
+            _trajectory(_inputs(tmp_path)),
+            receptor=RECEPTOR,
+            ligand=LIGAND,
+            idecomp=1,
+        )
+        # &decomp written, -do passed, decomp file consumed
+        assert "&decomp" in record["mmpbsa_in"]
+        assert "idecomp=1" in record["mmpbsa_in"]
+        assert record["wrote_decomp"]
+        # the DELTAS decomposition is attached and parsed
+        assert result.decomposition is not None
+        assert list(result.decomposition) == ["LEU 40", "THR 41", "ALA 44", "LIG 241"]
+        assert result.decomposition["LIG 241"].total == pytest.approx(-7.3)
+        assert result.decomposition.hotspots(1)[0].residue == "LIG 241"
+
+    def test_run_without_idecomp_has_no_decomposition(self, tmp_path: Path) -> None:
+        engine = AmberMMGBSA()
+        record = _install_stub_with_decomp(
+            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
+        )
+        result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
+        assert "&decomp" not in record["mmpbsa_in"]
+        assert not record["wrote_decomp"]
+        assert result.decomposition is None
+
+    def test_decomposition_survives_cache(self, tmp_path: Path) -> None:
+        engine = AmberMMGBSA()
+        _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
+        traj = _trajectory(_inputs(tmp_path))
+        first = engine.run(traj, receptor=RECEPTOR, ligand=LIGAND, idecomp=1)
+
+        # second call hits cache (tools would fail if called)
+        engine._run_subprocess = _fail_if_called  # type: ignore[assignment]
+        second = engine.run(traj, receptor=RECEPTOR, ligand=LIGAND, idecomp=1)
+        assert second.decomposition is not None
+        assert list(second.decomposition) == list(first.decomposition)
+        assert second.decomposition["LEU 40"].total == pytest.approx(-6.5)
+
+
+def _fail_if_called(cmd, *, cwd, step):  # noqa: ANN001
+    raise AssertionError("tools should not run on a cache hit")

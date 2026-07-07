@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`AmberMMGBSA.run(..., idecomp=...)`.** The Amber engine can now request
+  a per-residue decomposition end to end: it writes the `&decomp` namelist,
+  passes `-do FINAL_DECOMP_MMPBSA.dat` to MMPBSA.py, parses the delta block,
+  and attaches it to `result.decomposition`. `idecomp` / `print_res` enter
+  the provenance only when set, so existing no-decomp cache keys are
+  unchanged, and the decomposition round-trips through the cache.
 - **`FreeEnergyResult.decomposition`.** A `FreeEnergyResult` can now carry
   the per-residue `Decomposition` from an `idecomp` run (default `None`
   when not requested), and it round-trips through the cache (serialized as

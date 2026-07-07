@@ -290,6 +290,8 @@ class AmberMMGBSA(MMGBSAEngine):
         end_frame: int | None = None,
         interval: int = 1,
         salt_conc: float = 0.0,
+        idecomp: int = 0,
+        print_res: str = "within 6",
         **_kwargs: object,
     ) -> FreeEnergyResult:
         """Estimate ΔG_bind from ``trajectory`` with MM/GBSA or MM/PBSA.
@@ -312,10 +314,16 @@ class AmberMMGBSA(MMGBSAEngine):
                 length.
             interval: Stride between analyzed frames.
             salt_conc: Salt concentration (mol/L).
+            idecomp: Per-residue decomposition scheme (``0`` = off,
+                default; ``1``/``2`` per-residue). When set, the result
+                carries a :attr:`FreeEnergyResult.decomposition`.
+            print_res: Which residues to decompose (``&decomp print_res``,
+                default residues within 6 Å of the interface); only used
+                when ``idecomp`` is set.
 
         Returns:
             A :class:`FreeEnergyResult` from the tool's final block, with
-            provenance attached.
+            provenance attached (and a decomposition if ``idecomp`` set).
 
         Raises:
             ValueError: If a selection is empty/splits a residue, or the
@@ -332,19 +340,24 @@ class AmberMMGBSA(MMGBSAEngine):
         )
         end = end_frame if end_frame is not None else trajectory.n_frames
 
+        parameters: dict[str, object] = {
+            "solvent_model": solvent_model.lower(),
+            "receptor_mask": receptor_mask,
+            "ligand_mask": ligand_mask,
+            "start_frame": start_frame,
+            "end_frame": end,
+            "interval": interval,
+            "salt_conc": salt_conc,
+            "igb": self.igb,
+            "strip_mask": self.strip_mask,
+        }
+        if idecomp:
+            parameters["idecomp"] = idecomp
+            parameters["print_res"] = print_res
+
         provenance = Provenance.from_engine(
             engine="AmberMMGBSA.run",
-            parameters={
-                "solvent_model": solvent_model.lower(),
-                "receptor_mask": receptor_mask,
-                "ligand_mask": ligand_mask,
-                "start_frame": start_frame,
-                "end_frame": end,
-                "interval": interval,
-                "salt_conc": salt_conc,
-                "igb": self.igb,
-                "strip_mask": self.strip_mask,
-            },
+            parameters=parameters,
             inputs={"prmtop": str(prmtop_path), "trajectory_file": str(traj_path)},
             parent=_common.as_provenance(trajectory.metadata.get(mk.PROVENANCE)),
         )
@@ -368,13 +381,26 @@ class AmberMMGBSA(MMGBSAEngine):
                     interval=interval,
                     salt_conc=salt_conc,
                     igb=self.igb,
+                    idecomp=idecomp,
+                    print_res=print_res,
                 )
             )
             results_text = self._invoke(
-                run_dir, prmtop_path, traj_path, receptor_mask, ligand_mask
+                run_dir, prmtop_path, traj_path, receptor_mask, ligand_mask,
+                decomp=bool(idecomp),
             )
+            decomp_text = None
+            if idecomp:
+                decomp_out = run_dir / "FINAL_DECOMP_MMPBSA.dat"
+                if not decomp_out.is_file():
+                    raise RuntimeError(
+                        f"MMPBSA.py did not produce FINAL_DECOMP_MMPBSA.dat in {run_dir}"
+                    )
+                decomp_text = decomp_out.read_text()
 
         result = parse_mmpbsa_dat(results_text, solvent_model=solvent_model)
+        if decomp_text is not None:
+            result.decomposition = parse_mmpbsa_decomp(decomp_text)
         result.provenance = provenance
         result.metadata.update(
             {
@@ -438,8 +464,14 @@ class AmberMMGBSA(MMGBSAEngine):
         traj: Path,
         receptor_mask: str,
         ligand_mask: str,
+        *,
+        decomp: bool = False,
     ) -> str:
-        """Split the topology and run MMPBSA.py; return the results text."""
+        """Split the topology and run MMPBSA.py; return the results text.
+
+        When ``decomp`` is set, MMPBSA.py also writes
+        ``FINAL_DECOMP_MMPBSA.dat`` (the caller reads it from ``run_dir``).
+        """
         complex_p, receptor_p, ligand_p = "complex.prmtop", "receptor.prmtop", "ligand.prmtop"
         ante = [
             self.antemmpbsa_executable,
@@ -455,20 +487,19 @@ class AmberMMGBSA(MMGBSAEngine):
         self._run_subprocess(ante, cwd=run_dir, step="ante-MMPBSA")
 
         results = "FINAL_RESULTS_MMPBSA.dat"
-        self._run_subprocess(
-            [
-                self.mmpbsa_executable,
-                "-O",
-                "-i", "mmpbsa.in",
-                "-o", results,
-                "-cp", complex_p,
-                "-rp", receptor_p,
-                "-lp", ligand_p,
-                "-y", str(traj),
-            ],
-            cwd=run_dir,
-            step="MMPBSA",
-        )
+        command = [
+            self.mmpbsa_executable,
+            "-O",
+            "-i", "mmpbsa.in",
+            "-o", results,
+            "-cp", complex_p,
+            "-rp", receptor_p,
+            "-lp", ligand_p,
+            "-y", str(traj),
+        ]
+        if decomp:
+            command += ["-do", "FINAL_DECOMP_MMPBSA.dat"]
+        self._run_subprocess(command, cwd=run_dir, step="MMPBSA")
         out = run_dir / results
         if not out.is_file():
             raise RuntimeError(f"MMPBSA.py did not produce {results} in {run_dir}")
