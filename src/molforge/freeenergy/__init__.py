@@ -104,6 +104,9 @@ class FreeEnergyResult:
             the engine, parameters and inputs that produced this result.
         metadata: Engine-specific extras (per-term std devs, frame count,
             solvent model, walltime, ...).
+        decomposition: Optional per-residue :class:`Decomposition` from an
+            ``idecomp`` run — which residues drive the affinity. ``None``
+            when decomposition was not requested.
     """
 
     delta_g: float
@@ -113,6 +116,7 @@ class FreeEnergyResult:
     convergence: NDArray[np.float64] | None = None
     provenance: Provenance | None = None
     metadata: dict[str, object] = field(default_factory=dict)
+    decomposition: Decomposition | None = None
 
     def __post_init__(self) -> None:
         if self.uncertainty < 0:

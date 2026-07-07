@@ -757,6 +757,22 @@ def _serialize_free_energy_result(result: FreeEnergyResult, entry: Path) -> None
 
     metadata_safe, metadata_arrays = _split_arrays(result.metadata)
 
+    decomposition = None
+    if result.decomposition is not None:
+        decomposition = [
+            {
+                "residue": c.residue,
+                "total": float(c.total),
+                "uncertainty": float(c.uncertainty),
+                "internal": float(c.internal),
+                "vdw": float(c.vdw),
+                "electrostatic": float(c.electrostatic),
+                "polar_solvation": float(c.polar_solvation),
+                "nonpolar_solvation": float(c.nonpolar_solvation),
+            }
+            for c in result.decomposition.residues
+        ]
+
     payload = {
         "delta_g": float(result.delta_g),
         "uncertainty": float(result.uncertainty),
@@ -764,6 +780,7 @@ def _serialize_free_energy_result(result: FreeEnergyResult, entry: Path) -> None
         "components": components,
         "provenance": None if result.provenance is None else result.provenance.to_dict(),
         "metadata": metadata_safe,
+        "decomposition": decomposition,
     }
     (entry / "payload.json").write_text(json.dumps(payload), encoding="utf-8")
 
@@ -776,7 +793,12 @@ def _serialize_free_energy_result(result: FreeEnergyResult, entry: Path) -> None
 
 def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
     """Inverse of :func:`_serialize_free_energy_result`."""
-    from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
+    from molforge.freeenergy import (
+        Decomposition,
+        FreeEnergyComponents,
+        FreeEnergyResult,
+        ResidueContribution,
+    )
 
     payload = json.loads((entry / "payload.json").read_text(encoding="utf-8"))
 
@@ -803,6 +825,12 @@ def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
     metadata = _restore_metadata(payload["metadata"])
     metadata.update(meta_arrays)
 
+    decomposition = None
+    if payload.get("decomposition") is not None:
+        decomposition = Decomposition(
+            [ResidueContribution(**row) for row in payload["decomposition"]]
+        )
+
     return FreeEnergyResult(
         delta_g=payload["delta_g"],
         uncertainty=payload["uncertainty"],
@@ -811,6 +839,7 @@ def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
         convergence=convergence,
         provenance=provenance,
         metadata=metadata,
+        decomposition=decomposition,
     )
 
 

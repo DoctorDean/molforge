@@ -47,7 +47,12 @@ from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
 from molforge.docking import DockingResult, Pose
 from molforge.folding import ComplexSpec
-from molforge.freeenergy import FreeEnergyComponents, FreeEnergyResult
+from molforge.freeenergy import (
+    Decomposition,
+    FreeEnergyComponents,
+    FreeEnergyResult,
+    ResidueContribution,
+)
 from molforge.generative import DesignedSequence
 
 # ---------------------------------------------------------------------
@@ -742,6 +747,36 @@ class TestFreeEnergyResultRoundTrip:
         assert restored.delta_g == pytest.approx(-21.0)
         assert restored.uncertainty == pytest.approx(0.7)
         assert restored.method == "MM/GBSA"
+        assert restored.decomposition is None  # not requested
+
+    def test_decomposition_round_trip(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="AmberMMGBSA.run")
+        result = FreeEnergyResult(
+            delta_g=-21.0,
+            uncertainty=0.7,
+            method="MM/GBSA",
+            decomposition=Decomposition(
+                [
+                    ResidueContribution("LEU 40", -6.5, 0.3, 1.0, -6.0, -3.0, 2.0, -0.5),
+                    ResidueContribution("LIG 241", -7.3, 0.5, 2.0, -8.0, -2.0, 1.0, -0.3),
+                ]
+            ),
+        )
+        cache.put(prov, result, "free_energy_result")
+        d = cache.get(prov, "free_energy_result").decomposition
+
+        assert d is not None
+        assert list(d) == ["LEU 40", "LIG 241"]  # order preserved
+        leu = d["LEU 40"]
+        assert leu.total == pytest.approx(-6.5)
+        assert leu.uncertainty == pytest.approx(0.3)
+        assert leu.vdw == pytest.approx(-6.0)
+        assert leu.electrostatic == pytest.approx(-3.0)
+        assert leu.polar_solvation == pytest.approx(2.0)
+        assert leu.nonpolar_solvation == pytest.approx(-0.5)
+        assert leu.internal == pytest.approx(1.0)
+        assert [c.residue for c in d.hotspots()] == ["LIG 241", "LEU 40"]
 
     def test_components_entropy_none_preserved(self, tmp_path: Path) -> None:
         cache = Cache(directory=tmp_path)

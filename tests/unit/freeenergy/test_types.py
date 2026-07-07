@@ -59,6 +59,13 @@ class TestResult:
         assert r.provenance is None
         assert r.metadata == {}
         assert r.method == "MM/GBSA"
+        assert r.decomposition is None
+
+    def test_decomposition_attaches(self) -> None:
+        d = Decomposition([_contrib("LEU 40", -6.5)])
+        r = FreeEnergyResult(delta_g=-9.0, uncertainty=0.4, method="MM/GBSA", decomposition=d)
+        assert r.decomposition is d
+        assert r.decomposition["LEU 40"].total == pytest.approx(-6.5)
 
     def test_zero_uncertainty_allowed(self) -> None:
         assert _result(-9.0, 0.0).uncertainty == 0.0

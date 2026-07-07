@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`FreeEnergyResult.decomposition`.** A `FreeEnergyResult` can now carry
+  the per-residue `Decomposition` from an `idecomp` run (default `None`
+  when not requested), and it round-trips through the cache (serialized as
+  a per-residue list in `payload.json`, rebuilt on load). This gives the
+  engines a home for the decomposition alongside the ΔG.
 - **`&decomp` namelist support in `build_mmpbsa_input`.** New `idecomp`
   (0 = off, default; 1/2 per-residue; 3/4 pairwise), `dec_verbose`, and
   `print_res` parameters make the shared input builder emit the `&decomp`
