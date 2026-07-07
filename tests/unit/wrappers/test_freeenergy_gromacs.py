@@ -330,3 +330,61 @@ class TestGromacsCaching:
         # Swap receptor/ligand -> different index groups -> different key.
         engine.run(traj, receptor=LIGAND, ligand=RECEPTOR)
         assert len(record["calls"]) == 2
+
+
+DECOMP_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "freeenergy"
+    / "gmx_FINAL_DECOMP_MMPBSA.dat"
+)
+
+
+def _install_stub_with_decomp(
+    engine: GromacsMMGBSA, results_text: str, decomp_text: str
+) -> dict:
+    """Stub that also writes FINAL_DECOMP_MMPBSA.dat when -do is passed."""
+    record: dict = {"mmpbsa_in": None, "wrote_decomp": False, "cmd": None}
+
+    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+        cwd = Path(cwd)
+        record["cmd"] = list(cmd)
+        record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
+        (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text)
+        if "-do" in cmd:
+            record["wrote_decomp"] = True
+            (cwd / "FINAL_DECOMP_MMPBSA.dat").write_text(decomp_text)
+
+    engine._require_tool = lambda: None  # type: ignore[method-assign]
+    engine._run_subprocess = fake_run  # type: ignore[assignment]
+    return record
+
+
+class TestGromacsDecomposition:
+    def test_run_with_idecomp_attaches_decomposition(self, tmp_path: Path) -> None:
+        engine = GromacsMMGBSA()
+        record = _install_stub_with_decomp(
+            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
+        )
+        result = engine.run(
+            _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND, idecomp=2
+        )
+        assert "&decomp" in record["mmpbsa_in"]
+        assert "idecomp=2" in record["mmpbsa_in"]
+        assert "-do" in record["cmd"]
+        assert record["wrote_decomp"]
+        assert result.decomposition is not None
+        # Location column stripped, ligand keeps complex numbering
+        assert list(result.decomposition) == ["LEU 40", "THR 41", "ALA 44", "RAL 241"]
+        assert result.decomposition.hotspots(1)[0].residue == "RAL 241"
+
+    def test_run_without_idecomp_has_no_decomposition(self, tmp_path: Path) -> None:
+        engine = GromacsMMGBSA()
+        record = _install_stub_with_decomp(
+            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
+        )
+        result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
+        assert "&decomp" not in record["mmpbsa_in"]
+        assert "-do" not in record["cmd"]
+        assert not record["wrote_decomp"]
+        assert result.decomposition is None

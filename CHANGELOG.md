@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`GromacsMMGBSA.run(..., idecomp=...)`.** The GROMACS engine now
+  supports per-residue decomposition too, mirroring the Amber path: it
+  writes `&decomp`, passes `-do` to gmx_MMPBSA, parses the delta block
+  (stripping the Location column), and attaches `result.decomposition`.
+  Both MM/GBSA engines now deliver hotspots end to end.
 - **`AmberMMGBSA.run(..., idecomp=...)`.** The Amber engine can now request
   a per-residue decomposition end to end: it writes the `&decomp` namelist,
   passes `-do FINAL_DECOMP_MMPBSA.dat` to MMPBSA.py, parses the delta block,

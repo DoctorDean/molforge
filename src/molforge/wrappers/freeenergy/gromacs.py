@@ -255,6 +255,8 @@ class GromacsMMGBSA(MMGBSAEngine):
         end_frame: int | None = None,
         interval: int = 1,
         salt_conc: float = 0.0,
+        idecomp: int = 0,
+        print_res: str = "within 6",
         **_kwargs: object,
     ) -> FreeEnergyResult:
         """Estimate ΔG_bind from ``trajectory`` with gmx_MMPBSA.
@@ -278,10 +280,16 @@ class GromacsMMGBSA(MMGBSAEngine):
             end_frame: Last frame to analyze; defaults to the length.
             interval: Stride between analyzed frames.
             salt_conc: Salt concentration (mol/L).
+            idecomp: Per-residue decomposition scheme (``0`` = off,
+                default; ``1``/``2`` per-residue). When set, the result
+                carries a :attr:`FreeEnergyResult.decomposition`.
+            print_res: Which residues to decompose (``&decomp print_res``,
+                default residues within 6 Å of the interface); only used
+                when ``idecomp`` is set.
 
         Returns:
             A :class:`FreeEnergyResult` from the tool's final block, with
-            provenance attached.
+            provenance attached (and a decomposition if ``idecomp`` set).
 
         Raises:
             ValueError: If a selection is empty, or the structure /
@@ -304,18 +312,23 @@ class GromacsMMGBSA(MMGBSAEngine):
         )
         end = end_frame if end_frame is not None else trajectory.n_frames
 
+        parameters: dict[str, object] = {
+            "solvent_model": solvent_model.lower(),
+            "receptor_group": _group_signature(rec_atoms),
+            "ligand_group": _group_signature(lig_atoms),
+            "start_frame": start_frame,
+            "end_frame": end,
+            "interval": interval,
+            "salt_conc": salt_conc,
+            "igb": self.igb,
+        }
+        if idecomp:
+            parameters["idecomp"] = idecomp
+            parameters["print_res"] = print_res
+
         provenance = Provenance.from_engine(
             engine="GromacsMMGBSA.run",
-            parameters={
-                "solvent_model": solvent_model.lower(),
-                "receptor_group": _group_signature(rec_atoms),
-                "ligand_group": _group_signature(lig_atoms),
-                "start_frame": start_frame,
-                "end_frame": end,
-                "interval": interval,
-                "salt_conc": salt_conc,
-                "igb": self.igb,
-            },
+            parameters=parameters,
             inputs={
                 "structure": str(structure_path),
                 "trajectory_file": str(traj_path),
@@ -341,15 +354,29 @@ class GromacsMMGBSA(MMGBSAEngine):
                     interval=interval,
                     salt_conc=salt_conc,
                     igb=self.igb,
+                    idecomp=idecomp,
+                    print_res=print_res,
                 )
             )
             # Receptor is group 0, ligand group 1 in this minimal index.
             (run_dir / "index.ndx").write_text(
                 _ndx_block("receptor", rec_atoms, 15) + _ndx_block("ligand", lig_atoms, 15)
             )
-            results_text = self._invoke(run_dir, structure_path, traj_path, top_path)
+            results_text = self._invoke(
+                run_dir, structure_path, traj_path, top_path, decomp=bool(idecomp)
+            )
+            decomp_text = None
+            if idecomp:
+                decomp_out = run_dir / "FINAL_DECOMP_MMPBSA.dat"
+                if not decomp_out.is_file():
+                    raise RuntimeError(
+                        f"gmx_MMPBSA did not produce FINAL_DECOMP_MMPBSA.dat in {run_dir}"
+                    )
+                decomp_text = decomp_out.read_text()
 
         result = parse_gmx_mmpbsa_dat(results_text, solvent_model=solvent_model)
+        if decomp_text is not None:
+            result.decomposition = parse_gmx_mmpbsa_decomp(decomp_text)
         result.provenance = provenance
         result.metadata.update(
             {
@@ -417,9 +444,19 @@ class GromacsMMGBSA(MMGBSAEngine):
             )
 
     def _invoke(
-        self, run_dir: Path, structure: Path, traj: Path, top: Path | None
+        self,
+        run_dir: Path,
+        structure: Path,
+        traj: Path,
+        top: Path | None,
+        *,
+        decomp: bool = False,
     ) -> str:
-        """Run gmx_MMPBSA and return the results text."""
+        """Run gmx_MMPBSA and return the results text.
+
+        When ``decomp`` is set, gmx_MMPBSA also writes
+        ``FINAL_DECOMP_MMPBSA.dat`` (the caller reads it from ``run_dir``).
+        """
         results = "FINAL_RESULTS_MMPBSA.dat"
         cmd = [
             self.executable,
@@ -434,6 +471,8 @@ class GromacsMMGBSA(MMGBSAEngine):
         ]
         if top is not None:
             cmd += ["-cp", str(top)]
+        if decomp:
+            cmd += ["-do", "FINAL_DECOMP_MMPBSA.dat"]
         self._run_subprocess(cmd, cwd=run_dir, step="gmx_MMPBSA")
 
         out = run_dir / results
