@@ -30,7 +30,12 @@ from molforge.freeenergy import DeltaDeltaG, FreeEnergyResult
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-__all__ = ["from_alchemlyb", "from_delta_f", "relative_binding_free_energy"]
+__all__ = [
+    "absolute_binding_free_energy",
+    "from_alchemlyb",
+    "from_delta_f",
+    "relative_binding_free_energy",
+]
 
 # Boltzmann constant in kcal/(mol·K), = R / 4184 with the CODATA gas
 # constant R = 8.314462618 J/(mol·K); this is what alchemlyb's to_kcalmol
@@ -230,4 +235,80 @@ def relative_binding_free_energy(
         value=value,
         uncertainty=uncertainty,
         tighter=tighter,
+    )
+
+
+def _leg_terms(leg: FreeEnergyResult | float) -> tuple[float, float]:
+    """(value, uncertainty) from a leg given as a result or a bare float."""
+    if isinstance(leg, FreeEnergyResult):
+        return leg.delta_g, leg.uncertainty
+    return float(leg), 0.0
+
+
+def absolute_binding_free_energy(
+    complex_leg: FreeEnergyResult,
+    solvent_leg: FreeEnergyResult,
+    *,
+    restraint_correction: FreeEnergyResult | float = 0.0,
+    method: str = "ABFE",
+    metadata: Mapping[str, object] | None = None,
+) -> FreeEnergyResult:
+    """Close a double-decoupling cycle into an absolute binding ΔG.
+
+    Absolute binding free energy (ABFE) by double decoupling annihilates
+    the ligand's interactions with its environment in two phases —
+    restrained in the complex, and free in solvent — and adds a
+    standard-state restraint correction. The thermodynamic cycle gives
+
+        ΔG_bind = ΔG_solvent − ΔG_complex + restraint_correction
+
+    where the two legs are **decoupling** free energies (coupled →
+    non-interacting): a strong binder is hard to decouple from the complex
+    (large positive ``ΔG_complex``), so ``ΔG_solvent − ΔG_complex`` comes
+    out negative — favorable — as it should.
+
+    Unlike the relative cycle, this yields an *absolute* ΔG_bind, so the
+    result is a :class:`FreeEnergyResult` that ranks directly.
+
+    Convention notes:
+
+    - Pass the legs as decoupling free energies. If your λ schedule runs
+      the other way (coupling), negate them (or reverse the λ order before
+      :func:`from_alchemlyb`).
+    - ``restraint_correction`` is a *signed* contribution added as-is —
+      supply it with the sign your protocol uses (e.g. a Boresch
+      standard-state correction). It may be a float or a
+      :class:`FreeEnergyResult` (whose uncertainty then propagates).
+
+    Args:
+        complex_leg: ΔG of decoupling the (restrained) ligand in the
+            complex.
+        solvent_leg: ΔG of decoupling the ligand in solvent.
+        restraint_correction: Signed standard-state / restraint term.
+        method: Value for :attr:`FreeEnergyResult.method`.
+        metadata: Extra items merged into the result's metadata.
+
+    Returns:
+        A :class:`FreeEnergyResult` with the absolute ΔG_bind in kcal/mol
+        (``components`` is ``None``) and the three terms' errors propagated
+        in quadrature.
+    """
+    rc, rc_unc = _leg_terms(restraint_correction)
+    delta_g = solvent_leg.delta_g - complex_leg.delta_g + rc
+    uncertainty = math.hypot(complex_leg.uncertainty, solvent_leg.uncertainty, rc_unc)
+
+    meta: dict[str, object] = {
+        "complex_leg": complex_leg.delta_g,
+        "solvent_leg": solvent_leg.delta_g,
+        "restraint_correction": rc,
+    }
+    if metadata:
+        meta.update(metadata)
+
+    return FreeEnergyResult(
+        delta_g=delta_g,
+        uncertainty=uncertainty,
+        method=method,
+        components=None,
+        metadata=meta,
     )

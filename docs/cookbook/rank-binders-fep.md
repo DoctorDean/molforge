@@ -111,10 +111,26 @@ does the network fit.
 
 `from_alchemlyb` works with any alchemlyb estimator, so TI or BAR legs
 ingest the same way (the `method` label follows the estimator's name).
-Absolute binding FEP (decoupling legs plus a restraint correction) also
-produces per-leg ΔGs you can ingest, but closing *that* cycle — with its
-sign conventions and restraint term — is on you; `from_delta_f` /
-`from_alchemlyb` give you the pieces.
+
+Absolute binding FEP (double decoupling) has its own cycle helper,
+`absolute_binding_free_energy`, which combines the two decoupling legs and
+a standard-state restraint correction into an *absolute* ΔG_bind:
+
+```python
+from molforge.wrappers.freeenergy import absolute_binding_free_energy, from_alchemlyb
+
+dg_bind = absolute_binding_free_energy(
+    from_alchemlyb(complex_decoupling_est),   # ligand decoupled in the complex
+    from_alchemlyb(solvent_decoupling_est),   # ligand decoupled in solvent
+    restraint_correction=-1.6,                # signed, from your Boresch/analytical term
+)
+# ΔG_bind = ΔG_solvent − ΔG_complex + restraint_correction
+```
+
+It returns a `FreeEnergyResult` (not a `DeltaDeltaG`), so absolute ΔG_bind
+values rank directly in `FreeEnergyRanking`. The legs must be *decoupling*
+free energies and the restraint term carries the sign your protocol uses —
+see the function's docstring for the convention.
 
 ## FEP or MM/GBSA
 

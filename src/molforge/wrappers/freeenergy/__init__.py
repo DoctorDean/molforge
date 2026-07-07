@@ -9,6 +9,7 @@ and invoke the tools are layered on top.
 from __future__ import annotations
 
 from molforge.wrappers.freeenergy.alchemlyb import (
+    absolute_binding_free_energy,
     from_alchemlyb,
     from_delta_f,
     relative_binding_free_energy,
@@ -28,6 +29,7 @@ from molforge.wrappers.freeenergy.gromacs import (
 __all__ = [
     "AmberMMGBSA",
     "GromacsMMGBSA",
+    "absolute_binding_free_energy",
     "build_mmpbsa_input",
     "from_alchemlyb",
     "from_delta_f",

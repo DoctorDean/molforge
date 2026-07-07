@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Absolute-FEP cycle helper (`molforge.wrappers.freeenergy`).**
+  `absolute_binding_free_energy(complex_leg, solvent_leg, *,
+  restraint_correction=0.0)` closes a double-decoupling cycle into an
+  *absolute* ΔG_bind: ΔG_solvent − ΔG_complex + restraint_correction,
+  with the three terms' errors propagated in quadrature. The legs are
+  decoupling free energies (a strong binder is hard to decouple from the
+  complex, so the sign comes out favorable); the restraint term is a
+  signed contribution (float or `FreeEnergyResult`) supplied per the
+  user's protocol. Returns a `FreeEnergyResult` (not a `DeltaDeltaG`),
+  since ABFE gives an absolute affinity that ranks directly. The FEP
+  recipe's ABFE section now points at it.
 - **"Rank binders with FEP" cookbook recipe.** The rigorous sibling of the
   MM/GBSA recipe: ingest each FEP edge's two legs with `from_alchemlyb`,
   close the cycle with `relative_binding_free_energy`, read the per-edge

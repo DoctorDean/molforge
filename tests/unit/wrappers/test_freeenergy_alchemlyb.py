@@ -14,6 +14,7 @@ import pytest
 
 from molforge.freeenergy import FreeEnergyRanking
 from molforge.wrappers.freeenergy import (
+    absolute_binding_free_energy,
     from_alchemlyb,
     from_delta_f,
     relative_binding_free_energy,
@@ -219,3 +220,46 @@ class TestRelativeBindingFreeEnergy:
             )
         ranking = FreeEnergyRanking(results)
         assert [name for name, _ in ranking.ranked] == ["B", "C", "A"]  # B (-9) < C (-4) < A (0)
+
+
+class TestAbsoluteBindingFreeEnergy:
+    def _leg(self, dg: float, unc: float):
+        return from_delta_f(
+            np.array([[0.0, dg]]), np.array([[0.0, unc]]), energy_unit="kcal/mol"
+        )
+
+    def test_double_decoupling_cycle(self) -> None:
+        # ΔG_bind = solvent − complex + restraint = 35 − 45 − 1.5 = -11.5
+        r = absolute_binding_free_energy(
+            self._leg(45.0, 0.5), self._leg(35.0, 0.4), restraint_correction=-1.5
+        )
+        assert r.delta_g == pytest.approx(-11.5)
+        assert r.uncertainty == pytest.approx((0.5**2 + 0.4**2) ** 0.5)
+        assert r.method == "ABFE"
+        assert r.components is None  # absolute ΔG, not a term breakdown
+        assert r.metadata["complex_leg"] == pytest.approx(45.0)
+        assert r.metadata["solvent_leg"] == pytest.approx(35.0)
+        assert r.metadata["restraint_correction"] == pytest.approx(-1.5)
+
+    def test_default_no_restraint(self) -> None:
+        r = absolute_binding_free_energy(self._leg(45.0, 0.0), self._leg(35.0, 0.0))
+        assert r.delta_g == pytest.approx(-10.0)
+        assert r.metadata["restraint_correction"] == 0.0
+
+    def test_restraint_as_result_propagates_error(self) -> None:
+        r = absolute_binding_free_energy(
+            self._leg(45.0, 0.5),
+            self._leg(35.0, 0.4),
+            restraint_correction=self._leg(-1.5, 0.2),
+        )
+        assert r.delta_g == pytest.approx(-11.5)
+        assert r.uncertainty == pytest.approx((0.5**2 + 0.4**2 + 0.2**2) ** 0.5)
+
+    def test_ranks_as_absolute_result(self) -> None:
+        # ABFE gives absolute ΔG_bind, so results rank directly.
+        results = {
+            "lig_a": absolute_binding_free_energy(self._leg(45.0, 0.5), self._leg(35.0, 0.5)),
+            "lig_b": absolute_binding_free_energy(self._leg(48.0, 0.5), self._leg(35.0, 0.5)),
+        }
+        ranking = FreeEnergyRanking(results)
+        assert ranking.best[0] == "lig_b"  # -13 tighter than -10
