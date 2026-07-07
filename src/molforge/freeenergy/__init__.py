@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping
+    from collections.abc import Iterator, Mapping, Sequence
 
     import numpy as np
     from numpy.typing import NDArray
@@ -219,6 +219,111 @@ class FreeEnergyRanking:
         return iter(self.ranked)
 
 
+@dataclass(frozen=True)
+class ResidueContribution:
+    """One residue's contribution to the binding free energy.
+
+    From a per-residue MM/PB(GB)SA decomposition (the DELTA section):
+    ``total`` is the residue's net contribution to ΔG_bind, split into the
+    same energy terms as the overall estimate. A large negative ``total``
+    marks a binding hotspot; a positive one, a residue that opposes
+    binding.
+
+    Attributes:
+        residue: Residue label, e.g. ``"LEU 40"``.
+        total: Net contribution to ΔG_bind in kcal/mol (the sum of the
+            component terms below).
+        uncertainty: Standard error of ``total`` across frames.
+        internal: Internal term (bond/angle/dihedral; plus 1-4 for
+            ``idecomp=1``).
+        vdw: van der Waals contribution.
+        electrostatic: Electrostatic contribution.
+        polar_solvation: Polar solvation contribution.
+        nonpolar_solvation: Non-polar solvation contribution.
+    """
+
+    residue: str
+    total: float
+    uncertainty: float
+    internal: float
+    vdw: float
+    electrostatic: float
+    polar_solvation: float
+    nonpolar_solvation: float
+
+    def __post_init__(self) -> None:
+        if self.uncertainty < 0:
+            raise ValueError(f"uncertainty must be >= 0, got {self.uncertainty}")
+
+
+class Decomposition:
+    """A per-residue decomposition of a binding free energy.
+
+    A mapping from residue label to its :class:`ResidueContribution`,
+    preserving the order the residues were reported, with
+    :meth:`hotspots` to surface the residues that drive (or oppose)
+    binding. This is the endpoint-method answer to "*where* does the
+    affinity come from?" once :class:`FreeEnergyRanking` has answered
+    "which ligand?".
+    """
+
+    def __init__(self, contributions: Sequence[ResidueContribution]) -> None:
+        """Build a decomposition.
+
+        Args:
+            contributions: Per-residue contributions, in report order.
+
+        Raises:
+            ValueError: If two contributions share a residue label.
+        """
+        by_residue: dict[str, ResidueContribution] = {}
+        for c in contributions:
+            if c.residue in by_residue:
+                raise ValueError(f"duplicate residue label {c.residue!r}")
+            by_residue[c.residue] = c
+        self._by_residue = by_residue
+
+    @property
+    def residues(self) -> list[ResidueContribution]:
+        """All contributions, in report order."""
+        return list(self._by_residue.values())
+
+    @property
+    def total(self) -> float:
+        """Sum of every residue's contribution (the decomposed total)."""
+        return sum(c.total for c in self._by_residue.values())
+
+    def hotspots(
+        self, n: int | None = None, *, favorable: bool = True
+    ) -> list[ResidueContribution]:
+        """Residues ranked by contribution.
+
+        Args:
+            n: Return at most this many; ``None`` returns all.
+            favorable: If true (default), most binding-favorable first
+                (most negative ``total``); if false, most opposing first.
+
+        Returns:
+            The ranked contributions.
+        """
+        ordered = sorted(
+            self._by_residue.values(), key=lambda c: c.total, reverse=not favorable
+        )
+        return ordered if n is None else ordered[:n]
+
+    def __getitem__(self, residue: str) -> ResidueContribution:
+        return self._by_residue[residue]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._by_residue)
+
+    def __len__(self) -> int:
+        return len(self._by_residue)
+
+    def __contains__(self, residue: object) -> bool:
+        return residue in self._by_residue
+
+
 class MMGBSAEngine(ABC):
     """Abstract base for endpoint binding-free-energy engines.
 
@@ -281,10 +386,12 @@ class MMGBSAEngineNotInstalledError(ImportError):
 
 
 __all__ = [
+    "Decomposition",
     "DeltaDeltaG",
     "FreeEnergyComponents",
     "FreeEnergyRanking",
     "FreeEnergyResult",
     "MMGBSAEngine",
     "MMGBSAEngineNotInstalledError",
+    "ResidueContribution",
 ]

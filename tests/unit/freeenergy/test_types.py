@@ -13,12 +13,14 @@ import numpy as np
 import pytest
 
 from molforge.freeenergy import (
+    Decomposition,
     DeltaDeltaG,
     FreeEnergyComponents,
     FreeEnergyRanking,
     FreeEnergyResult,
     MMGBSAEngine,
     MMGBSAEngineNotInstalledError,
+    ResidueContribution,
 )
 
 
@@ -161,3 +163,68 @@ class TestEngineBase:
         assert repr(engine) == "Dummy()"
         out = engine.run(object(), receptor="chain A", ligand="resname LIG")
         assert out.delta_g == pytest.approx(-7.0)
+
+
+def _contrib(residue: str, total: float, uncertainty: float = 0.1) -> ResidueContribution:
+    return ResidueContribution(
+        residue=residue,
+        total=total,
+        uncertainty=uncertainty,
+        internal=0.0,
+        vdw=total,
+        electrostatic=0.0,
+        polar_solvation=0.0,
+        nonpolar_solvation=0.0,
+    )
+
+
+class TestResidueContribution:
+    def test_fields_and_frozen(self) -> None:
+        c = ResidueContribution("LEU 40", -18.86, 0.79, 22.06, -6.83, -32.53, -1.57, 0.01)
+        assert c.residue == "LEU 40"
+        assert c.total == pytest.approx(-18.86)
+        assert c.vdw == pytest.approx(-6.83)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            c.total = 0.0  # type: ignore[misc]
+
+    def test_negative_uncertainty_rejected(self) -> None:
+        with pytest.raises(ValueError, match="uncertainty must be >= 0"):
+            _contrib("X", -1.0, uncertainty=-0.5)
+
+
+class TestDecomposition:
+    def test_order_lookup_and_membership(self) -> None:
+        d = Decomposition([_contrib("LEU 40", -18.86), _contrib("THR 41", -23.99)])
+        assert len(d) == 2
+        assert list(d) == ["LEU 40", "THR 41"]  # report order
+        assert d["THR 41"].total == pytest.approx(-23.99)
+        assert "LEU 40" in d
+        assert [c.residue for c in d.residues] == ["LEU 40", "THR 41"]
+
+    def test_total_sums_contributions(self) -> None:
+        d = Decomposition([_contrib("A", -18.86), _contrib("B", -23.99), _contrib("C", 9.12)])
+        assert d.total == pytest.approx(-33.73)
+
+    def test_hotspots_favorable_first(self) -> None:
+        d = Decomposition(
+            [_contrib("LEU 40", -18.86), _contrib("THR 41", -23.99), _contrib("RAL 241", 9.12)]
+        )
+        assert [c.residue for c in d.hotspots(2)] == ["THR 41", "LEU 40"]
+
+    def test_hotspots_opposing(self) -> None:
+        d = Decomposition([_contrib("THR 41", -23.99), _contrib("RAL 241", 9.12)])
+        assert d.hotspots(1, favorable=False)[0].residue == "RAL 241"
+
+    def test_hotspots_all_when_n_none(self) -> None:
+        d = Decomposition([_contrib("A", -1.0), _contrib("B", -2.0)])
+        assert len(d.hotspots()) == 2
+
+    def test_duplicate_residue_rejected(self) -> None:
+        with pytest.raises(ValueError, match="duplicate residue"):
+            Decomposition([_contrib("A", -1.0), _contrib("A", -2.0)])
+
+    def test_empty_allowed(self) -> None:
+        d = Decomposition([])
+        assert len(d) == 0
+        assert d.total == 0.0
+        assert d.hotspots() == []

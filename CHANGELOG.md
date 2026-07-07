@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Per-residue decomposition value types (`molforge.freeenergy`).**
+  `ResidueContribution` (frozen: residue label, total, uncertainty, and
+  the internal/vdw/electrostatic/polar/nonpolar breakdown) and
+  `Decomposition` — a residue-label mapping preserving report order with
+  `.hotspots(n, favorable=...)` (residues ranked by contribution, most
+  binding-favorable first by default), `.total`, and `.residues`. These
+  answer "*where* does the affinity come from?" once `FreeEnergyRanking`
+  has answered "which ligand?"; the parsers land next.
 - **cinnabar network ingest (`molforge.wrappers.freeenergy`).**
   `from_cinnabar(femap_or_dataframe)` reads cinnabar's per-ligand
   MLE-fit absolute estimates (from `FEMap.get_absolute_dataframe()`, or a
