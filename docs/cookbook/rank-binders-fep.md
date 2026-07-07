@@ -101,11 +101,36 @@ for name, r in ranking.ranked:
 
 These are binding free energies *relative to the lead*, not absolute
 ΔG_bind — the whole map floats on the lead's unknown baseline, which is
-exactly what a congeneric optimization cares about. For a non-star
-network (edges between arbitrary pairs) you'd solve the graph for
-per-ligand estimates first; molforge gives you the per-edge `DeltaDeltaG`
-inputs, and a tool like [cinnabar](https://github.com/OpenFreeEnergy/cinnabar)
-does the network fit.
+exactly what a congeneric optimization cares about.
+
+For a non-star network (edges between arbitrary pairs), solve the graph
+for a per-ligand estimate first. [cinnabar](https://cinnabar.openfree.energy)
+does this with a maximum-likelihood estimator; feed it your per-edge
+`DeltaDeltaG` values, then ingest its result:
+
+```python
+from cinnabar import FEMap, Measurement
+from openff.units import unit
+from molforge.wrappers.freeenergy import from_cinnabar
+from molforge.freeenergy import FreeEnergyRanking
+
+femap = FEMap()
+for edge in ddgs.values():   # DeltaDeltaG objects, any topology
+    femap.add_measurement(Measurement(
+        labelA=edge.reference, labelB=edge.other,
+        DG=edge.value * unit.kilocalorie_per_mole,
+        uncertainty=edge.uncertainty * unit.kilocalorie_per_mole,
+        computational=True,
+    ))
+femap.generate_absolute_values()          # the MLE graph fit
+
+ranking = FreeEnergyRanking(from_cinnabar(femap))
+```
+
+`from_cinnabar` reads cinnabar's per-ligand absolute estimates (dropping
+experimental reference rows by default) into `{label: FreeEnergyResult}`.
+Those absolute values share one network offset, so it cancels in every
+pairwise ΔΔG and the ranking is unaffected.
 
 ## Absolute FEP and other estimators
 

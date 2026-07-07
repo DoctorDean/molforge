@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **cinnabar network ingest (`molforge.wrappers.freeenergy`).**
+  `from_cinnabar(femap_or_dataframe)` reads cinnabar's per-ligand
+  MLE-fit absolute estimates (from `FEMap.get_absolute_dataframe()`, or a
+  `FEMap` directly) into `{label: FreeEnergyResult}` that plugs into
+  `FreeEnergyRanking` — closing the non-star-network gap the FEP recipe
+  flagged. Drops experimental reference rows by default, handles the
+  `DG` / `DG (kcal/mol)` column-name variants and openff `Quantity`
+  values, and notes that the shared network offset cancels in ranking.
+  Duck-typed via `.columns` / `.to_dict`, so no pandas/cinnabar
+  dependency. The FEP recipe now shows the full network path.
 - **Absolute-FEP cycle helper (`molforge.wrappers.freeenergy`).**
   `absolute_binding_free_energy(complex_leg, solvent_leg, *,
   restraint_correction=0.0)` closes a double-decoupling cycle into an

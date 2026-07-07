@@ -20,6 +20,7 @@ from molforge.wrappers.freeenergy.amber import (
     parse_mmpbsa_dat,
     selection_to_amber_mask,
 )
+from molforge.wrappers.freeenergy.cinnabar import from_cinnabar
 from molforge.wrappers.freeenergy.gromacs import (
     GromacsMMGBSA,
     parse_gmx_mmpbsa_dat,
@@ -32,6 +33,7 @@ __all__ = [
     "absolute_binding_free_energy",
     "build_mmpbsa_input",
     "from_alchemlyb",
+    "from_cinnabar",
     "from_delta_f",
     "parse_gmx_mmpbsa_dat",
     "parse_mmpbsa_dat",
