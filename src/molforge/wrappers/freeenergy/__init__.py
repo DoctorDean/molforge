@@ -25,6 +25,7 @@ from molforge.wrappers.freeenergy.cinnabar import from_cinnabar
 from molforge.wrappers.freeenergy.gromacs import (
     GromacsMMGBSA,
     parse_gmx_mmpbsa_dat,
+    parse_gmx_mmpbsa_decomp,
     selection_to_ndx_group,
 )
 
@@ -37,6 +38,7 @@ __all__ = [
     "from_cinnabar",
     "from_delta_f",
     "parse_gmx_mmpbsa_dat",
+    "parse_gmx_mmpbsa_decomp",
     "parse_mmpbsa_dat",
     "parse_mmpbsa_decomp",
     "relative_binding_free_energy",

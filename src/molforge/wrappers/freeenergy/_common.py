@@ -24,6 +24,7 @@ import numpy as np
 
 from molforge.core import Provenance
 from molforge.freeenergy import (
+    Decomposition,
     FreeEnergyComponents,
     FreeEnergyResult,
     ResidueContribution,
@@ -278,6 +279,11 @@ def parse_decomp_row(line: str) -> ResidueContribution | None:
     sub-header rows (``Residue``, ``Avg.``, ``van der Waals`` …) fail the
     float check and return ``None``.
 
+    The residue label is the leading ``resname resnum`` pair. The delta
+    section's rows carry an extra ``Location`` column (e.g. ``LEU 40 R LEU
+    40`` — the residue's position in the receptor/ligand topology), which
+    sits between the residue and the numbers and is dropped.
+
     Args:
         line: A single line from a decomposition block.
 
@@ -293,7 +299,7 @@ def parse_decomp_row(line: str) -> ResidueContribution | None:
         nums = [float(t) for t in tail]
     except ValueError:
         return None
-    label = " ".join(tokens[:-_DECOMP_NUMBERS]).strip()
+    label = " ".join(tokens[: -_DECOMP_NUMBERS][:2])
     if not label:
         return None
     return ResidueContribution(
@@ -361,3 +367,41 @@ def decomp_species_block(
 
     end = after_block.find("Energy Decomposition:")
     return after_block if end == -1 else after_block[:end]
+
+
+# Species-section markers, shared by MMPBSA.py and gmx_MMPBSA (gmx uses the
+# same "DELTAS:"/"Complex:"/… headers, since it reuses MMPBSA.py's writer).
+DECOMP_SECTIONS = {
+    "delta": "DELTAS:",
+    "complex": "Complex:",
+    "receptor": "Receptor:",
+    "ligand": "Ligand:",
+}
+
+
+def parse_decomp(text: str, *, section: str = "delta") -> Decomposition:
+    """Parse a per-residue decomposition file into a :class:`Decomposition`.
+
+    Shared by the Amber and GROMACS wrappers: both ``MMPBSA.py`` and
+    ``gmx_MMPBSA`` write the same ``FINAL_DECOMP_MMPBSA.dat`` structure, so a
+    single implementation reads the requested species' "Total Energy
+    Decomposition" block for either.
+
+    Args:
+        text: Contents of ``FINAL_DECOMP_MMPBSA.dat``.
+        section: Which species block — ``"delta"`` (default, the binding
+            contribution), ``"complex"``, ``"receptor"``, or ``"ligand"``.
+
+    Returns:
+        The per-residue :class:`Decomposition`, in report order.
+
+    Raises:
+        ValueError: If ``section`` is unknown or the block is absent.
+    """
+    try:
+        marker = DECOMP_SECTIONS[section.lower()]
+    except KeyError:
+        raise ValueError(
+            f"unknown section {section!r}; choose from {sorted(DECOMP_SECTIONS)}"
+        ) from None
+    return Decomposition(parse_decomp_block(decomp_species_block(text, marker)))

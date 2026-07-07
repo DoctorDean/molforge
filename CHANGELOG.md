@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **gmx_MMPBSA per-residue decomposition parser (`molforge.wrappers.freeenergy`).**
+  `parse_gmx_mmpbsa_decomp(text, *, section="delta")` reads the same
+  `FINAL_DECOMP_MMPBSA.dat` structure gmx_MMPBSA shares with MMPBSA.py.
+  The decomposition logic (section map + block location + row assembly)
+  now lives once in `_common.parse_decomp`, which both wrappers delegate
+  to. The shared row parser takes the residue's `resname resnum` label and
+  drops the gmx delta section's extra `Location` column, so ligand
+  residues keep their complex numbering.
 - **MMPBSA.py per-residue decomposition parser (`molforge.wrappers.freeenergy`).**
   `parse_mmpbsa_decomp(text, *, section="delta")` reads a
   `FINAL_DECOMP_MMPBSA.dat` and returns a `Decomposition` over the

@@ -137,14 +137,6 @@ def parse_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyResul
     )
 
 
-_DECOMP_SECTIONS = {
-    "delta": "DELTAS:",
-    "complex": "Complex:",
-    "receptor": "Receptor:",
-    "ligand": "Ligand:",
-}
-
-
 def parse_mmpbsa_decomp(text: str, *, section: str = "delta") -> Decomposition:
     """Parse a ``MMPBSA.py`` per-residue decomposition.
 
@@ -166,14 +158,7 @@ def parse_mmpbsa_decomp(text: str, *, section: str = "delta") -> Decomposition:
     Raises:
         ValueError: If ``section`` is unknown or the block is absent.
     """
-    try:
-        marker = _DECOMP_SECTIONS[section.lower()]
-    except KeyError:
-        raise ValueError(
-            f"unknown section {section!r}; choose from {sorted(_DECOMP_SECTIONS)}"
-        ) from None
-    block = _common.decomp_species_block(text, marker)
-    return Decomposition(_common.parse_decomp_block(block))
+    return _common.parse_decomp(text, section=section)
 
 
 __all__ = [

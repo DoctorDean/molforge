@@ -34,6 +34,7 @@ from molforge.cache import get_default_cache
 from molforge.core import Provenance
 from molforge.core import metadata_keys as mk
 from molforge.freeenergy import (
+    Decomposition,
     FreeEnergyResult,
     MMGBSAEngine,
     MMGBSAEngineNotInstalledError,
@@ -132,6 +133,34 @@ def parse_gmx_mmpbsa_dat(text: str, *, solvent_model: str = "gb") -> FreeEnergyR
         method=str(spec["method"]),
         metadata=metadata,
     )
+
+
+def parse_gmx_mmpbsa_decomp(text: str, *, section: str = "delta") -> Decomposition:
+    """Parse a ``gmx_MMPBSA`` per-residue decomposition.
+
+    gmx_MMPBSA writes the same ``FINAL_DECOMP_MMPBSA.dat`` structure as
+    ``MMPBSA.py`` (it reuses that writer), so this reads the requested
+    species' "Total Energy Decomposition" block just like
+    :func:`~molforge.wrappers.freeenergy.parse_mmpbsa_decomp`. The default
+    ``"delta"`` section is the per-residue binding contribution.
+
+    gmx's delta rows carry an extra ``Location`` column (the residue's spot
+    in the receptor/ligand topology); it is dropped, and the residue keeps
+    its complex-numbering ``resname resnum`` label.
+
+    Args:
+        text: Contents of ``FINAL_DECOMP_MMPBSA.dat``.
+        section: Which species block to read — ``"delta"`` (default),
+            ``"complex"``, ``"receptor"``, or ``"ligand"``.
+
+    Returns:
+        A :class:`~molforge.freeenergy.Decomposition` over the residues in
+        that block, in report order.
+
+    Raises:
+        ValueError: If ``section`` is unknown or the block is absent.
+    """
+    return _common.parse_decomp(text, section=section)
 
 
 def _ndx_block(name: str, atoms_1based: NDArray[np.int64], per_line: int) -> str:
@@ -430,4 +459,9 @@ class GromacsMMGBSA(MMGBSAEngine):
             ) from e
 
 
-__all__ = ["GromacsMMGBSA", "parse_gmx_mmpbsa_dat", "selection_to_ndx_group"]
+__all__ = [
+    "GromacsMMGBSA",
+    "parse_gmx_mmpbsa_dat",
+    "parse_gmx_mmpbsa_decomp",
+    "selection_to_ndx_group",
+]

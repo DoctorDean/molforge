@@ -1,0 +1,24 @@
+|Run on Tue Mar  9 23:48:23 2021
+|GB non-polar solvation energies calculated with gbsa=2
+|idecomp = 2 Per-residue decomp adding 1-4 interactions to EEL and VDW.
+|Energy Decomposition Analysis (All units kcal/mol) Generalized Born solvent
+
+Complex:
+Total Energy Decomposition:
+Residue    Internal                                 van der Waals                           Electrostatic                           Polar Solvation                         Non-Polar Solv.                         TOTAL
+           Avg.     Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean
+LEU  40    22.06    3.40        0.82                -6.83   1.27        0.31                -32.53  0.81        0.20                -1.57   0.38        0.09                0.01    0.00        0.00                -18.86  3.27        0.79
+
+DELTAS:
+Total Energy Decomposition:
+Residue Location    Internal                                van der Waals                           Electrostatic                           Polar Solvation                         Non-Polar Solv.                         TOTAL
+                    Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean
+LEU  40 R LEU  40   0.00    0.00        0.00                -2.46   0.21        0.05                -0.45   0.13        0.03                1.11    0.18        0.04                -0.22   0.02        0.01                -2.02   0.23        0.06
+THR  41 R THR  41   0.00    0.00        0.00                -2.09   0.15        0.04                -0.60   0.12        0.03                1.26    0.15        0.04                -0.28   0.02        0.00                -1.72   0.17        0.04
+ALA  44 R ALA  44   0.00    0.00        0.00                -1.50   0.13        0.03                0.07    0.05        0.01                -0.34   0.04        0.01                -0.21   0.02        0.00                -1.98   0.17        0.04
+RAL 241 L RAL   1   0.00    0.00        0.00                -29.49  1.14        0.28                -15.72  1.60        0.39                22.44   0.74        0.18                -5.22   0.04        0.01                -28.00  1.36        0.33
+
+Sidechain Energy Decomposition:
+Residue Location    Internal                                van der Waals                           Electrostatic                           Polar Solvation                         Non-Polar Solv.                         TOTAL
+                    Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean   Avg.    Std. Dev.   Std. Err. of Mean
+LEU  40 R LEU  40   0.00    0.00        0.00                -1.45   0.17        0.04                -0.23   0.10        0.02                0.25    0.05        0.01                -0.19   0.02        0.01                -1.63   0.15        0.04
