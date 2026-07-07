@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`&decomp` namelist support in `build_mmpbsa_input`.** New `idecomp`
+  (0 = off, default; 1/2 per-residue; 3/4 pairwise), `dec_verbose`, and
+  `print_res` parameters make the shared input builder emit the `&decomp`
+  namelist that tells MMPBSA.py / gmx_MMPBSA to write
+  `FINAL_DECOMP_MMPBSA.dat`. `idecomp` is range-checked. The two engines
+  will use this to request decomposition from a `run()`.
 - **gmx_MMPBSA per-residue decomposition parser (`molforge.wrappers.freeenergy`).**
   `parse_gmx_mmpbsa_decomp(text, *, section="delta")` reads the same
   `FINAL_DECOMP_MMPBSA.dat` structure gmx_MMPBSA shares with MMPBSA.py.

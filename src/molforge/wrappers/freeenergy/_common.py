@@ -81,11 +81,14 @@ def build_mmpbsa_input(
     salt_conc: float = 0.0,
     igb: int = 5,
     verbose: int = 1,
+    idecomp: int = 0,
+    dec_verbose: int = 0,
+    print_res: str = "within 6",
 ) -> str:
     """Build the ``mmpbsa.in`` namelist text for an MM/PB(GB)SA run.
 
     Shared by the Amber and gmx_MMPBSA engines — both consume the same
-    ``&general`` / ``&gb`` / ``&pb`` namelists.
+    ``&general`` / ``&gb`` / ``&pb`` (and optional ``&decomp``) namelists.
 
     Args:
         solvent_model: ``"gb"`` (writes a ``&gb`` namelist, MM/GBSA) or
@@ -97,13 +100,21 @@ def build_mmpbsa_input(
             ``istrng`` for PB).
         igb: Generalized Born model index (GB only; 5 = OBC-II).
         verbose: MMPBSA ``verbose`` level.
+        idecomp: Per-residue decomposition scheme. ``0`` (default) writes
+            no ``&decomp`` namelist; ``1`` or ``2`` request a per-residue
+            decomposition (``1`` folds 1-4 terms into ``internal``, ``2``
+            into ``electrostatic``/``vdw``). ``3``/``4`` are the pairwise
+            schemes.
+        dec_verbose: ``&decomp`` output level (0 = total contributions).
+        print_res: Which residues to decompose (``&decomp print_res``);
+            the default selects residues within 6 Å of the interface.
 
     Returns:
         The input-file text, ready to write to ``mmpbsa.in``.
 
     Raises:
-        ValueError: On an unknown ``solvent_model`` or an invalid frame
-            range / interval.
+        ValueError: On an unknown ``solvent_model``, an invalid frame
+            range / interval, or an out-of-range ``idecomp``.
     """
     model = solvent_model.lower()
     if model not in ("gb", "pb"):
@@ -114,6 +125,8 @@ def build_mmpbsa_input(
         raise ValueError(f"end_frame ({end_frame}) must be >= start_frame ({start_frame})")
     if interval < 1:
         raise ValueError(f"interval must be >= 1, got {interval}")
+    if idecomp not in (0, 1, 2, 3, 4):
+        raise ValueError(f"idecomp must be one of 0-4, got {idecomp}")
 
     title = "molforge MM/GBSA input" if model == "gb" else "molforge MM/PBSA input"
     lines = [
@@ -127,6 +140,12 @@ def build_mmpbsa_input(
         lines += ["&gb", f"   igb={igb}, saltcon={salt_conc:g},", "/"]
     else:
         lines += ["&pb", f"   istrng={salt_conc:g},", "/"]
+    if idecomp:
+        lines += [
+            "&decomp",
+            f'   idecomp={idecomp}, dec_verbose={dec_verbose}, print_res="{print_res}",',
+            "/",
+        ]
     return "\n".join(lines) + "\n"
 
 

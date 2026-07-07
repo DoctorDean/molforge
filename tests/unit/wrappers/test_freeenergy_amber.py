@@ -190,6 +190,25 @@ class TestBuildInput:
     def test_zero_salt_formats_cleanly(self) -> None:
         assert "saltcon=0," in build_mmpbsa_input(end_frame=10)
 
+    def test_no_decomp_by_default(self) -> None:
+        assert "&decomp" not in build_mmpbsa_input(end_frame=10)
+
+    def test_decomp_namelist(self) -> None:
+        text = build_mmpbsa_input(end_frame=10, idecomp=1)
+        assert "&decomp" in text
+        assert "idecomp=1" in text
+        assert 'print_res="within 6"' in text
+        assert "dec_verbose=0" in text
+
+    def test_decomp_custom_print_res(self) -> None:
+        text = build_mmpbsa_input(end_frame=10, idecomp=2, print_res="within 8")
+        assert "idecomp=2" in text
+        assert 'print_res="within 8"' in text
+
+    def test_bad_idecomp_raises(self) -> None:
+        with pytest.raises(ValueError, match="idecomp"):
+            build_mmpbsa_input(end_frame=10, idecomp=9)
+
     def test_unknown_model_raises(self) -> None:
         with pytest.raises(ValueError, match="'gb' or 'pb'"):
             build_mmpbsa_input(solvent_model="implicit", end_frame=10)
