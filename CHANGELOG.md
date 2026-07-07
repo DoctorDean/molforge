@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Decomposition section in the MM/GBSA ranking recipe.** Shows getting
+  the per-residue hotspot map from either engine with `idecomp=1`, reading
+  `result.decomposition.hotspots(n)` (and `favorable=False` for residues
+  that oppose binding), inspecting a `ResidueContribution`'s term
+  breakdown, and parsing an existing `FINAL_DECOMP_MMPBSA.dat` directly.
+  Docs only.
 - **`GromacsMMGBSA.run(..., idecomp=...)`.** The GROMACS engine now
   supports per-residue decomposition too, mirroring the Amber path: it
   writes `&decomp`, passes `-do` to gmx_MMPBSA, parses the delta block

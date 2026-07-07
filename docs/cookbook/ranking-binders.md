@@ -194,6 +194,41 @@ second pass, a re-run of the notebook — returns instantly without
 touching the tools. Change any parameter (GB → PB, a different frame
 range) and it recomputes. See [Caching results](caching-results.md).
 
+## Per-residue decomposition: which residues drive binding?
+
+Once you know *which* ligand binds tightest, decomposition tells you
+*where* the affinity comes from — the per-residue hotspot map. Pass
+`idecomp=1` (or `2`) to either engine's `run()`:
+
+```python
+result = engine.run(complex_ready, receptor="chain A", ligand="resname LIG", idecomp=1)
+
+for res in result.decomposition.hotspots(5):
+    print(f"{res.residue:>8}  {res.total:+.2f} ± {res.uncertainty:.2f} kcal/mol")
+```
+
+`result.decomposition` is a `Decomposition` — a residue-label mapping.
+`hotspots(n)` returns the most binding-favorable residues first (most
+negative `total`); `hotspots(n, favorable=False)` surfaces residues that
+*oppose* binding, which often flags a clash worth engineering out. Each
+`ResidueContribution` carries the same term breakdown as the overall
+estimate, so you can see whether a hotspot is van der Waals- or
+electrostatics-driven:
+
+```python
+leu = result.decomposition["LEU 40"]
+print(leu.total, leu.vdw, leu.electrostatic, leu.polar_solvation)
+```
+
+This works identically for `AmberMMGBSA` and `GromacsMMGBSA`. Under the
+hood it writes a `&decomp` namelist, has the tool emit
+`FINAL_DECOMP_MMPBSA.dat`, and parses the delta (complex − receptor −
+ligand) block; `print_res="within 6"` (the default) decomposes residues
+within 6 Å of the interface. The decomposition is cached with the result,
+so a repeat `idecomp` run returns instantly. If you already have a
+`FINAL_DECOMP_MMPBSA.dat`, parse it directly with `parse_mmpbsa_decomp`
+(or `parse_gmx_mmpbsa_decomp`).
+
 ## What MM/GBSA is and isn't for
 
 - **Good for:** ranking a congeneric series, triaging analogs, cheap
