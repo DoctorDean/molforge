@@ -90,3 +90,28 @@ def formal_charge(mol: Any) -> int:
     """Net formal charge (sum over atoms)."""
     chem = _chem()
     return int(chem.GetFormalCharge(mol))
+
+
+def read_sdf_records(
+    path: str, *, sanitize: bool = True, remove_hs: bool = False
+) -> list[tuple[Any, str]]:
+    """Read an SDF file into ``(mol, name)`` pairs, chemistry preserved.
+
+    Uses RDKit's ``SDMolSupplier``, so bonds, formal charges, aromaticity,
+    stereochemistry, and any 3D coordinates survive — unlike the
+    coordinate-only :func:`molforge.io.read_sdf`. Records RDKit can't parse
+    are skipped rather than raising, so one bad entry doesn't sink a bulk
+    read.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+    """
+    chem = _chem()
+    supplier = chem.SDMolSupplier(str(path), sanitize=sanitize, removeHs=remove_hs)
+    records: list[tuple[Any, str]] = []
+    for mol in supplier:
+        if mol is None:
+            continue
+        name = mol.GetProp("_Name") if mol.HasProp("_Name") else ""
+        records.append((mol, name))
+    return records

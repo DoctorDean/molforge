@@ -77,6 +77,7 @@ from molforge.io.pdb import (
     write_pdb_string,
 )
 from molforge.io.pdb_alphafold import is_alphafold_pdb, load_alphafold
+from molforge.io.molecules import read_molecules, read_smiles
 from molforge.io.trajectory import (
     iter_trajectory,
     read_trajectory,
@@ -115,4 +116,7 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     "read_trajectory",
     "iter_trajectory",
     "write_trajectory",
+    # Small-molecule ingestion (chemistry-aware, RDKit-backed)
+    "read_molecules",
+    "read_smiles",
 ]

@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Chemistry-aware molecule ingestion (`molforge.io`).** `read_molecules(path)`
+  reads SDF (`.sdf`/`.mol`) and SMILES (`.smi`/`.smiles`) files into
+  `list[Molecule]` with bonds, formal charges, stereochemistry, and any 3D
+  coordinates preserved — unlike the coordinate-only `read_sdf` (which
+  returns `Protein` and is untouched). `read_smiles(text)` parses a SMILES
+  block (`SMILES [name]` per line, skipping blanks/comments). Both are
+  RDKit-backed and lazy; unparseable SDF records are skipped so one bad
+  entry doesn't sink a bulk read.
+- **First-class `Molecule` type (`molforge.core`).** An RDKit-backed
+  small-molecule type — a peer to `Protein` — so molforge can reason about
+  ligands as chemistry (bonds, formal charges, aromaticity, stereo) rather
+  than the bond-less point clouds the coordinate-only path produces.
+  Constructors `Molecule.from_smiles(...)` and `Molecule.from_rdkit(mol)`;
+  identity properties `smiles`, `inchi`, `inchikey`, `formula`,
+  `molecular_weight`, `formal_charge`, `n_atoms`, `n_heavy_atoms`; and
+  `to_rdkit()`. RDKit is a lazy dependency (new `chem` extra): importing
+  `molforge.core` never pulls it in, and a chemistry op without RDKit
+  raises `RDKitNotInstalledError`. This is the foundation for chemistry-
+  aware small-molecule ingestion and cleaning.
 - **Binding free-energy architecture page** (`docs/architecture/free-energy.md`).
   Explains the subsystem's design: the shared value types as one currency,
   the engine-vs-ingest split ("wrap what is cheap to run, ingest what is
