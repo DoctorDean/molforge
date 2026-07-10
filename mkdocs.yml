@@ -81,6 +81,7 @@ nav:
       - End-to-end design: examples/end_to_end_design.ipynb
   - Architecture:
       - Overview: architecture/overview.md
+      - Binding free energy: architecture/free-energy.md
       - API stability: architecture/api-stability.md
       - Roadmap: architecture/roadmap.md
   - API reference:

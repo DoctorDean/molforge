@@ -27,11 +27,13 @@ molforge
 ├── md            # Trajectory and Simulation containers, MDEngine interface
 ├── prep          # MD system preparation: heterogen removal, capping, protonation
 ├── docking       # Pose handling and engine-agnostic docking abstractions
+├── freeenergy    # Binding free energy: value types + the MMGBSAEngine interface
 ├── plugins       # Plugin registry and entry-point discovery
 └── wrappers      # Thin wrappers around external engines
     ├── folding    # AlphaFold, ESMFold, Boltz, RoseTTAFold
     ├── docking    # AutoDock Vina, DiffDock
     ├── md         # OpenMM, GROMACS
+    ├── freeenergy # MMPBSA.py, gmx_MMPBSA; FEP/network ingest (alchemlyb, cinnabar)
     └── generative # RFdiffusion, ProteinMPNN
 ```
 

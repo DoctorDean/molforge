@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Binding free-energy architecture page** (`docs/architecture/free-energy.md`).
+  Explains the subsystem's design: the shared value types as one currency,
+  the engine-vs-ingest split ("wrap what is cheap to run, ingest what is
+  not"), the three tiers (MM/GBSA, relative FEP, absolute FEP), a
+  result-flow diagram, the module layout, the cross-cutting choices
+  (no heavy deps, structural uncertainty, provenance/caching, decomposition
+  ride-along), and a method-choosing guide. Linked in the Architecture nav;
+  the overview module map now lists `freeenergy`. Docs only.
 - **"Absolute binding free energy with FEP" cookbook recipe.** A dedicated
   ABFE walkthrough: the double-decoupling cycle, ingesting the two
   decoupling legs with `from_alchemlyb`, the Boresch orientational
