@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.chem` — molecule standardization (cleaning).** A new
+  subpackage for cheminformatics operations on `Molecule`. `standardize(m)`
+  runs a cleaning pipeline (cleanup → keep-largest-fragment → neutralize,
+  with an optional canonical-tautomer step) so the same structure is seen
+  the same way for identity/dedup/modelling; the granular steps `cleanup`,
+  `largest_fragment`, `neutralize`, and `canonical_tautomer` are exposed
+  too. Each returns a new `Molecule` (input untouched), preserves the name,
+  and records the steps in `metadata["standardized"]`. RDKit-backed and
+  lazy. New `reference/chem.md` page and nav entry.
 - **Chemistry-aware molecule ingestion (`molforge.io`).** `read_molecules(path)`
   reads SDF (`.sdf`/`.mol`) and SMILES (`.smi`/`.smiles`) files into
   `list[Molecule]` with bonds, formal charges, stereochemistry, and any 3D

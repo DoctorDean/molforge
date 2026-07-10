@@ -92,6 +92,34 @@ def formal_charge(mol: Any) -> int:
     return int(chem.GetFormalCharge(mol))
 
 
+def _standardize_mod() -> Any:
+    """Return ``rdkit.Chem.MolStandardize.rdMolStandardize`` or raise."""
+    _chem()  # clean error first if RDKit is absent
+    from rdkit.Chem.MolStandardize import rdMolStandardize
+
+    return rdMolStandardize
+
+
+def cleanup(mol: Any) -> Any:
+    """RDKit ``Cleanup``: sanitize, normalize functional groups, reionize."""
+    return _standardize_mod().Cleanup(mol)
+
+
+def largest_fragment(mol: Any) -> Any:
+    """Keep the largest organic fragment (strips salts/solvents)."""
+    return _standardize_mod().FragmentParent(mol)
+
+
+def uncharge(mol: Any) -> Any:
+    """Neutralize where chemically reasonable."""
+    return _standardize_mod().Uncharger().uncharge(mol)
+
+
+def canonical_tautomer(mol: Any) -> Any:
+    """Pick RDKit's canonical tautomer."""
+    return _standardize_mod().TautomerEnumerator().Canonicalize(mol)
+
+
 def read_sdf_records(
     path: str, *, sanitize: bool = True, remove_hs: bool = False
 ) -> list[tuple[Any, str]]:

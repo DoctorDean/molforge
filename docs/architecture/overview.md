@@ -27,6 +27,7 @@ molforge
 ├── md            # Trajectory and Simulation containers, MDEngine interface
 ├── prep          # MD system preparation: heterogen removal, capping, protonation
 ├── docking       # Pose handling and engine-agnostic docking abstractions
+├── chem          # Cheminformatics ops on Molecule (standardization / cleaning)
 ├── freeenergy    # Binding free energy: value types + the MMGBSAEngine interface
 ├── plugins       # Plugin registry and entry-point discovery
 └── wrappers      # Thin wrappers around external engines
