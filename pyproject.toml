@@ -41,7 +41,7 @@ classifiers = [
 # Minimal runtime dependencies — keep this list small.
 # Heavy / optional deps go under [project.optional-dependencies].
 dependencies = [
-    "numpy>=2.2.6",
+    "numpy>=1.24",
     "typing-extensions>=4.7",
 ]
 
@@ -65,6 +65,9 @@ prep = [
 docking = [
     "rdkit>=2023.9",
 ]
+chem = [
+    "rdkit>=2023.9",
+]
 ml = [
     "torch>=2.1",
     "transformers>=4.40",
@@ -74,7 +77,7 @@ io = [
     "biotite>=0.40",
 ]
 all = [
-    "molforge[structure,sequence,md,prep,docking,ml,io]",
+    "molforge[structure,sequence,md,prep,docking,ml,io,chem]",
 ]
 dev = [
     "pytest>=7.4",

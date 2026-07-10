@@ -24,7 +24,9 @@ from molforge.core.atom_array import (
     IntArray,
     StrArray,
 )
+from molforge.core._rdkit import RDKitNotInstalledError
 from molforge.core.chain import Chain
+from molforge.core.molecule import Molecule
 from molforge.core.constants import (
     NUCLEOTIDE_TO_ONE,
     ONE_TO_THREE,
@@ -46,6 +48,9 @@ __all__ = [  # noqa: RUF022 — grouped by concept, not alphabetical
     "Residue",
     "Chain",
     "Protein",
+    # Small molecule (RDKit-backed; RDKit is a lazy dependency)
+    "Molecule",
+    "RDKitNotInstalledError",
     # Linear
     "AtomArray",
     "ATOM_FIELDS",
