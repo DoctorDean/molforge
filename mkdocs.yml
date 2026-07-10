@@ -63,6 +63,7 @@ nav:
       - Caching results: cookbook/caching-results.md
       - Rank binders (MM/GBSA): cookbook/ranking-binders.md
       - Rank binders (FEP): cookbook/rank-binders-fep.md
+      - Absolute binding FEP: cookbook/absolute-binding-fep.md
       - "Choosing: folding engines": cookbook/choosing-folding.md
       - "Choosing: docking engines": cookbook/choosing-docking.md
       - "Choosing: generative engines": cookbook/choosing-generative.md

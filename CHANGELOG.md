@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"Absolute binding free energy with FEP" cookbook recipe.** A dedicated
+  ABFE walkthrough: the double-decoupling cycle, ingesting the two
+  decoupling legs with `from_alchemlyb`, the Boresch orientational
+  restraint and its analytical standard-state correction (with a
+  sign/sanity check grounded in the ~4 kcal/mol inflation seen when
+  orientational restraints are dropped), combining via
+  `absolute_binding_free_energy`, and ranking several ligands on an
+  absolute scale. The RBFE recipe's "Absolute FEP" section now points
+  here; linked in the cookbook index and nav. Docs only.
 - **Decomposition section in the MM/GBSA ranking recipe.** Shows getting
   the per-residue hotspot map from either engine with `idecomp=1`, reading
   `result.decomposition.hotspots(n)` (and `favorable=False` for residues

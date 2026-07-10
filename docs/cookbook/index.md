@@ -21,6 +21,7 @@ covers concrete workflows.
 | Skip recomputing expensive engine calls you've already run      | [Caching results](caching-results.md)                     |
 | Rank a series of analogs by binding affinity (MM/GBSA)          | [Rank binders with MM/GBSA](ranking-binders.md)           |
 | Rank analogs by rigorous relative affinity (FEP, via alchemlyb) | [Rank binders with FEP](rank-binders-fep.md)              |
+| Compute an absolute binding free energy (ABFE, via alchemlyb)   | [Absolute binding free energy with FEP](absolute-binding-fep.md) |
 
 ## If you're choosing between options...
 
