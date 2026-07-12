@@ -51,7 +51,7 @@ shell script — `molforge` is just imports.
    Drug targets have ligands and ions. Membrane proteins have lipids.
    The data model handles all of it without an awkward special case
    for *"non-protein."*
-5. **Typed, tested, documented.** Strict mypy, ruff-clean, 1,200+ tests
+5. **Typed, tested, documented.** Strict mypy, ruff-clean, 1,800+ tests
    in CI, every public symbol has a Google-style docstring.
 
 ## Where to go next
