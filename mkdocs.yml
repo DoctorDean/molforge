@@ -9,8 +9,8 @@ docs_dir: docs
 
 theme:
   name: material
-  logo: assets/molforge.png
-  favicon: assets/molforge.png
+  logo: assets/emblem.png
+  favicon: assets/favicon.png
   features:
     - navigation.tabs
     - navigation.sections
