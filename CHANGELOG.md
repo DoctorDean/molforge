@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Streaming molecule readers (`molforge.io`).** `iter_molecules(path)` and
+  `iter_smiles(text)` are lazy counterparts to `read_molecules` /
+  `read_smiles` — they yield one `Molecule` at a time (SDF via RDKit's
+  `ForwardSDMolSupplier`, SMILES line by line) so a file larger than memory
+  can be processed without materializing it. `iter_molecules` resolves the
+  format eagerly (a bad extension raises on the call) while per-record
+  parsing stays lazy. Backed by a new streaming `core._rdkit.iter_sdf_records`
+  shim, to which the eager `read_sdf_records` now delegates. This is the
+  ingestion foundation for the forthcoming lazy `Dataset`.
 - **`molforge.chem` — validity and deduplication.** `is_valid(m)` reports
   whether a molecule passes RDKit sanitization (valence, aromaticity,
   kekulization), checked on a copy so nothing is mutated — a predicate you

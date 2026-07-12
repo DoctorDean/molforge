@@ -16,9 +16,10 @@ from molforge.core import Molecule
 from molforge.core import _rdkit
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from os import PathLike
 
-__all__ = ["read_molecules", "read_smiles"]
+__all__ = ["iter_molecules", "iter_smiles", "read_molecules", "read_smiles"]
 
 
 _EXT_TO_FORMAT = {
@@ -112,4 +113,79 @@ def read_molecules(
         ]
     if fmt in ("smiles", "smi"):
         return read_smiles(Path(path).read_text(), sanitize=sanitize, source=source)
+    raise ValueError(f"unknown molecule format {fmt!r}; expected 'sdf' or 'smiles'")
+
+
+def iter_smiles(
+    text: str, *, sanitize: bool = True, source: str = "<string>"
+) -> Iterator[Molecule]:
+    """Stream a SMILES block into molecules, one line at a time.
+
+    The lazy counterpart to :func:`read_smiles` — same ``SMILES [name]``
+    per-line format (blank lines and ``#`` comments skipped), but molecules
+    are yielded as each line is parsed rather than collected into a list.
+
+    Args:
+        text: The SMILES text.
+        sanitize: Run RDKit sanitization on each molecule.
+        source: Recorded in each molecule's ``metadata["source"]``.
+
+    Yields:
+        One :class:`~molforge.core.Molecule` per non-comment line, in order.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+        ValueError: If a SMILES string can't be parsed.
+    """
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split(None, 1)
+        smiles = parts[0]
+        name = parts[1].strip() if len(parts) > 1 else ""
+        mol = _rdkit.mol_from_smiles(smiles, sanitize=sanitize)
+        yield Molecule.from_rdkit(mol, name=name, metadata={"source": source})
+
+
+def _iter_sdf_molecules(source: str, *, sanitize: bool) -> Iterator[Molecule]:
+    for mol, name in _rdkit.iter_sdf_records(source, sanitize=sanitize):
+        yield Molecule.from_rdkit(mol, name=name, metadata={"source": source})
+
+
+def iter_molecules(
+    path: str | PathLike[str],
+    *,
+    format: str | None = None,
+    sanitize: bool = True,
+) -> Iterator[Molecule]:
+    """Stream a molecule file into :class:`Molecule` objects, one at a time.
+
+    The lazy counterpart to :func:`read_molecules`: SDF is streamed with
+    RDKit's ``ForwardSDMolSupplier`` and SMILES line by line, so a file
+    larger than memory can be processed without materializing it. The format
+    is resolved eagerly (so a bad extension or ``format`` raises right away),
+    while per-record parsing stays lazy.
+
+    Args:
+        path: The file to read.
+        format: ``"sdf"`` or ``"smiles"``; inferred from the extension when
+            omitted.
+        sanitize: Run RDKit sanitization on each molecule.
+
+    Returns:
+        A lazy iterator of molecules, in file order; each records the source
+        file in its metadata and takes its ``name`` from the record.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed (raised when the
+            iterator is first consumed).
+        ValueError: On an unknown format (raised eagerly).
+    """
+    fmt = (format or _infer_format(path)).lower()
+    source = str(path)
+    if fmt == "sdf":
+        return _iter_sdf_molecules(source, sanitize=sanitize)
+    if fmt in ("smiles", "smi"):
+        return iter_smiles(Path(path).read_text(), sanitize=sanitize, source=source)
     raise ValueError(f"unknown molecule format {fmt!r}; expected 'sdf' or 'smiles'")

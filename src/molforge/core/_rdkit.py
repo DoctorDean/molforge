@@ -14,7 +14,10 @@ boundary without RDKit installed.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class RDKitNotInstalledError(ImportError):
@@ -136,26 +139,46 @@ def sanitize_ok(mol: Any) -> bool:
     return True
 
 
+def iter_sdf_records(
+    path: str, *, sanitize: bool = True, remove_hs: bool = False
+) -> Iterator[tuple[Any, str]]:
+    """Stream an SDF file as ``(mol, name)`` pairs, one record at a time.
+
+    Uses RDKit's ``ForwardSDMolSupplier`` over an open file handle, so a
+    large multi-record SDF is parsed lazily and never fully materialized —
+    the streaming counterpart to :func:`read_sdf_records`. Chemistry (bonds,
+    formal charges, aromaticity, stereochemistry, any 3D coordinates) is
+    preserved, and records RDKit can't parse are skipped rather than raising
+    so one bad entry doesn't sink the stream.
+
+    Yields:
+        ``(mol, name)`` per parsable record, where ``name`` is the SDF title
+        (the ``_Name`` property) or ``""``.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+    """
+    chem = _chem()  # raise cleanly before opening the file
+    with open(path, "rb") as handle:
+        supplier = chem.ForwardSDMolSupplier(handle, sanitize=sanitize, removeHs=remove_hs)
+        for mol in supplier:
+            if mol is None:
+                continue
+            name = mol.GetProp("_Name") if mol.HasProp("_Name") else ""
+            yield (mol, name)
+
+
 def read_sdf_records(
     path: str, *, sanitize: bool = True, remove_hs: bool = False
 ) -> list[tuple[Any, str]]:
     """Read an SDF file into ``(mol, name)`` pairs, chemistry preserved.
 
-    Uses RDKit's ``SDMolSupplier``, so bonds, formal charges, aromaticity,
-    stereochemistry, and any 3D coordinates survive — unlike the
-    coordinate-only :func:`molforge.io.read_sdf`. Records RDKit can't parse
-    are skipped rather than raising, so one bad entry doesn't sink a bulk
-    read.
+    The eager counterpart to :func:`iter_sdf_records` — materializes the
+    whole file. Bonds, formal charges, aromaticity, stereochemistry, and any
+    3D coordinates survive, unlike the coordinate-only
+    :func:`molforge.io.read_sdf`; unparsable records are skipped.
 
     Raises:
         RDKitNotInstalledError: If RDKit isn't installed.
     """
-    chem = _chem()
-    supplier = chem.SDMolSupplier(str(path), sanitize=sanitize, removeHs=remove_hs)
-    records: list[tuple[Any, str]] = []
-    for mol in supplier:
-        if mol is None:
-            continue
-        name = mol.GetProp("_Name") if mol.HasProp("_Name") else ""
-        records.append((mol, name))
-    return records
+    return list(iter_sdf_records(path, sanitize=sanitize, remove_hs=remove_hs))
