@@ -226,3 +226,41 @@ def conformer_atoms(mol: Any) -> tuple[list[str], list[int], Any]:
     elements = [atom.GetSymbol() for atom in mol.GetAtoms()]
     charges = [atom.GetFormalCharge() for atom in mol.GetAtoms()]
     return elements, charges, coords
+
+
+def mol_from_atoms(
+    elements: list[str], coords: Any, *, charge: int, perceive_bond_orders: bool
+) -> Any:
+    """Build an RDKit ``Mol`` from element symbols and 3D coordinates.
+
+    Connectivity — and, when ``perceive_bond_orders`` is set, bond orders —
+    are inferred from geometry with RDKit's ``rdDetermineBonds``, the reverse
+    of reading coordinates out of a mol. ``charge`` is the molecule's net
+    formal charge, which bond-order perception needs to get valences right.
+    Intended for small molecules, not whole polymers.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+        ValueError: If RDKit can't perceive bonds from the geometry.
+    """
+    chem = _chem()
+    from rdkit.Chem import rdDetermineBonds
+    from rdkit.Geometry import Point3D
+
+    editable = chem.RWMol()
+    for element in elements:
+        editable.AddAtom(chem.Atom(element))
+    conformer = chem.Conformer(len(elements))
+    for i, position in enumerate(coords):
+        x, y, z = position
+        conformer.SetAtomPosition(i, Point3D(float(x), float(y), float(z)))
+    editable.AddConformer(conformer, assignId=True)
+    mol = editable.GetMol()
+    try:
+        if perceive_bond_orders:
+            rdDetermineBonds.DetermineBonds(mol, charge=charge)
+        else:
+            rdDetermineBonds.DetermineConnectivity(mol)
+    except (ValueError, RuntimeError) as e:
+        raise ValueError(f"RDKit could not perceive bonds from geometry: {e}") from e
+    return mol

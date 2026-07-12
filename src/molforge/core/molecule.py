@@ -113,6 +113,56 @@ class Molecule:
         mol = _rdkit.mol_from_smiles(smiles, sanitize=sanitize)
         return cls(mol, name=name, metadata=metadata)
 
+    @classmethod
+    def from_atom_array(
+        cls,
+        atom_array: AtomArray,
+        *,
+        charge: int = 0,
+        perceive_bond_orders: bool = True,
+        name: str = "",
+        metadata: Mapping[str, object] | None = None,
+    ) -> Molecule:
+        """Build a molecule from an :class:`~molforge.core.AtomArray`, perceiving
+        bonds from geometry.
+
+        The reverse of :meth:`to_atom_array`: it takes the array's element
+        symbols and 3D coordinates and infers connectivity — and, by default,
+        bond orders — with RDKit's geometry-based perception, recovering the
+        chemistry the flat coordinate representation doesn't carry.
+
+        Perception is designed for *small molecules*: pass a ligand you've
+        sliced out of a structure, not a whole protein (perceiving bonds over
+        thousands of atoms is slow and unreliable). Formal charges aren't
+        stored on the array, so give the net ``charge`` if the molecule isn't
+        neutral — perception needs it to assign bond orders correctly.
+
+        Args:
+            atom_array: The atoms to build from; its ``element`` and ``coords``
+                are used.
+            charge: Net formal charge of the molecule (for bond-order
+                perception).
+            perceive_bond_orders: Infer bond orders (single/double/aromatic);
+                when False, only connectivity is perceived (all bonds single).
+            name: Optional label.
+            metadata: Optional annotation dict.
+
+        Returns:
+            A new :class:`Molecule` with perceived bonds.
+
+        Raises:
+            RDKitNotInstalledError: If RDKit isn't installed.
+            ValueError: If RDKit can't perceive bonds from the geometry.
+        """
+        elements = [str(element) for element in atom_array.element]
+        mol = _rdkit.mol_from_atoms(
+            elements,
+            atom_array.coords,
+            charge=charge,
+            perceive_bond_orders=perceive_bond_orders,
+        )
+        return cls(mol, name=name, metadata=metadata)
+
     # -- conversion -----------------------------------------------------
 
     def to_rdkit(self) -> Any:

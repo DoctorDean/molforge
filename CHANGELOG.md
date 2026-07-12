@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`Molecule.from_atom_array()` — reverse bridge, coordinates to chemistry.**
+  Builds a `Molecule` from an `AtomArray`'s element symbols and 3D
+  coordinates, perceiving connectivity — and, by default, bond orders — from
+  geometry with RDKit's `rdDetermineBonds`. Give the net `charge` when the
+  molecule isn't neutral (perception needs it), or pass
+  `perceive_bond_orders=False` for connectivity only. Intended for small
+  molecules (a ligand sliced out of a structure), not whole polymers. With
+  `to_atom_array()` this closes the `Molecule` ↔ `AtomArray` round trip.
+  Backed by a new `core._rdkit.mol_from_atoms` shim; RDKit-backed and lazy.
 - **`Molecule.to_atom_array()` — bridge to the structure/ML side.** Flattens a
   `Molecule` into a coordinate-first `AtomArray` (a single `HETATM` / `ligand`
   residue, per-element atom names like `C1`/`C2`/`N1`, formal charges carried

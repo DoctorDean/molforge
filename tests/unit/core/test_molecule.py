@@ -9,9 +9,12 @@ fake RDKit ``Mol``.
 
 from __future__ import annotations
 
+from typing import Any
+
+import numpy as np
 import pytest
 
-from molforge.core import Molecule, RDKitNotInstalledError
+from molforge.core import AtomArray, Molecule, RDKitNotInstalledError
 from molforge.core import _rdkit
 
 
@@ -145,6 +148,61 @@ class TestToAtomArray:
             Molecule.from_rdkit(_FakeMol()).to_atom_array()
 
 
+class TestFromAtomArray:
+    """Reverse bridge: build a Molecule from element + coords by perceiving bonds."""
+
+    @staticmethod
+    def _aa() -> AtomArray:
+        return AtomArray.from_dict(
+            {
+                "coords": np.array(
+                    [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 1.0, 0.0]], dtype=np.float32
+                ),
+                "element": np.array(["C", "C", "O"], dtype="U2"),
+            }
+        )
+
+    def test_builds_molecule_from_elements(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        got: dict[str, object] = {}
+
+        def fake(
+            elements: list[str], coords: Any, *, charge: int, perceive_bond_orders: bool
+        ) -> _FakeMol:
+            got["elements"] = elements
+            got["charge"] = charge
+            got["orders"] = perceive_bond_orders
+            got["coords_shape"] = coords.shape
+            return _FakeMol()
+
+        monkeypatch.setattr(_rdkit, "mol_from_atoms", fake)
+        m = Molecule.from_atom_array(self._aa(), name="lig")
+        assert isinstance(m, Molecule)
+        assert m.name == "lig"
+        assert got["elements"] == ["C", "C", "O"]  # numpy strs coerced to plain str
+        assert got["charge"] == 0
+        assert got["orders"] is True
+        assert got["coords_shape"] == (3, 3)
+
+    def test_threads_charge_and_connectivity_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        got: dict[str, object] = {}
+
+        def fake(
+            elements: list[str], coords: Any, *, charge: int, perceive_bond_orders: bool
+        ) -> _FakeMol:
+            got["charge"] = charge
+            got["orders"] = perceive_bond_orders
+            return _FakeMol()
+
+        monkeypatch.setattr(_rdkit, "mol_from_atoms", fake)
+        Molecule.from_atom_array(self._aa(), charge=-1, perceive_bond_orders=False)
+        assert got == {"charge": -1, "orders": False}
+
+    def test_metadata_preserved(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "mol_from_atoms", lambda *a, **k: _FakeMol())
+        m = Molecule.from_atom_array(self._aa(), metadata={"source": "1abc"})
+        assert m.metadata["source"] == "1abc"
+
+
 class TestRDKitAbsent:
     """With RDKit genuinely absent, chemistry entry points raise cleanly."""
 
@@ -155,6 +213,16 @@ class TestRDKitAbsent:
     def test_to_atom_array_raises(self) -> None:
         with pytest.raises(RDKitNotInstalledError):
             Molecule.from_rdkit(_FakeMol()).to_atom_array()
+
+    def test_from_atom_array_raises(self) -> None:
+        aa = AtomArray.from_dict(
+            {
+                "coords": np.zeros((1, 3), dtype=np.float32),
+                "element": np.array(["C"], dtype="U2"),
+            }
+        )
+        with pytest.raises(RDKitNotInstalledError):
+            Molecule.from_atom_array(aa)
 
     def test_property_raises(self) -> None:
         # a molecule can be *wrapped* around a fake mol without RDKit, but a
