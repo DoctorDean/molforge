@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.chem.MoleculeDataset` — a lazy molecule pipeline.** A thin,
+  immutable collection over any iterable of `Molecule` with combinators that
+  return new datasets and run nothing until iterated: `map(fn)` (e.g. over
+  `standardize`), `take(n)` (short-circuits, so unbounded sources are fine),
+  and `collect()` to materialize. Pairs with `iter_molecules` for
+  ingest → transform → collect pipelines over files larger than memory. A
+  dataset is re-iterable exactly when its source is (a list repeats; a
+  one-shot iterator is single-pass). Molecule-aware combinators
+  (filter/valid/dedup) land next.
 - **Streaming molecule readers (`molforge.io`).** `iter_molecules(path)` and
   `iter_smiles(text)` are lazy counterparts to `read_molecules` /
   `read_smiles` — they yield one `Molecule` at a time (SDF via RDKit's
