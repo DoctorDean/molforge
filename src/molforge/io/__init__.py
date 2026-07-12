@@ -42,6 +42,8 @@ Convenience helpers:
 
 - :func:`fetch` / :func:`fetch_many` — pull one or many structures by PDB ID
   from RCSB or AlphaFold.
+- :func:`search_rcsb` — full-text search the RCSB PDB for entry IDs, ready to
+  hand to :func:`fetch_many`.
 - :func:`load_alphafold` — load an AlphaFold prediction, exposing pLDDT
   as a first-class field rather than buried in B-factor.
 
@@ -54,6 +56,7 @@ Example:
 from __future__ import annotations
 
 from molforge.io.dispatch import fetch, fetch_many, load, save
+from molforge.io.rcsb_search import search_rcsb
 from molforge.io.fasta import (
     FastaRecord,
     read_fasta,
@@ -91,6 +94,7 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     "save",
     "fetch",
     "fetch_many",
+    "search_rcsb",
     # PDB
     "read_pdb",
     "read_pdb_string",

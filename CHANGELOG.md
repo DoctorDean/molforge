@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`io.search_rcsb()` — full-text RCSB search.** Turns a free-text query into
+  a relevance-ranked list of PDB IDs via the RCSB Search API, ready to feed to
+  `fetch_many` — `fetch_many(search_rcsb("hemoglobin", limit=10))` goes from a
+  keyword to a list of `Protein`s. `limit` caps the hits; no matches returns an
+  empty list. Standard-library only, like `fetch`.
 - **`io.fetch_many()` — batch structure fetch.** Pulls several structures by
   ID in one call (`fetch_many(["1UBQ", "4HHB"])`), one `fetch` per ID and in
   input order, so a list of IDs — including the hits from an RCSB search —
