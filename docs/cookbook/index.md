@@ -23,6 +23,7 @@ covers concrete workflows.
 | Rank analogs by rigorous relative affinity (FEP, via alchemlyb) | [Rank binders with FEP](rank-binders-fep.md)              |
 | Compute an absolute binding free energy (ABFE, via alchemlyb)   | [Absolute binding free energy with FEP](absolute-binding-fep.md) |
 | Ingest, clean, dedup, and filter a set of small molecules       | [Work with small molecules](small-molecules.md)           |
+| Fetch or search structures (RCSB/AlphaFold) and compounds (ChEMBL) | [Fetch and search databases](fetch-and-search.md)      |
 
 ## If you're choosing between options...
 

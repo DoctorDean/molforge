@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"Fetch and search databases" cookbook recipe.** A walkthrough of the
+  remote-data functions — `fetch` / `fetch_many` (RCSB, AlphaFold),
+  `search_rcsb` (full-text PDB search → IDs → `fetch_many`), and `fetch_chembl`
+  / `fetch_chembl_many` (ChEMBL → `Molecule`) — and how a ChEMBL pull drops
+  straight into the `MoleculeDataset` clean/filter pipeline. Linked in the
+  cookbook index and nav. Docs only.
 - **`io.fetch_chembl()` / `fetch_chembl_many()` — ChEMBL ingestion.** Pull one
   or many compounds from the ChEMBL REST API by ID and build chemistry-aware
   `Molecule`s from their canonical SMILES, with `metadata["source"] ==

@@ -65,6 +65,7 @@ nav:
       - Rank binders (FEP): cookbook/rank-binders-fep.md
       - Absolute binding FEP: cookbook/absolute-binding-fep.md
       - Work with small molecules: cookbook/small-molecules.md
+      - Fetch and search databases: cookbook/fetch-and-search.md
       - "Choosing: folding engines": cookbook/choosing-folding.md
       - "Choosing: docking engines": cookbook/choosing-docking.md
       - "Choosing: generative engines": cookbook/choosing-generative.md
