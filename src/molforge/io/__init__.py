@@ -40,7 +40,8 @@ For MD trajectories:
 
 Convenience helpers:
 
-- :func:`fetch` — pull a structure by PDB ID from RCSB or AlphaFold.
+- :func:`fetch` / :func:`fetch_many` — pull one or many structures by PDB ID
+  from RCSB or AlphaFold.
 - :func:`load_alphafold` — load an AlphaFold prediction, exposing pLDDT
   as a first-class field rather than buried in B-factor.
 
@@ -52,7 +53,7 @@ Example:
 
 from __future__ import annotations
 
-from molforge.io.dispatch import fetch, load, save
+from molforge.io.dispatch import fetch, fetch_many, load, save
 from molforge.io.fasta import (
     FastaRecord,
     read_fasta,
@@ -89,6 +90,7 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     "load",
     "save",
     "fetch",
+    "fetch_many",
     # PDB
     "read_pdb",
     "read_pdb_string",

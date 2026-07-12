@@ -26,6 +26,7 @@ from molforge.io.pqr import read_pqr, write_pqr
 from molforge.io.sdf import read_sdf, write_sdf
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from os import PathLike
 
     from molforge.core import Protein
@@ -213,3 +214,47 @@ def fetch(
 
     reader = read_cif_string if format == "cif" else read_pdb_string
     return reader(text)
+
+
+def fetch_many(
+    pdb_ids: Iterable[str],
+    *,
+    source: str = "rcsb",
+    format: str = "pdb",
+    timeout: float = 30.0,
+    on_error: str = "raise",
+) -> list[Protein]:
+    """Fetch several structures by ID, one :func:`fetch` per ID.
+
+    A thin convenience over :func:`fetch` for pulling a whole set — for
+    example the hits from :func:`search_rcsb`. Downloads are sequential (the
+    servers rate-limit, and this keeps the dependency to the standard library).
+
+    Args:
+        pdb_ids: The IDs to fetch, in the order you want them back.
+        source: ``"rcsb"`` or ``"alphafold"`` (applied to every ID).
+        format: ``"pdb"`` or ``"cif"`` (applied to every ID).
+        timeout: Per-download network timeout in seconds.
+        on_error: ``"raise"`` (default) stops at the first ID that fails;
+            ``"skip"`` drops IDs that fail — e.g. a 404 for a non-existent
+            entry — and returns the structures that did download.
+
+    Returns:
+        The fetched proteins, in input order (minus any dropped under
+        ``on_error="skip"``).
+
+    Raises:
+        ValueError: If ``on_error`` is not ``"raise"`` or ``"skip"``.
+        OSError: On a download failure when ``on_error="raise"``.
+    """
+    if on_error not in ("raise", "skip"):
+        raise ValueError(f"on_error must be 'raise' or 'skip', got {on_error!r}")
+
+    proteins: list[Protein] = []
+    for pdb_id in pdb_ids:
+        try:
+            proteins.append(fetch(pdb_id, source=source, format=format, timeout=timeout))
+        except OSError:
+            if on_error == "raise":
+                raise
+    return proteins

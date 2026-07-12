@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`io.fetch_many()` — batch structure fetch.** Pulls several structures by
+  ID in one call (`fetch_many(["1UBQ", "4HHB"])`), one `fetch` per ID and in
+  input order, so a list of IDs — including the hits from an RCSB search —
+  becomes a list of `Protein`s. `on_error="skip"` drops IDs that fail (e.g. a
+  404 for a non-existent entry) and returns the rest, while the default raises
+  on the first failure. Standard-library only, like `fetch`.
 - **`Molecule.from_atom_array()` — reverse bridge, coordinates to chemistry.**
   Builds a `Molecule` from an `AtomArray`'s element symbols and 3D
   coordinates, perceiving connectivity — and, by default, bond orders — from

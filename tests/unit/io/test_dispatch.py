@@ -219,3 +219,69 @@ class TestFetch:
             pytest.raises(OSError, match="could not reach"),
         ):
             fetch("1UBQ")
+
+
+class TestFetchMany:
+    """Batch fetch. urllib.request.urlopen is mocked — no real downloads."""
+
+    _PDB = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n"
+
+    @classmethod
+    def _resp(cls) -> object:
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.read.return_value = cls._PDB.encode("utf-8")
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = False
+        return resp
+
+    def test_fetches_all_in_order(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.io import fetch_many
+
+        with patch("urllib.request.urlopen", return_value=self._resp()) as mock:
+            proteins = fetch_many(["1ubq", "4hhb"])
+
+        assert len(proteins) == 2
+        assert all(isinstance(p, Protein) for p in proteins)
+        urls = [call[0][0] for call in mock.call_args_list]
+        assert urls == [
+            "https://files.rcsb.org/download/1UBQ.pdb",
+            "https://files.rcsb.org/download/4HHB.pdb",
+        ]
+
+    def test_empty_iterable_returns_empty(self) -> None:
+        from molforge.io import fetch_many
+
+        assert fetch_many([]) == []
+
+    def test_bad_on_error_raises(self) -> None:
+        from molforge.io import fetch_many
+
+        with pytest.raises(ValueError, match="on_error must be"):
+            fetch_many(["1ubq"], on_error="ignore")
+
+    def test_on_error_raise_propagates(self) -> None:
+        import urllib.error
+        from unittest.mock import patch
+
+        from molforge.io import fetch_many
+
+        err = urllib.error.HTTPError(url="u", code=404, msg="NF", hdrs=None, fp=None)  # type: ignore[arg-type]
+        with patch("urllib.request.urlopen", side_effect=err), pytest.raises(OSError):
+            fetch_many(["ZZZZ", "1ubq"])
+
+    def test_on_error_skip_drops_failures(self) -> None:
+        import urllib.error
+        from unittest.mock import patch
+
+        from molforge.io import fetch_many
+
+        err = urllib.error.HTTPError(url="u", code=404, msg="NF", hdrs=None, fp=None)  # type: ignore[arg-type]
+        with patch("urllib.request.urlopen", side_effect=[err, self._resp()]):
+            proteins = fetch_many(["ZZZZ", "1ubq"], on_error="skip")
+
+        assert len(proteins) == 1
+        assert isinstance(proteins[0], Protein)
