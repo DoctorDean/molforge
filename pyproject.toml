@@ -105,7 +105,7 @@ Homepage      = "https://github.com/DoctorDean/molforge"
 Documentation = "https://doctordean.github.io/molforge/"
 Repository    = "https://github.com/DoctorDean/molforge"
 Issues        = "https://github.com/DoctorDean/molforge/issues"
-Changelog     = "https://github.com/DoctorDean/molforge/blob/main/CHANGELOG.md"
+Changelog     = "https://github.com/DoctorDean/molforge/blob/master/CHANGELOG.md"
 
 # Entry-point group used by the plugin registry.
 # Third-party packages can register engines, parsers, scoring functions, etc.

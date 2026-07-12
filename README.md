@@ -4,10 +4,10 @@
 [![PyPI version](https://img.shields.io/pypi/v/molforge.svg)](https://pypi.org/project/molforge/) 
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/molforge?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/molforge)
 [![Python versions](https://img.shields.io/pypi/pyversions/molforge.svg)](https://pypi.org/project/molforge/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/DoctorDean/molforge/blob/master/LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-![Molforge Logo](molforge.png)
+![Molforge Logo](https://raw.githubusercontent.com/DoctorDean/molforge/master/molforge.png)
 
 > **A forge for protein workflows.** One Python script, every tool in your stack: docking, MD, folding, antibody and nanobody engineering, de novo design — without the format-conversion tax.
 
@@ -105,36 +105,43 @@ ca = folded.chains["A"].residues[42].atoms["CA"]  # specific atom
 
 Notice what *isn't* there: file-format conversions, atom-name remapping, hand-rolled PDB parsers, custom data classes per engine. molforge does that work so your script reads like the science you're actually doing.
 
-> **Worked examples and walkthroughs** ([`notebooks/`](notebooks/)):
-> - [`de_novo_design.ipynb`](notebooks/examples/de_novo_design.ipynb) — *de novo* design loop: RFdiffusion → ProteinMPNN → ESMFold → scoring.
-> - [`cross_engine_validation.ipynb`](notebooks/examples/cross_engine_validation.ipynb) — two-validator consensus pattern in detail (ESMFold + AlphaFold).
-> - [`end_to_end_design.ipynb`](notebooks/examples/end_to_end_design.ipynb) — full mutation loop: fold → analyze → mutate → re-fold → compare.
-> - [`01_sequences.ipynb`](notebooks/walkthroughs/01_sequences.ipynb) — alignment, mutations, composition.
-> - [`02_structures.ipynb`](notebooks/walkthroughs/02_structures.ipynb) — RMSD, contacts, DSSP, SASA, dihedrals.
-> - [`03_md_simulations.ipynb`](notebooks/walkthroughs/03_md_simulations.ipynb) — OpenMM `prepare → minimize → run` flow, trajectory analysis.
-> - [`04_docking.ipynb`](notebooks/walkthroughs/04_docking.ipynb) — Vina with automatic ligand prep.
-> - [`05_ml_featurization.ipynb`](notebooks/walkthroughs/05_ml_featurization.ipynb) — one-hot, RBF distances, ESM-2 embeddings, graph construction.
-> - [`06_plugin_authoring.ipynb`](notebooks/walkthroughs/06_plugin_authoring.ipynb) — register custom engines, parsers, and scorers.
+> **Worked examples and walkthroughs** ([`notebooks/`](https://github.com/DoctorDean/molforge/tree/master/notebooks)):
+> - [`de_novo_design.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/examples/de_novo_design.ipynb) — *de novo* design loop: RFdiffusion → ProteinMPNN → ESMFold → scoring.
+> - [`cross_engine_validation.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/examples/cross_engine_validation.ipynb) — two-validator consensus pattern in detail (ESMFold + AlphaFold).
+> - [`end_to_end_design.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/examples/end_to_end_design.ipynb) — full mutation loop: fold → analyze → mutate → re-fold → compare.
+> - [`01_sequences.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/01_sequences.ipynb) — alignment, mutations, composition.
+> - [`02_structures.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/02_structures.ipynb) — RMSD, contacts, DSSP, SASA, dihedrals.
+> - [`03_md_simulations.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/03_md_simulations.ipynb) — OpenMM `prepare → minimize → run` flow, trajectory analysis.
+> - [`04_docking.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/04_docking.ipynb) — Vina with automatic ligand prep.
+> - [`05_ml_featurization.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/05_ml_featurization.ipynb) — one-hot, RBF distances, ESM-2 embeddings, graph construction.
+> - [`06_plugin_authoring.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/06_plugin_authoring.ipynb) — register custom engines, parsers, and scorers.
 
 ## Repository structure
 
 ```
 molforge/
 ├── src/molforge/             # Library source (src-layout)
-│   ├── core/                 # Hierarchical + linear data model
+│   ├── core/                 # Hierarchical + linear data model, provenance
 │   ├── sequence/             # Sequence operations, alignment, mutations
-│   ├── structure/            # RMSD, SASA, contacts, geometry
+│   ├── structure/            # RMSD, SASA, contacts, DSSP, geometry
 │   ├── md/                   # MD trajectories and analysis
 │   ├── docking/              # Docking abstractions and pose handling
 │   ├── ml/                   # ML utilities, featurizers, tensor views
-│   ├── io/                   # PDB, mmCIF, FASTA, PDBQT, PQR, SDF, MOL2
+│   ├── io/                   # PDB, mmCIF, FASTA, PDBQT, PQR, SDF, MOL2, fetch
+│   ├── chem/                 # RDKit-backed molecules, descriptors, datasets
+│   ├── prep/                 # MD system prep (clean, fix, protonate)
+│   ├── ensembles/            # Conformer clustering, consensus, weighting
+│   ├── validation/           # Composable design-acceptance criteria
 │   ├── plugins/              # Plugin registry and entry-point discovery
-│   ├── metrics/              # TM-score, lDDT, GDT-TS, docking metrics
+│   ├── metrics/              # TM-score, lDDT, GDT-TS, DockQ
 │   └── wrappers/             # Thin interfaces to external engines
-│       ├── folding/          # AlphaFold, ESMFold, Boltz, RoseTTAFold
-│       ├── docking/          # AutoDock Vina, DiffDock
-│       └── md/               # OpenMM, GROMACS
-├── tests/                    # pytest suite (909 passing + skips)
+│       ├── folding/          # ESMFold, AlphaFold, Boltz, Chai-1, RoseTTAFold
+│       ├── docking/          # AutoDock Vina, Gnina, DiffDock
+│       ├── md/               # OpenMM, GROMACS, AMBER
+│       ├── generative/       # RFdiffusion, ProteinMPNN, ESM-IF1
+│       ├── freeenergy/       # MM/PB(GB)SA, alchemlyb, cinnabar
+│       └── pockets/          # fpocket
+├── tests/                    # pytest suite (1,800+ tests)
 │   ├── fixtures/pdb/         # synthetic mini_*.pdb + realistic real_*.pdb fixtures
 │   ├── unit/                 # per-subpackage unit tests
 │   ├── integration/          # end-to-end tests against the realistic fixtures
@@ -146,34 +153,41 @@ molforge/
 └── ACKNOWLEDGEMENTS.md       # Prior art and intellectual debts
 ```
 
-A deeper architecture walkthrough is in [`docs/architecture/overview.md`](docs/architecture/overview.md).
+A deeper architecture walkthrough is in [`docs/architecture/overview.md`](https://github.com/DoctorDean/molforge/blob/master/docs/architecture/overview.md).
 
 ## Status
 
 molforge is **pre-1.0** and under active development. What's working today:
 
 - **Core data model** — `Protein` / `Chain` / `Residue` / `Atom` over a canonical NumPy-backed `AtomArray`, with first-class heterogeneous content (ligands, water, ions, modified residues).
-- **File I/O** — full read/write for **PDB** (with NMR ensembles, altlocs, insertion codes) and **mmCIF** (the modern format for large structures); **FASTA** sequence I/O; **AlphaFold** loader that surfaces pLDDT as a first-class field. PDBQT, PQR, SDF, MOL2 are stubbed with committed APIs.
+- **File I/O** — full read/write for **PDB** (NMR ensembles, altlocs, insertion codes), **mmCIF**, **FASTA**, **PDBQT**, **PQR**, **SDF**, and **MOL2**; an **AlphaFold** loader that surfaces pLDDT as a first-class field; **trajectory I/O** (XTC, TRR, DCD, NetCDF, HDF5 via mdtraj); and remote fetch from **RCSB**, **AlphaFold DB**, and **ChEMBL**, plus full-text PDB search.
 - **Sequence operations** — pairwise **alignment** (Needleman-Wunsch / Smith-Waterman with BLOSUM62 / PAM250), point **mutations** with protein-engineering notation (`A123V`, `A123V/T56K`, `H:K42N`), composition and property helpers (MW, GRAVY, aromaticity).
 - **Structural analysis** — Kabsch/Umeyama **superposition**, **RMSD** (whole-structure and per-residue, multiple atom subsets), **contact and distance maps**, **radius of gyration**, **centroid / center of mass**, in-place **translate / rotate**, **DSSP** secondary-structure assignment (8-state and 3-state, no external binary), **SASA** (Shrake-Rupley, no FreeSASA dependency), and **backbone dihedrals** (φ, ψ, ω, Ramachandran).
 - **Validation utilities** — `molforge.validation` orchestrates the "score designs across multiple validators and combine results" pattern. Declarative `Criterion` (composable with `&` / `|` / `~`), `CriteriaSet` for per-criterion diagnostics, `cross_validate` to run designs through one or more validators, `consensus` to merge verdict lists ("ESMFold AND AlphaFold both pass" / "majority of validators pass" / threshold rules).
 - **Evaluation metrics** — `molforge.metrics` ships the standard structural-prediction metrics: **TM-score** (Zhang & Skolnick), **GDT-TS / GDT-HA** (CASP), **lDDT** (alignment-free, what AlphaFold's pLDDT estimates), and **DockQ** (Basu & Wallner, for protein-protein complexes). NumPy-only — no tmalign/lddt binaries required.
 - **ML featurization** — sequence featurizers (one-hot, BLOSUM/PAM, positional encoding), structure featurizers (RBF-binned distances, pair orientations, local environment), **ESM-2 protein language model embeddings**, and graph construction (`to_graph` → PyTorch Geometric / DGL).
-- **Four engine-wrapper categories live end-to-end** — folding (**ESMFold** + **AlphaFold/ColabFold**), docking (**AutoDock Vina** with automatic meeko/RDKit prep), MD (**OpenMM** with full `prepare → minimize → run` flow), and now **generative design** (**RFdiffusion** for backbone generation, **ProteinMPNN** for sequence design). The full *de novo* design loop is in one library.
+- **Engine wrappers across six modalities**, all behind consistent, swappable interfaces:
+  - **Folding** — ESMFold, AlphaFold/ColabFold, Boltz, Chai-1, RoseTTAFold (with multi-component cofolding on Boltz and Chai-1).
+  - **Docking** — AutoDock Vina (automatic meeko/RDKit prep), Gnina (CNN rescoring), DiffDock.
+  - **MD** — OpenMM (full `prepare → minimize → run`), GROMACS, AMBER.
+  - **Generative design** — RFdiffusion (backbones), ProteinMPNN and ESM-IF1 (sequence design). The full *de novo* design loop is in one library.
+  - **Binding free energy** — MM/PB(GB)SA via AmberTools and gmx_MMPBSA; alchemlyb and cinnabar for FEP ingestion.
+  - **Pocket detection** — fpocket.
+- **Provenance and caching** — every wrapper records a `Provenance` chain (engine, version, parameters, inputs, parent) on its output, and a content-addressed cache keyed on that chain skips recomputation and invalidates automatically when an upstream step changes.
 
-Coming next: DiffDock wrapper, GROMACS MD wrapper, explicit-solvent prep helpers, ML featurization for downstream models. See [`CHANGELOG.md`](CHANGELOG.md) for the full picture.
+Coming next: local MSA search (mmseqs2 / hmmer), parallel batch helpers (`fold_many` / `dock_many`), and higher-level design-loop tooling. See [`CHANGELOG.md`](https://github.com/DoctorDean/molforge/blob/master/CHANGELOG.md) for the full picture.
 
 ## Acknowledgements
 
-molforge is inspired by [Protkit](https://github.com/silicogenesis/protkit) (SilicoGenesis), which pioneered the idea of a unified, hierarchical representation for protein structures in Python. molforge extends that direction toward cross-tool, cross-format workflows and a different internal architecture (NumPy-backed linear store, hierarchical views as accessors). See [`ACKNOWLEDGEMENTS.md`](ACKNOWLEDGEMENTS.md) for the longer list of projects we've learned from.
+molforge is inspired by [Protkit](https://github.com/silicogenesis/protkit) (SilicoGenesis), which pioneered the idea of a unified, hierarchical representation for protein structures in Python. molforge extends that direction toward cross-tool, cross-format workflows and a different internal architecture (NumPy-backed linear store, hierarchical views as accessors). See [`ACKNOWLEDGEMENTS.md`](https://github.com/DoctorDean/molforge/blob/master/ACKNOWLEDGEMENTS.md) for the longer list of projects we've learned from.
 
 ## Contributing
 
-We welcome contributions. See [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md) before opening an issue or PR.
+We welcome contributions. See [`CONTRIBUTING.md`](https://github.com/DoctorDean/molforge/blob/master/CONTRIBUTING.md) and the [Code of Conduct](https://github.com/DoctorDean/molforge/blob/master/CODE_OF_CONDUCT.md) before opening an issue or PR.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](https://github.com/DoctorDean/molforge/blob/master/LICENSE).
 
 ## Citation
 
