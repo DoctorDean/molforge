@@ -4,12 +4,25 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from molforge.core import _rdkit
+from molforge.core.atom_array import AtomArray
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 __all__ = ["Molecule"]
+
+
+def _element_atom_names(elements: list[str]) -> Any:
+    """Per-element atom names — ``C1``, ``C2``, ``N1``, ... (PDB ligand style)."""
+    counts: dict[str, int] = {}
+    names: list[str] = []
+    for element in elements:
+        counts[element] = counts.get(element, 0) + 1
+        names.append(f"{element}{counts[element]}")
+    return np.array(names, dtype="U4")
 
 
 class Molecule:
@@ -105,6 +118,69 @@ class Molecule:
     def to_rdkit(self) -> Any:
         """The underlying RDKit ``Mol`` (the same object, not a copy)."""
         return self._mol
+
+    def to_atom_array(
+        self,
+        *,
+        embed: bool = False,
+        add_hydrogens: bool = False,
+        seed: int = 0xF00D,
+    ) -> AtomArray:
+        """Flatten to an :class:`~molforge.core.AtomArray` of 3D coordinates.
+
+        This is the bridge from chemistry (bonds, charges) to the flat,
+        coordinate-first world of :class:`~molforge.core.AtomArray` and the
+        structure/ML tooling built on it.
+
+        If the molecule already carries a conformer, its coordinates are used
+        as-is. If it has none — as a molecule parsed from SMILES does —
+        ``embed=True`` generates one on demand with RDKit's ETKDG, while
+        ``embed=False`` (the default) raises rather than inventing geometry.
+
+        The atoms come back as a single ``HETATM`` / ``ligand`` residue, with
+        per-element atom names (``C1``, ``C2``, ``N1``, ...) and formal
+        charges carried across.
+
+        Args:
+            embed: Generate a 3D conformer when the molecule has none. Has no
+                effect when the molecule already carries coordinates.
+            add_hydrogens: When embedding, add explicit hydrogens first for
+                more realistic geometry (they appear in the output).
+            seed: Random seed for embedding, so the geometry is reproducible.
+
+        Returns:
+            An :class:`~molforge.core.AtomArray` with one atom per mol atom.
+
+        Raises:
+            ValueError: If the molecule has no conformer and ``embed`` is
+                False, or if RDKit can't embed one.
+            RDKitNotInstalledError: If RDKit isn't installed.
+        """
+        if _rdkit.has_conformer(self._mol):
+            mol = self._mol
+        elif embed:
+            mol = _rdkit.embed_conformer(self._mol, seed=seed, add_hs=add_hydrogens)
+        else:
+            raise ValueError(
+                "Molecule has no 3D coordinates; pass embed=True to generate a "
+                "conformer, or convert one that already carries them (e.g. read "
+                "from an SDF with 3D structures)."
+            )
+        elements, charges, coords = _rdkit.conformer_atoms(mol)
+        n = len(elements)
+        return AtomArray.from_dict(
+            {
+                "coords": np.asarray(coords, dtype=np.float32).reshape(n, 3),
+                "element": np.array(elements, dtype="U2"),
+                "atom_name": _element_atom_names(elements),
+                "charge": np.array(charges, dtype=np.float32),
+                "serial": np.arange(1, n + 1, dtype=np.int32),
+                "record_type": np.full(n, "HETATM", dtype="U6"),
+                "entity_type": np.full(n, "ligand", dtype="U8"),
+                "residue_name": np.full(n, "LIG", dtype="U3"),
+                "residue_id": np.ones(n, dtype=np.int32),
+            }
+        )
 
     # -- identity / properties -----------------------------------------
 

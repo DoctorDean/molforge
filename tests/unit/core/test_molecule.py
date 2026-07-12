@@ -86,12 +86,75 @@ class TestProperties:
         assert repr(m) == "Molecule(n_atoms=9 name='ethanol')"
 
 
+class TestToAtomArray:
+    """Bridge to AtomArray: use existing coords, or embed on command."""
+
+    # (elements, formal_charges, coords) — integer coords are float32-exact.
+    ETHANOL = (
+        ["C", "C", "O"],
+        [0, 0, 0],
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [2.0, 1.0, 0.0]],
+    )
+
+    def test_uses_existing_conformer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "has_conformer", lambda mol: True)
+        monkeypatch.setattr(_rdkit, "conformer_atoms", lambda mol: self.ETHANOL)
+        monkeypatch.setattr(
+            _rdkit, "embed_conformer", lambda *a, **k: pytest.fail("must not embed")
+        )
+        aa = Molecule.from_rdkit(_FakeMol(), name="ethanol").to_atom_array()
+        assert len(aa) == 3
+        assert list(aa.element) == ["C", "C", "O"]
+        assert list(aa.atom_name) == ["C1", "C2", "O1"]  # per-element numbering
+        assert aa.coords[2].tolist() == [2.0, 1.0, 0.0]
+        assert list(aa.serial) == [1, 2, 3]
+        assert set(aa.record_type) == {"HETATM"}
+        assert set(aa.entity_type) == {"ligand"}
+        assert set(aa.residue_name) == {"LIG"}
+
+    def test_carries_formal_charges(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "has_conformer", lambda mol: True)
+        monkeypatch.setattr(_rdkit, "conformer_atoms", lambda mol: (["N"], [1], [[0.0, 0.0, 0.0]]))
+        aa = Molecule.from_rdkit(_FakeMol()).to_atom_array()
+        assert aa.charge[0] == 1.0
+
+    def test_embeds_on_command_when_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        got: dict[str, object] = {}
+
+        def fake_embed(mol: object, *, seed: int, add_hs: bool) -> str:
+            got["seed"] = seed
+            got["add_hs"] = add_hs
+            return "EMBEDDED"
+
+        def fake_atoms(mol: object) -> tuple[list[str], list[int], list[list[float]]]:
+            got["read_from"] = mol
+            return (["C"], [0], [[0.0, 0.0, 0.0]])
+
+        monkeypatch.setattr(_rdkit, "has_conformer", lambda mol: False)
+        monkeypatch.setattr(_rdkit, "embed_conformer", fake_embed)
+        monkeypatch.setattr(_rdkit, "conformer_atoms", fake_atoms)
+
+        aa = Molecule.from_rdkit(_FakeMol()).to_atom_array(embed=True, add_hydrogens=True, seed=7)
+        assert got["read_from"] == "EMBEDDED"  # coords read off the embedded mol
+        assert got["seed"] == 7 and got["add_hs"] is True
+        assert len(aa) == 1
+
+    def test_missing_conformer_without_embed_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "has_conformer", lambda mol: False)
+        with pytest.raises(ValueError, match="no 3D coordinates"):
+            Molecule.from_rdkit(_FakeMol()).to_atom_array()
+
+
 class TestRDKitAbsent:
     """With RDKit genuinely absent, chemistry entry points raise cleanly."""
 
     def test_from_smiles_raises(self) -> None:
         with pytest.raises(RDKitNotInstalledError, match="require RDKit"):
             Molecule.from_smiles("CCO")
+
+    def test_to_atom_array_raises(self) -> None:
+        with pytest.raises(RDKitNotInstalledError):
+            Molecule.from_rdkit(_FakeMol()).to_atom_array()
 
     def test_property_raises(self) -> None:
         # a molecule can be *wrapped* around a fake mol without RDKit, but a

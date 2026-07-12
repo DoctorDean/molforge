@@ -182,3 +182,47 @@ def read_sdf_records(
         RDKitNotInstalledError: If RDKit isn't installed.
     """
     return list(iter_sdf_records(path, sanitize=sanitize, remove_hs=remove_hs))
+
+
+def has_conformer(mol: Any) -> bool:
+    """Whether ``mol`` carries at least one 3D conformer."""
+    _chem()  # clean error first if RDKit is absent
+    return bool(mol.GetNumConformers())
+
+
+def embed_conformer(mol: Any, *, seed: int, add_hs: bool) -> Any:
+    """Return a copy of ``mol`` with a freshly generated ETKDG 3D conformer.
+
+    ``add_hs`` adds explicit hydrogens before embedding (RDKit's recommended
+    recipe for realistic geometry); the returned mol then carries them.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+        ValueError: If RDKit can't embed a conformer for this molecule.
+    """
+    chem = _chem()
+    from rdkit.Chem import AllChem
+
+    work = chem.AddHs(mol) if add_hs else chem.Mol(mol)
+    params = AllChem.ETKDGv3()
+    params.randomSeed = seed
+    if AllChem.EmbedMolecule(work, params) < 0:
+        raise ValueError("RDKit could not generate a 3D conformer for this molecule")
+    return work
+
+
+def conformer_atoms(mol: Any) -> tuple[list[str], list[int], Any]:
+    """Per-atom element symbols, formal charges, and ``(N, 3)`` coordinates.
+
+    Coordinates come from ``mol``'s (first) conformer; element and charge are
+    read in the same atom order, so the three line up positionally.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+    """
+    _chem()
+    conformer = mol.GetConformer()
+    coords = conformer.GetPositions()
+    elements = [atom.GetSymbol() for atom in mol.GetAtoms()]
+    charges = [atom.GetFormalCharge() for atom in mol.GetAtoms()]
+    return elements, charges, coords

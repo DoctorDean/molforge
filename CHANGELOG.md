@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`Molecule.to_atom_array()` — bridge to the structure/ML side.** Flattens a
+  `Molecule` into a coordinate-first `AtomArray` (a single `HETATM` / `ligand`
+  residue, per-element atom names like `C1`/`C2`/`N1`, formal charges carried
+  across). It uses the molecule's existing conformer when it has one; when it
+  doesn't — as a molecule parsed from SMILES — `embed=True` generates a 3D
+  conformer on demand with RDKit's ETKDG (`add_hydrogens=True` for explicit-H
+  geometry, `seed=` for reproducibility), while the default raises rather than
+  inventing coordinates. Backed by new `core._rdkit` shim functions
+  `has_conformer`, `embed_conformer`, and `conformer_atoms`; RDKit-backed and
+  lazy.
 - **`MoleculeDataset.filter(criterion)` + `molecule_descriptors`.** Reuses a
   `validation.Criterion` as a molecule filter: `.filter(criterion)` keeps
   molecules whose descriptors satisfy the criterion, validating the
