@@ -18,7 +18,7 @@ from molforge.core import Molecule
 from molforge.core import _rdkit
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
 
 __all__ = [
     "is_valid",
@@ -64,15 +64,27 @@ def unique(molecules: Iterable[Molecule], *, key: str = "inchikey") -> list[Mole
         ValueError: If ``key`` is neither ``"inchikey"`` nor ``"smiles"``.
         RDKitNotInstalledError: If RDKit isn't installed.
     """
+    _check_key(key)
+    return list(_iter_unique(molecules, key=key))
+
+
+def _check_key(key: str) -> None:
+    """Validate a dedup ``key``, raising ``ValueError`` if unsupported."""
     if key not in ("inchikey", "smiles"):
         raise ValueError(f"key must be 'inchikey' or 'smiles', got {key!r}")
 
+
+def _iter_unique(molecules: Iterable[Molecule], *, key: str) -> Iterator[Molecule]:
+    """Stream molecules, skipping repeats by ``key`` (assumes ``key`` valid).
+
+    The lazy core shared by :func:`unique` and
+    :meth:`molforge.chem.MoleculeDataset.dedup` — keeps the first occurrence
+    of each identity, holding only the set of seen identities in memory.
+    """
     seen: set[str] = set()
-    kept: list[Molecule] = []
     for molecule in molecules:
         identity = molecule.inchikey if key == "inchikey" else molecule.smiles
         if identity in seen:
             continue
         seen.add(identity)
-        kept.append(molecule)
-    return kept
+        yield molecule

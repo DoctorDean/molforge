@@ -29,6 +29,8 @@ from __future__ import annotations
 from itertools import islice
 from typing import TYPE_CHECKING
 
+from molforge.chem.quality import _check_key, _iter_unique, is_valid
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
@@ -103,6 +105,39 @@ class MoleculeDataset:
             raise ValueError(f"take(n) requires n >= 0, got {n}")
         source = self._source
         return MoleculeDataset(_ReiterableSource(lambda: islice(iter(source), n)))
+
+    def valid(self) -> MoleculeDataset:
+        """Keep only molecules that pass RDKit sanitization.
+
+        A lazy filter over :func:`molforge.chem.is_valid` — structures RDKit
+        rejects are dropped rather than raising.
+
+        Returns:
+            A new dataset yielding only the valid molecules.
+        """
+        source = self._source
+        return MoleculeDataset(_ReiterableSource(lambda: (m for m in source if is_valid(m))))
+
+    def dedup(self, *, key: str = "inchikey") -> MoleculeDataset:
+        """Drop duplicate molecules by structural identity, keeping the first.
+
+        Streams with a running set of seen identities, so only the identities
+        (not the molecules) are held in memory.
+
+        Args:
+            key: Identity to compare on — ``"inchikey"`` (default) or
+                ``"smiles"``.
+
+        Returns:
+            A new dataset yielding the first molecule of each identity, in
+            order.
+
+        Raises:
+            ValueError: If ``key`` is neither ``"inchikey"`` nor ``"smiles"``.
+        """
+        _check_key(key)
+        source = self._source
+        return MoleculeDataset(_ReiterableSource(lambda: _iter_unique(source, key=key)))
 
     def collect(self) -> list[Molecule]:
         """Materialize the dataset into a list, running the whole pipeline."""

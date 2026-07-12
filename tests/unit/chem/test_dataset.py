@@ -14,7 +14,8 @@ from itertools import count
 import pytest
 
 from molforge.chem import MoleculeDataset
-from molforge.core import Molecule
+from molforge.core import Molecule, RDKitNotInstalledError
+from molforge.core import _rdkit
 
 
 class _FakeMol:
@@ -115,3 +116,61 @@ class TestReiterability:
         ds = MoleculeDataset(iter([_mol("a"), _mol("b")])).map(_relabel("!"))
         assert len(ds.collect()) == 2
         assert len(ds.collect()) == 0  # one-shot source -> exhausted
+
+
+class TestValid:
+    def test_valid_drops_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "sanitize_ok", lambda m: m.tag != "bad")
+        out = MoleculeDataset([_mol("a"), _mol("bad"), _mol("c")]).valid().collect()
+        assert [m.name for m in out] == ["a", "c"]
+
+    def test_valid_is_lazy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        checked: list[str] = []
+
+        def ok(m: _FakeMol) -> bool:
+            checked.append(m.tag)
+            return True
+
+        monkeypatch.setattr(_rdkit, "sanitize_ok", ok)
+        ds = MoleculeDataset([_mol("a"), _mol("b")]).valid()
+        assert checked == []
+        ds.collect()
+        assert checked == ["a", "b"]
+
+
+class TestDedup:
+    @pytest.fixture
+    def by_inchikey(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "to_inchikey", lambda m: f"KEY-{m.tag}")
+
+    @pytest.fixture
+    def by_smiles(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "to_smiles", lambda m: f"SMI-{m.tag}")
+
+    def test_dedup_keeps_first(self, by_inchikey: None) -> None:
+        out = MoleculeDataset([_mol("a"), _mol("b"), _mol("a")]).dedup().collect()
+        assert [m.name for m in out] == ["a", "b"]
+
+    def test_dedup_streams_lazily(self, by_inchikey: None) -> None:
+        # dedup over an unbounded source composed with take() must not hang.
+        endless = (_mol("x") for _ in count())
+        out = MoleculeDataset(endless).dedup().take(1).collect()
+        assert [m.name for m in out] == ["x"]
+
+    def test_dedup_key_smiles(self, by_smiles: None) -> None:
+        out = MoleculeDataset([_mol("a"), _mol("a"), _mol("d")]).dedup(key="smiles").collect()
+        assert [m.name for m in out] == ["a", "d"]
+
+    def test_dedup_bad_key_raises_eagerly(self) -> None:
+        with pytest.raises(ValueError, match="inchikey"):
+            MoleculeDataset([_mol("a")]).dedup(key="nope")
+
+
+class TestMoleculeAwareRDKitAbsent:
+    def test_valid_raises_on_consume(self) -> None:
+        with pytest.raises(RDKitNotInstalledError):
+            MoleculeDataset([_mol("a")]).valid().collect()
+
+    def test_dedup_raises_on_consume(self) -> None:
+        with pytest.raises(RDKitNotInstalledError):
+            MoleculeDataset([_mol("a"), _mol("b")]).dedup().collect()

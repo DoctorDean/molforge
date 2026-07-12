@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`MoleculeDataset` — `.valid()` and `.dedup()`.** Two molecule-aware
+  combinators: `.valid()` keeps only molecules that pass RDKit sanitization
+  (a lazy filter over `is_valid`), and `.dedup(key="inchikey")` drops
+  structural duplicates keeping the first occurrence, streaming with a
+  running set of seen identities (only identities, not molecules, held in
+  memory) so it composes with `.take()` over unbounded sources. Both are
+  lazy and RDKit-backed; `unique`'s dedup core is now shared with `.dedup()`
+  through an internal streaming helper.
 - **`molforge.chem.MoleculeDataset` — a lazy molecule pipeline.** A thin,
   immutable collection over any iterable of `Molecule` with combinators that
   return new datasets and run nothing until iterated: `map(fn)` (e.g. over
