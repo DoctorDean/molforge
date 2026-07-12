@@ -10,6 +10,7 @@ without RDKit raises :class:`~molforge.core.RDKitNotInstalledError`.
 
 from __future__ import annotations
 
+from molforge.chem.quality import is_valid, unique
 from molforge.chem.standardize import (
     canonical_tautomer,
     cleanup,
@@ -21,7 +22,9 @@ from molforge.chem.standardize import (
 __all__ = [
     "canonical_tautomer",
     "cleanup",
+    "is_valid",
     "largest_fragment",
     "neutralize",
     "standardize",
+    "unique",
 ]

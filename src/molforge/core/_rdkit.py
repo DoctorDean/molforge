@@ -120,6 +120,22 @@ def canonical_tautomer(mol: Any) -> Any:
     return _standardize_mod().TautomerEnumerator().Canonicalize(mol)
 
 
+def sanitize_ok(mol: Any) -> bool:
+    """Whether ``mol`` passes RDKit sanitization, checked on a copy.
+
+    Sanitization runs on ``Chem.Mol(mol)`` so ``mol`` is never mutated. A
+    structure RDKit rejects returns ``False`` rather than raising, which
+    makes this a validity predicate. RDKit being absent still raises
+    :class:`RDKitNotInstalledError`, consistent with the rest of the shim.
+    """
+    chem = _chem()
+    try:
+        chem.SanitizeMol(chem.Mol(mol))
+    except Exception:  # any RDKit sanitize failure means the structure is invalid
+        return False
+    return True
+
+
 def read_sdf_records(
     path: str, *, sanitize: bool = True, remove_hs: bool = False
 ) -> list[tuple[Any, str]]:

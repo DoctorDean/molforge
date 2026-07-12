@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`molforge.chem` — validity and deduplication.** `is_valid(m)` reports
+  whether a molecule passes RDKit sanitization (valence, aromaticity,
+  kekulization), checked on a copy so nothing is mutated — a predicate you
+  can filter a set on, returning `False` for structures RDKit rejects rather
+  than raising. `unique(molecules, key="inchikey")` removes duplicates by
+  structural identity (InChIKey by default, or `"smiles"`), keeping the first
+  occurrence so input order is preserved. Together with `standardize` this
+  completes the ingest → clean → validity/dedup path for small-molecule
+  sets. RDKit-backed and lazy (a missing RDKit still raises
+  `RDKitNotInstalledError`).
 - **`molforge.chem` — molecule standardization (cleaning).** A new
   subpackage for cheminformatics operations on `Molecule`. `standardize(m)`
   runs a cleaning pipeline (cleanup → keep-largest-fragment → neutralize,
