@@ -44,6 +44,8 @@ Convenience helpers:
   from RCSB or AlphaFold.
 - :func:`search_rcsb` — full-text search the RCSB PDB for entry IDs, ready to
   hand to :func:`fetch_many`.
+- :func:`fetch_chembl` / :func:`fetch_chembl_many` — pull one or many small
+  molecules from ChEMBL by ID as :class:`~molforge.core.Molecule` objects.
 - :func:`load_alphafold` — load an AlphaFold prediction, exposing pLDDT
   as a first-class field rather than buried in B-factor.
 
@@ -55,6 +57,7 @@ Example:
 
 from __future__ import annotations
 
+from molforge.io.chembl import fetch_chembl, fetch_chembl_many
 from molforge.io.dispatch import fetch, fetch_many, load, save
 from molforge.io.rcsb_search import search_rcsb
 from molforge.io.fasta import (
@@ -127,4 +130,6 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     "read_smiles",
     "iter_molecules",
     "iter_smiles",
+    "fetch_chembl",
+    "fetch_chembl_many",
 ]

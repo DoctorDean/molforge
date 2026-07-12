@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`io.fetch_chembl()` / `fetch_chembl_many()` — ChEMBL ingestion.** Pull one
+  or many compounds from the ChEMBL REST API by ID and build chemistry-aware
+  `Molecule`s from their canonical SMILES, with `metadata["source"] ==
+  "chembl"` and the ChEMBL ID recorded (name from ChEMBL's preferred name).
+  Entries with no small-molecule structure (a biotherapeutic) raise, and
+  `fetch_chembl_many(..., on_error="skip")` drops those and any download
+  failures, returning the rest. Standard-library networking; RDKit-backed
+  molecule construction (lazy). New module `io/chembl.py`.
 - **`io.search_rcsb()` — full-text RCSB search.** Turns a free-text query into
   a relevance-ranked list of PDB IDs via the RCSB Search API, ready to feed to
   `fetch_many` — `fetch_many(search_rcsb("hemoglobin", limit=10))` goes from a
