@@ -52,7 +52,7 @@ verdicts = cross_validate(
 ```
 
 See the
-[cross-engine validation notebook](https://github.com/DoctorDean/molforge/blob/main/notebooks/examples/cross_engine_validation.ipynb)
+[cross-engine validation notebook](https://github.com/DoctorDean/molforge/blob/master/notebooks/examples/cross_engine_validation.ipynb)
 for a full walkthrough including consensus rules.
 
 !!! note "Error handling"

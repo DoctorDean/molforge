@@ -68,12 +68,12 @@ shell script — `molforge` is just imports.
 - **Looking for a specific function?** Browse the
   [API reference](reference/core.md) or use the search box (top right).
 - **Want to see real workflows?** The
-  [walkthrough notebooks](https://github.com/DoctorDean/molforge/tree/main/notebooks/walkthroughs)
+  [walkthrough notebooks](https://github.com/DoctorDean/molforge/tree/master/notebooks/walkthroughs)
   cover each subpackage end-to-end.
 
 ## License & contributing
 
 `molforge` is MIT-licensed. Issues and pull requests are welcome at
 [github.com/DoctorDean/molforge](https://github.com/DoctorDean/molforge);
-see [CONTRIBUTING.md](https://github.com/DoctorDean/molforge/blob/main/CONTRIBUTING.md)
+see [CONTRIBUTING.md](https://github.com/DoctorDean/molforge/blob/master/CONTRIBUTING.md)
 for the workflow.

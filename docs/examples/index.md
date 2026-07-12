@@ -16,5 +16,5 @@ See the [walkthroughs](../walkthroughs/01_sequences.ipynb) instead —
 six shorter notebooks, one per subpackage.
 
 The raw notebook files live in
-[notebooks/examples/](https://github.com/DoctorDean/molforge/tree/main/notebooks/examples)
+[notebooks/examples/](https://github.com/DoctorDean/molforge/tree/master/notebooks/examples)
 on GitHub.

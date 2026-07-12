@@ -53,7 +53,7 @@ user of `molforge`. The return value tells you which plugins
 
 For a full worked example (custom engine, custom parser, custom
 scorer, all wired through one `register()` entry point), see the
-[plugin authoring walkthrough](https://github.com/DoctorDean/molforge/blob/main/notebooks/walkthroughs/06_plugin_authoring.ipynb).
+[plugin authoring walkthrough](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/06_plugin_authoring.ipynb).
 
 ## Reference
 

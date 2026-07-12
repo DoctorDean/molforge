@@ -6,7 +6,7 @@ data model, running a structural analysis, and saving back to disk.
 
 For longer end-to-end examples (design loops, cross-engine validation,
 MD walkthroughs), see the
-[walkthrough notebooks](https://github.com/DoctorDean/molforge/tree/main/notebooks/walkthroughs).
+[walkthrough notebooks](https://github.com/DoctorDean/molforge/tree/master/notebooks/walkthroughs).
 
 ## 1. Load a structure
 
@@ -93,9 +93,9 @@ writer names.
 ## 5. Where to go from here
 
 - **Mutations and alignments** —
-  [walkthroughs/01_sequences.ipynb](https://github.com/DoctorDean/molforge/blob/main/notebooks/walkthroughs/01_sequences.ipynb)
+  [walkthroughs/01_sequences.ipynb](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/01_sequences.ipynb)
 - **Geometry deep dive** —
-  [walkthroughs/02_structures.ipynb](https://github.com/DoctorDean/molforge/blob/main/notebooks/walkthroughs/02_structures.ipynb)
+  [walkthroughs/02_structures.ipynb](https://github.com/DoctorDean/molforge/blob/master/notebooks/walkthroughs/02_structures.ipynb)
 - **Folding, docking, MD** — [Engine wrappers](../guide/wrappers.md)
 - **Adding your own engine** — [Plugins](../guide/plugins.md)
 - **Why the data model looks the way it does** —

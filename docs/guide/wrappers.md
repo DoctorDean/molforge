@@ -88,5 +88,5 @@ you need.
   wrappers with full signatures.
 - Generative wrappers used together (RFdiffusion → ProteinMPNN →
   ESMFold): see the
-  [`de_novo_design.ipynb`](https://github.com/DoctorDean/molforge/blob/main/notebooks/examples/de_novo_design.ipynb)
+  [`de_novo_design.ipynb`](https://github.com/DoctorDean/molforge/blob/master/notebooks/examples/de_novo_design.ipynb)
   notebook.
