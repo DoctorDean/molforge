@@ -11,6 +11,7 @@ without RDKit raises :class:`~molforge.core.RDKitNotInstalledError`.
 from __future__ import annotations
 
 from molforge.chem.dataset import MoleculeDataset
+from molforge.chem.descriptors import DESCRIPTOR_NAMES, molecule_descriptors
 from molforge.chem.quality import is_valid, unique
 from molforge.chem.standardize import (
     canonical_tautomer,
@@ -21,11 +22,13 @@ from molforge.chem.standardize import (
 )
 
 __all__ = [
+    "DESCRIPTOR_NAMES",
     "MoleculeDataset",
     "canonical_tautomer",
     "cleanup",
     "is_valid",
     "largest_fragment",
+    "molecule_descriptors",
     "neutralize",
     "standardize",
     "unique",

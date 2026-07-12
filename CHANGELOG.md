@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`MoleculeDataset.filter(criterion)` + `molecule_descriptors`.** Reuses a
+  `validation.Criterion` as a molecule filter: `.filter(criterion)` keeps
+  molecules whose descriptors satisfy the criterion, validating the
+  referenced metric names up front and computing only those per molecule. The
+  new `molecule_descriptors(m)` helper (and `DESCRIPTOR_NAMES`) is the
+  vocabulary — `molecular_weight`, `formal_charge`, `n_atoms`, `n_heavy_atoms`
+  — so `ds.filter(Criterion.lt("molecular_weight", 500) & Criterion.le("formal_charge", 0))`
+  reads as a drug-likeness filter. Lazy and RDKit-backed. This completes the
+  `MoleculeDataset` combinator set (map / filter / valid / dedup / take /
+  collect).
 - **`MoleculeDataset` — `.valid()` and `.dedup()`.** Two molecule-aware
   combinators: `.valid()` keeps only molecules that pass RDKit sanitization
   (a lazy filter over `is_valid`), and `.dedup(key="inchikey")` drops

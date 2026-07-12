@@ -16,21 +16,23 @@ import pytest
 from molforge.chem import MoleculeDataset
 from molforge.core import Molecule, RDKitNotInstalledError
 from molforge.core import _rdkit
+from molforge.validation import Criterion
 
 
 class _FakeMol:
-    def __init__(self, tag: str) -> None:
+    def __init__(self, tag: str, *, heavy: int = 1) -> None:
         self.tag = tag
+        self._heavy = heavy
 
     def GetNumAtoms(self) -> int:
-        return 1
+        return self._heavy
 
     def GetNumHeavyAtoms(self) -> int:
-        return 1
+        return self._heavy
 
 
-def _mol(tag: str) -> Molecule:
-    return Molecule.from_rdkit(_FakeMol(tag), name=tag)
+def _mol(tag: str, *, heavy: int = 1) -> Molecule:
+    return Molecule.from_rdkit(_FakeMol(tag, heavy=heavy), name=tag)
 
 
 def _relabel(suffix: str) -> Callable[[Molecule], Molecule]:
@@ -164,6 +166,33 @@ class TestDedup:
     def test_dedup_bad_key_raises_eagerly(self) -> None:
         with pytest.raises(ValueError, match="inchikey"):
             MoleculeDataset([_mol("a")]).dedup(key="nope")
+
+
+class TestFilter:
+    def test_filter_by_heavy_atoms(self) -> None:
+        ds = MoleculeDataset([_mol("small", heavy=5), _mol("big", heavy=40)])
+        out = ds.filter(Criterion.le("n_heavy_atoms", 20)).collect()
+        assert [m.name for m in out] == ["small"]
+
+    def test_filter_composed_criterion(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(_rdkit, "formal_charge", lambda m: 0 if m.tag == "ok" else 2)
+        ds = MoleculeDataset([_mol("ok", heavy=10), _mol("charged", heavy=10)])
+        crit = Criterion.le("n_heavy_atoms", 20) & Criterion.le("formal_charge", 0)
+        assert [m.name for m in ds.filter(crit).collect()] == ["ok"]
+
+    def test_filter_then_take_short_circuits(self) -> None:
+        endless = (_mol(str(i), heavy=i) for i in count())
+        out = MoleculeDataset(endless).filter(Criterion.ge("n_heavy_atoms", 0)).take(3).collect()
+        assert len(out) == 3
+
+    def test_filter_unknown_descriptor_raises_eagerly(self) -> None:
+        with pytest.raises(ValueError, match="unknown descriptor"):
+            MoleculeDataset([]).filter(Criterion.lt("logp", 5))
+
+    def test_filter_rdkit_absent_on_consume(self) -> None:
+        ds = MoleculeDataset([_mol("a")])
+        with pytest.raises(RDKitNotInstalledError):
+            ds.filter(Criterion.lt("molecular_weight", 500)).collect()
 
 
 class TestMoleculeAwareRDKitAbsent:

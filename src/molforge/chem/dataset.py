@@ -29,12 +29,14 @@ from __future__ import annotations
 from itertools import islice
 from typing import TYPE_CHECKING
 
+from molforge.chem.descriptors import DESCRIPTOR_NAMES, molecule_descriptors
 from molforge.chem.quality import _check_key, _iter_unique, is_valid
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
     from molforge.core import Molecule
+    from molforge.validation import Criterion
 
 __all__ = ["MoleculeDataset"]
 
@@ -105,6 +107,43 @@ class MoleculeDataset:
             raise ValueError(f"take(n) requires n >= 0, got {n}")
         source = self._source
         return MoleculeDataset(_ReiterableSource(lambda: islice(iter(source), n)))
+
+    def filter(self, criterion: Criterion) -> MoleculeDataset:
+        """Keep molecules whose descriptors satisfy ``criterion``.
+
+        ``criterion`` is a :class:`~molforge.validation.Criterion` over
+        molecule descriptors — see :func:`molforge.chem.molecule_descriptors`
+        for the vocabulary (``molecular_weight``, ``formal_charge``,
+        ``n_atoms``, ``n_heavy_atoms``). Its referenced names are validated up
+        front, and only those descriptors are computed per molecule::
+
+            from molforge.validation import Criterion
+            ds.filter(Criterion.lt("molecular_weight", 500) & Criterion.le("formal_charge", 0))
+
+        Args:
+            criterion: A criterion over descriptor names.
+
+        Returns:
+            A new dataset yielding only the molecules that satisfy
+            ``criterion``.
+
+        Raises:
+            ValueError: If the criterion references an unknown descriptor.
+            RDKitNotInstalledError: If RDKit isn't installed (on consumption).
+        """
+        needed = frozenset(criterion.metric_names)
+        unknown = sorted(needed - DESCRIPTOR_NAMES)
+        if unknown:
+            raise ValueError(
+                f"criterion references unknown descriptor(s) {unknown}; "
+                f"available: {sorted(DESCRIPTOR_NAMES)}"
+            )
+        source = self._source
+
+        def keep(m: Molecule) -> bool:
+            return criterion.evaluate(molecule_descriptors(m, names=needed))
+
+        return MoleculeDataset(_ReiterableSource(lambda: (m for m in source if keep(m))))
 
     def valid(self) -> MoleculeDataset:
         """Keep only molecules that pass RDKit sanitization.
