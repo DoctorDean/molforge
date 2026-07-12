@@ -35,11 +35,11 @@ workflow then builds the distribution, validates it, and uploads to PyPI.
 5. **Tag and push**:
    ```bash
    git tag -a v0.0.4 -m "Release 0.0.4"
-   git push origin main --tags
+   git push origin master --tags
    ```
 
 The release workflow runs on the tag push (not on the commit push to
-main) and handles the rest:
+master) and handles the rest:
 - Builds sdist + wheel via `python -m build`.
 - Verifies the wheel's `__version__` matches the tag.
 - Runs `twine check` on the distributions.

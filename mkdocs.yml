@@ -3,7 +3,7 @@ site_description: A unified Python library for structural bioinformatics, MD, pr
 site_url: https://doctordean.github.io/molforge/
 repo_url: https://github.com/DoctorDean/molforge
 repo_name: DoctorDean/molforge
-edit_uri: edit/main/docs/
+edit_uri: edit/master/docs/
 
 docs_dir: docs
 
