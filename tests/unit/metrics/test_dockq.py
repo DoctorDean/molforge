@@ -92,6 +92,27 @@ class TestIrms:
         score = irms(model, native)
         assert 0.1 < score < 1.0
 
+    def test_irms_robust_to_missing_backbone_atom(self) -> None:
+        """iRMS selects backbone atoms by residue position, so a residue
+        missing one must not shift the indexing. The old flat p*4 slicing
+        crashed (or silently paired the wrong atoms). Dropping a
+        non-interface O from the model leaves the interface geometry
+        identical, so iRMS stays ~0.
+        """
+        native = read_pdb(FIXTURES / "mini_complex_native.pdb")
+        arr = native.atom_array
+        first = next(
+            sl
+            for sl in arr.iter_residue_slices()
+            if str(arr.chain_id[sl.start]) == "A" and str(arr.entity_type[sl.start]) == "protein"
+        )
+        o_global = first.start + int(np.where(arr.atom_name[first] == "O")[0][0])
+        mask = np.ones(arr.n_atoms, dtype=bool)
+        mask[o_global] = False
+        model = Protein(arr.select(mask))
+        assert model.atom_array.n_atoms == native.atom_array.n_atoms - 1
+        assert irms(model, native) == pytest.approx(0.0, abs=1e-4)
+
 
 class TestLrms:
     def test_native_vs_self_is_zero(self) -> None:

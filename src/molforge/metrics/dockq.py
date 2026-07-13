@@ -86,6 +86,39 @@ def _backbone_atom_coords_per_chain(
     return {k: np.asarray(v, dtype=np.float64) for k, v in out.items()}
 
 
+_BACKBONE_ATOMS = ("N", "CA", "C", "O")
+
+
+def _backbone_by_residue(protein: Protein, chain_id: str) -> list[np.ndarray | None]:
+    """N, CA, C, O coordinates per protein residue of ``chain_id``.
+
+    Returns one ``(4, 3)`` array per residue (atoms in N, CA, C, O order),
+    in the chain's residue order — so the list index is the residue's
+    position within the chain. A residue missing any backbone atom yields
+    ``None`` rather than shifting every later residue's index, which flat
+    position-based ``p * 4`` slicing would do — silently pairing the wrong
+    atoms (or indexing out of bounds) in the interface RMSD.
+    """
+    arr = protein.atom_array
+    out: list[np.ndarray | None] = []
+    for sl in arr.iter_residue_slices():
+        if str(arr.entity_type[sl.start]) != "protein":
+            continue
+        if str(arr.chain_id[sl.start]) != chain_id:
+            continue
+        names = arr.atom_name[sl]
+        coords = arr.coords[sl]
+        bb: list[np.ndarray] = []
+        for name in _BACKBONE_ATOMS:
+            idx = np.where(names == name)[0]
+            if idx.size == 0:
+                bb = []
+                break
+            bb.append(coords[idx[0]])
+        out.append(np.asarray(bb, dtype=np.float64) if bb else None)
+    return out
+
+
 def _heavy_atoms_by_residue(protein: Protein, chain_id: str) -> list[np.ndarray]:
     """Heavy-atom coordinates for each protein residue of ``chain_id``.
 
@@ -250,10 +283,11 @@ def irms(
     chain_b: str | None = None,
 ) -> float:
     """Interface RMSD — backbone RMSD over the interface residues only."""
-    m_bb = _backbone_atom_coords_per_chain(model)
-    r_bb = _backbone_atom_coords_per_chain(reference)
     if chain_a is None or chain_b is None:
-        common = sorted(set(m_bb) & set(r_bb))
+        common = sorted(
+            set(_backbone_atom_coords_per_chain(model))
+            & set(_backbone_atom_coords_per_chain(reference))
+        )
         if len(common) < 2:
             raise ValueError("need at least 2 protein chains")
         chain_a, chain_b = common[0], common[1]
@@ -261,27 +295,32 @@ def irms(
     if not iface_a or not iface_b:
         return 0.0
 
-    # Take the 4 backbone atoms per interface residue. We assume equal
-    # backbone-atom counts per residue between model and reference (true
-    # if both have full N/CA/C/O sets); otherwise this fails loudly.
-    # Build indexing: each interface residue contributes its 4 backbone atoms.
-    def _interface_bb(chain_bb: np.ndarray, positions: list[int]) -> np.ndarray:
-        # backbone-atoms-per-residue: 4 (N, CA, C, O).
-        sel: list[int] = []
+    # Select each interface residue's N/CA/C/O by residue position, so a
+    # residue missing a backbone atom can't shift the indexing (flat
+    # position*4 slicing silently paired the wrong atoms, or indexed out of
+    # bounds). Interface residues without a complete backbone in *both*
+    # structures are skipped.
+    def _matched(chain_id: str, positions: list[int]) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        m_res = _backbone_by_residue(model, chain_id)
+        r_res = _backbone_by_residue(reference, chain_id)
+        m_sel: list[np.ndarray] = []
+        r_sel: list[np.ndarray] = []
         for p in positions:
-            sel.extend(range(p * 4, p * 4 + 4))
-        return chain_bb[sel]
+            if p < len(m_res) and p < len(r_res):
+                m_bb, r_bb = m_res[p], r_res[p]
+                if m_bb is not None and r_bb is not None:
+                    m_sel.append(m_bb)
+                    r_sel.append(r_bb)
+        return m_sel, r_sel
 
-    m_interface = np.concatenate(
-        [_interface_bb(m_bb[chain_a], iface_a), _interface_bb(m_bb[chain_b], iface_b)]
-    )
-    r_interface = np.concatenate(
-        [_interface_bb(r_bb[chain_a], iface_a), _interface_bb(r_bb[chain_b], iface_b)]
-    )
-    if m_interface.shape != r_interface.shape:
-        raise ValueError(
-            f"interface backbone shape mismatch: {m_interface.shape} vs {r_interface.shape}"
-        )
+    m_a, r_a = _matched(chain_a, iface_a)
+    m_b, r_b = _matched(chain_b, iface_b)
+    m_blocks = m_a + m_b
+    r_blocks = r_a + r_b
+    if not m_blocks:
+        return 0.0
+    m_interface = np.concatenate(m_blocks)
+    r_interface = np.concatenate(r_blocks)
     return superpose(m_interface, r_interface).rmsd
 
 
