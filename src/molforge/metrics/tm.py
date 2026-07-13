@@ -42,7 +42,19 @@ import numpy as np
 from molforge.structure.superposition import superpose
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from molforge.core import Protein
+
+
+# TM-score and GDT are both defined as the *maximum* of a residue sum over
+# rigid-body superpositions. A single Kabsch fit only minimizes RMSD, which
+# is dominated by the most-displaced residues and systematically
+# underestimates both metrics when part of the structure is displaced (a
+# hinge or domain motion). The search below follows the TM-score / LGA
+# heuristic: seed superpositions on contiguous fragments, then iteratively
+# re-superpose on the residues that currently fit, keeping the best score.
+_MAX_REFINE_ITERS = 20
 
 
 def _d0(length: int) -> float:
@@ -69,6 +81,57 @@ def _ca_coords(protein: Protein) -> np.ndarray:
             continue
         out.append(arr.coords[sl][ca_idx[0]])
     return np.asarray(out, dtype=np.float64)
+
+
+def _seed_lengths(length: int) -> list[int]:
+    """Initial fragment lengths for the superposition search.
+
+    The full length plus successively halved windows down to a short
+    floor. Shorter seeds let the search lock onto a well-superposable
+    sub-domain and disregard a displaced remainder.
+    """
+    lengths: list[int] = []
+    f = length
+    while f > 4:
+        lengths.append(f)
+        f //= 2
+    lengths.append(min(4, length))
+    return sorted({min(x, length) for x in lengths}, reverse=True)
+
+
+def _optimal_superposition_score(
+    m_coords: np.ndarray,
+    r_coords: np.ndarray,
+    *,
+    select_cutoff: float,
+    score_fn: Callable[[np.ndarray], float],
+) -> float:
+    """Maximize ``score_fn`` over fragment-seeded superpositions.
+
+    For each seed fragment (a contiguous residue window) the model is
+    superposed onto the reference on that fragment, then iteratively
+    re-superposed on the residues currently within ``select_cutoff`` Å.
+    ``score_fn`` (a function of the per-residue CA distance array) is
+    evaluated at every superposition visited, and the maximum is returned.
+    The full-length seed's first fit is the plain Kabsch superposition, so
+    the result is always >= the single-Kabsch value.
+    """
+    length = r_coords.shape[0]
+    best = 0.0
+    for l_ini in _seed_lengths(length):
+        step = max(1, l_ini // 2)
+        for start in range(0, length - l_ini + 1, step):
+            sel = np.arange(start, start + l_ini)
+            for _ in range(_MAX_REFINE_ITERS):
+                sp = superpose(m_coords[sel], r_coords[sel])
+                aligned = (sp.rotation @ m_coords.T).T + sp.translation
+                distances = np.linalg.norm(aligned - r_coords, axis=1)
+                best = max(best, score_fn(distances))
+                nxt = np.where(distances < select_cutoff)[0]
+                if nxt.size < 3 or np.array_equal(nxt, sel):
+                    break  # too few to superpose, or converged to a fixed point
+                sel = nxt
+    return best
 
 
 def tm_score(
@@ -126,9 +189,16 @@ def tm_score(
         )
 
     d0 = _d0(norm_length)
-    # Optimal rigid-body superposition
-    result = superpose(m_coords, r_coords)
-    diff = result.mobile_aligned.astype(np.float64) - r_coords
-    distances = np.linalg.norm(diff, axis=1)
-    s = (1.0 / (1.0 + (distances / d0) ** 2)).sum()
-    return float(s / norm_length)
+
+    # TM-score is the MAXIMUM of the residue sum over superpositions, not
+    # its value at the RMSD-minimizing (Kabsch) fit. Search fragment-seeded
+    # superpositions; the selection cutoff follows the reference program's
+    # d0_search (d0 clamped to [4.5, 8.0] Å).
+    d0_search = min(max(d0, 4.5), 8.0)
+
+    def _tm(distances: np.ndarray) -> float:
+        return float((1.0 / (1.0 + (distances / d0) ** 2)).sum() / norm_length)
+
+    return _optimal_superposition_score(
+        m_coords, r_coords, select_cutoff=d0_search, score_fn=_tm
+    )

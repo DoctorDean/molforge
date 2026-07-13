@@ -12,8 +12,32 @@ from molforge.core import AtomArray, Protein
 from molforge.io import read_pdb
 from molforge.metrics import tm_score
 from molforge.metrics.tm import _d0
+from molforge.structure.superposition import superpose
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
+
+
+def _ca_protein(coords: np.ndarray) -> Protein:
+    """Build a CA-only protein from an (n, 3) coordinate array."""
+    n = coords.shape[0]
+    return Protein(
+        AtomArray.from_dict(
+            {
+                "coords": coords.astype(np.float32),
+                "atom_name": np.array(["CA"] * n, dtype="U4"),
+                "residue_id": np.arange(1, n + 1, dtype="int32"),
+                "chain_id": np.array(["A"] * n, dtype="U4"),
+                "entity_type": np.array(["protein"] * n, dtype="U8"),
+            }
+        )
+    )
+
+
+def _helix_ca(n: int) -> np.ndarray:
+    """Idealized alpha-helix CA trace with n residues."""
+    i = np.arange(n)
+    theta = np.radians(100.0) * i
+    return np.stack([2.3 * np.cos(theta), 2.3 * np.sin(theta), 1.5 * i], axis=1).astype(np.float64)
 
 
 class TestD0:
@@ -79,6 +103,32 @@ class TestNoiseDegrades:
         score = tm_score(q, p)
         # Heavy noise -> low score
         assert score < 0.5
+
+
+class TestDomainMotionMaximization:
+    """TM-score is the maximum over superpositions, not the value at the
+    RMSD-minimizing Kabsch fit. When part of a structure is displaced (a
+    hinge / domain motion), Kabsch compromises and underestimates TM; the
+    fragment-seeded search must recover the well-superposable core.
+    """
+
+    def test_displaced_domain_is_recovered(self) -> None:
+        ref = _helix_ca(40)
+        model = ref.copy()
+        model[28:] += np.array([40.0, 0.0, 0.0])  # rigidly displace the last 12 residues
+        ref_p, model_p = _ca_protein(ref), _ca_protein(model)
+
+        # The old implementation returned the Kabsch-fit value.
+        sp = superpose(model, ref)
+        d = np.linalg.norm(sp.mobile_aligned - ref, axis=1)
+        d0 = _d0(40)
+        kabsch_tm = float((1.0 / (1.0 + (d / d0) ** 2)).sum() / 40)
+
+        score = tm_score(model_p, ref_p)
+        # The 28-residue core (70%) superposes exactly, so TM ~ 0.70 ...
+        assert score == pytest.approx(28 / 40, abs=0.05)
+        # ... far above the RMSD-compromised Kabsch value (~0.05 here).
+        assert score > kabsch_tm + 0.1
 
 
 class TestNormalization:

@@ -8,10 +8,36 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from molforge.core import Protein
+from molforge.core.atom_array import AtomArray
 from molforge.io import read_pdb
 from molforge.metrics import gdt_ha, gdt_per_cutoff, gdt_ts
+from molforge.structure.superposition import superpose
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
+
+
+def _ca_protein(coords: np.ndarray) -> Protein:
+    """Build a CA-only protein from an (n, 3) coordinate array."""
+    n = coords.shape[0]
+    return Protein(
+        AtomArray.from_dict(
+            {
+                "coords": coords.astype(np.float32),
+                "atom_name": np.array(["CA"] * n, dtype="U4"),
+                "residue_id": np.arange(1, n + 1, dtype="int32"),
+                "chain_id": np.array(["A"] * n, dtype="U4"),
+                "entity_type": np.array(["protein"] * n, dtype="U8"),
+            }
+        )
+    )
+
+
+def _helix_ca(n: int) -> np.ndarray:
+    """Idealized alpha-helix CA trace with n residues."""
+    i = np.arange(n)
+    theta = np.radians(100.0) * i
+    return np.stack([2.3 * np.cos(theta), 2.3 * np.sin(theta), 1.5 * i], axis=1).astype(np.float64)
 
 
 class TestIdenticalStructures:
@@ -58,6 +84,30 @@ class TestNoiseDegrades:
             np.float32
         )
         assert gdt_ha(q, p) <= gdt_ts(q, p) + 1e-6
+
+
+class TestDomainMotionMaximization:
+    """GDT is a maximum over superpositions (LGA fits the most residues
+    under each cutoff), not the value at the RMSD-minimizing Kabsch fit.
+    A displaced sub-domain must not drag the score down.
+    """
+
+    def test_displaced_domain_is_recovered(self) -> None:
+        ref = _helix_ca(40)
+        model = ref.copy()
+        model[28:] += np.array([40.0, 0.0, 0.0])  # rigidly displace the last 12 residues
+        ref_p, model_p = _ca_protein(ref), _ca_protein(model)
+
+        # Kabsch-fit GDT-TS (what the old implementation returned).
+        sp = superpose(model, ref)
+        d = np.linalg.norm(sp.mobile_aligned - ref, axis=1)
+        kabsch_gdt = float(np.mean([(d < c).sum() / 40 for c in (1.0, 2.0, 4.0, 8.0)]))
+
+        score = gdt_ts(model_p, ref_p)
+        # The 28-residue core (70%) superposes exactly, so GDT-TS ~ 0.70 ...
+        assert score == pytest.approx(28 / 40, abs=0.06)
+        # ... far above the Kabsch value (~0.10 here).
+        assert score > kabsch_gdt + 0.1
 
 
 class TestPerCutoff:

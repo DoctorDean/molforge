@@ -27,12 +27,9 @@ lists are already in correspondence.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
-
-from molforge.structure.superposition import superpose
 
 if TYPE_CHECKING:
     from molforge.core import Protein
@@ -41,8 +38,8 @@ _GDT_TS_CUTOFFS = (1.0, 2.0, 4.0, 8.0)
 _GDT_HA_CUTOFFS = (0.5, 1.0, 2.0, 4.0)
 
 
-def _ca_distances_after_superposition(model: Protein, reference: Protein) -> NDArray[np.float64]:
-    """Return per-residue CA distances after optimal superposition."""
+def _validated_ca(model: Protein, reference: Protein) -> tuple[np.ndarray, np.ndarray]:
+    """Return matched (model, reference) CA coordinate arrays, or raise."""
     from molforge.metrics.tm import _ca_coords
 
     m_coords = _ca_coords(model)
@@ -54,9 +51,27 @@ def _ca_distances_after_superposition(model: Protein, reference: Protein) -> NDA
         )
     if m_coords.shape[0] < 3:
         raise ValueError(f"GDT requires at least 3 residues, got {m_coords.shape[0]}")
-    result = superpose(m_coords, r_coords)
-    diff = result.mobile_aligned.astype(np.float64) - r_coords
-    return cast("NDArray[np.float64]", np.linalg.norm(diff, axis=1))
+    return m_coords, r_coords
+
+
+def _max_fraction_within(m_coords: np.ndarray, r_coords: np.ndarray, cutoff: float) -> float:
+    """Largest fraction of residues superposable within ``cutoff`` Å.
+
+    Like TM-score, GDT is a maximum over superpositions — LGA searches for
+    the superposition fitting the most residues under each cutoff — so a
+    single RMSD-minimizing Kabsch fit underestimates it whenever part of
+    the structure is displaced. Reuse the shared fragment-seeded search,
+    counting residues within ``cutoff``.
+    """
+    from molforge.metrics.tm import _optimal_superposition_score
+
+    n = r_coords.shape[0]
+    return _optimal_superposition_score(
+        m_coords,
+        r_coords,
+        select_cutoff=cutoff,
+        score_fn=lambda distances: float((distances < cutoff).sum()) / n,
+    )
 
 
 def gdt_ts(model: Protein, reference: Protein) -> float:
@@ -69,9 +84,8 @@ def gdt_ts(model: Protein, reference: Protein) -> float:
     Returns:
         GDT-TS in ``[0, 1]``. Higher = better.
     """
-    distances = _ca_distances_after_superposition(model, reference)
-    n = distances.shape[0]
-    fractions = [float((distances < c).sum()) / n for c in _GDT_TS_CUTOFFS]
+    m_coords, r_coords = _validated_ca(model, reference)
+    fractions = [_max_fraction_within(m_coords, r_coords, c) for c in _GDT_TS_CUTOFFS]
     return float(np.mean(fractions))
 
 
@@ -85,9 +99,8 @@ def gdt_ha(model: Protein, reference: Protein) -> float:
     Returns:
         GDT-HA in ``[0, 1]``. Higher = better.
     """
-    distances = _ca_distances_after_superposition(model, reference)
-    n = distances.shape[0]
-    fractions = [float((distances < c).sum()) / n for c in _GDT_HA_CUTOFFS]
+    m_coords, r_coords = _validated_ca(model, reference)
+    fractions = [_max_fraction_within(m_coords, r_coords, c) for c in _GDT_HA_CUTOFFS]
     return float(np.mean(fractions))
 
 
@@ -110,6 +123,5 @@ def gdt_per_cutoff(
         Dict mapping cutoff to fraction of residues within that cutoff
         after optimal superposition.
     """
-    distances = _ca_distances_after_superposition(model, reference)
-    n = distances.shape[0]
-    return {float(c): float((distances < c).sum()) / n for c in cutoffs}
+    m_coords, r_coords = _validated_ca(model, reference)
+    return {float(c): _max_fraction_within(m_coords, r_coords, c) for c in cutoffs}
