@@ -337,7 +337,9 @@ def dssp(protein: Protein) -> dict[str, object]:
         if angle_deg > 70.0:
             bend[i] = True
 
-    # Assignment priority: E > B > H > G > I > T > S > "-"
+    # Assignment priority (DSSP): H > E/B > G > I > T > S > "-". A strand
+    # residue is E when it sits in a ladder (an adjacent residue also bridges)
+    # and B when it is an isolated bridge.
     # Build alpha-helix runs from turn4 (Kabsch-Sander rule: residues i+1..i+3
     # are H if turn4[i] and turn4[i-1]).
     is_h = np.zeros(n_res, dtype=bool)
@@ -375,10 +377,11 @@ def dssp(protein: Protein) -> dict[str, object]:
         if not mask[i]:
             codes_8[i] = "-"
             continue
-        if strand[i]:
-            codes_8[i] = "E"
-        elif is_h[i]:
+        if is_h[i]:
             codes_8[i] = "H"
+        elif strand[i]:
+            in_ladder = (i > 0 and strand[i - 1]) or (i + 1 < n_res and strand[i + 1])
+            codes_8[i] = "E" if in_ladder else "B"
         elif is_g[i]:
             codes_8[i] = "G"
         elif is_i[i]:

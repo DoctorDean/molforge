@@ -156,6 +156,14 @@ class TestReferenceDSSP:
         # fails loudly.
         assert agreement >= 0.90, f"DSSP agreement {agreement:.2%} below 90%: {codes}"
 
+    def test_assigns_isolated_beta_bridges(self) -> None:
+        """Ubiquitin has two isolated beta-bridges that reference DSSP (mdtraj)
+        labels ``B``, not ``E``. Before the fix every bridge collapsed to E, so
+        no residue was ever assigned B.
+        """
+        codes = dssp(read_pdb(FIXTURES / "real_ubiquitin.pdb"))["codes_8"]
+        assert codes.count("B") == 2, "".join(codes)
+
 
 class TestNonProteinHandling:
     def test_water_atoms_get_dash(self) -> None:
