@@ -71,6 +71,69 @@ class TestSmithWatermanBasic:
         assert result.coverage_a < 0.5
 
 
+class TestSmithWatermanAffineTraceback:
+    """Regression tests for the affine-gap local traceback.
+
+    A single traceback-pointer matrix cannot distinguish gap-open from
+    gap-extend, so it can reconstruct a suboptimal alignment even though
+    the reported score is the true optimum. The invariant below — the
+    returned alignment must score exactly what the function reports —
+    catches that: it fails for the single-pointer implementation on the
+    ``CAAAACCACAACCCCC`` case at the default ``gap_open=-10``.
+    """
+
+    @staticmethod
+    def _affine_score(
+        aligned_a: str, aligned_b: str, match: int, mismatch: int,
+        gap_open: int, gap_extend: int,
+    ) -> int:
+        total = 0
+        in_gap = False
+        for x, y in zip(aligned_a, aligned_b, strict=True):
+            if x == "-" or y == "-":
+                total += gap_extend if in_gap else gap_open
+                in_gap = True
+            else:
+                total += match if x == y else mismatch
+                in_gap = False
+        return total
+
+    def test_multi_residue_gap_run_reconstructed(self) -> None:
+        # The two MKTV blocks must align, forcing a 3-residue gap in b.
+        result = smith_waterman(
+            "MKTVANDMKTV", "MKTVMKTV",
+            matrix=None, match=3, mismatch=-2, gap_open=-4, gap_extend=-1,
+        )
+        assert result.aligned_a == "MKTVANDMKTV"
+        assert result.aligned_b == "MKTV---MKTV"
+        assert result.score == 18  # 8*3 matches - (4 + 1 + 1) for the 3-gap
+        assert result.identity == 1.0
+
+    @pytest.mark.parametrize(
+        "a, b, match, mismatch, gap_open, gap_extend",
+        [
+            ("MKTVANDMKTV", "MKTVMKTV", 3, -2, -4, -1),
+            # Discovered by randomized search; the single-pointer traceback
+            # reported 27 but returned an alignment scoring only 22.
+            ("CAAAACCACAACCCCC", "AACAAACAAC", 5, -4, -10, -1),
+            ("WWWACDEFGHIKLWWW", "ACDEFGHIKL", 2, -1, -10, -1),
+        ],
+    )
+    def test_returned_alignment_matches_reported_score(
+        self, a: str, b: str, match: int, mismatch: int,
+        gap_open: int, gap_extend: int,
+    ) -> None:
+        result = smith_waterman(
+            a, b, matrix=None, match=match, mismatch=mismatch,
+            gap_open=gap_open, gap_extend=gap_extend,
+        )
+        recomputed = self._affine_score(
+            result.aligned_a, result.aligned_b,
+            match, mismatch, gap_open, gap_extend,
+        )
+        assert recomputed == result.score
+
+
 class TestAlignDispatcher:
     def test_global_default(self) -> None:
         result = align("MKTV", "MKTV")

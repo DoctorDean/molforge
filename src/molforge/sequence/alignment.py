@@ -283,22 +283,50 @@ def smith_waterman(
         sub_matrix, idx = get_matrix(matrix)
     s = _score(a, b, sub_matrix, idx, match, mismatch)
 
-    M = np.zeros((n + 1, m + 1), dtype=np.int64)
-    X = np.zeros((n + 1, m + 1), dtype=np.int64)
-    Y = np.zeros((n + 1, m + 1), dtype=np.int64)
-    tb = np.zeros((n + 1, m + 1), dtype=np.int8)  # 0 none, 1 diag, 2 up, 3 left
+    M = np.zeros((n + 1, m + 1), dtype=np.int64)  # H: best local score ending here
+    X = np.zeros((n + 1, m + 1), dtype=np.int64)  # gap in b (advance a)
+    Y = np.zeros((n + 1, m + 1), dtype=np.int64)  # gap in a (advance b)
+    # One traceback matrix per state, so an affine gap run can be followed
+    # back correctly — a single pointer matrix cannot distinguish gap-open
+    # from gap-extend and reconstructs a suboptimal alignment. Mirrors the
+    # three-state formulation in needleman_wunsch above.
+    #   tb_M: 0 = local start (H reset to 0), 1 = diagonal match/mismatch,
+    #         2 = switch to X state, 3 = switch to Y state.
+    #   tb_X / tb_Y: 0 = gap opened (from M), 1 = gap extended.
+    tb_M = np.zeros((n + 1, m + 1), dtype=np.int8)
+    tb_X = np.zeros((n + 1, m + 1), dtype=np.int8)
+    tb_Y = np.zeros((n + 1, m + 1), dtype=np.int8)
 
     best = 0
     best_ij = (0, 0)
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            diag = max(M[i - 1, j - 1], X[i - 1, j - 1], Y[i - 1, j - 1]) + s[i, j]
-            X[i, j] = max(M[i - 1, j] + gap_open, X[i - 1, j] + gap_extend, 0)
-            Y[i, j] = max(M[i, j - 1] + gap_open, Y[i, j - 1] + gap_extend, 0)
-            candidates = (0, diag, X[i, j], Y[i, j])
+            # X: gap in b (advance in a only) — open from M or extend X.
+            open_x = M[i - 1, j] + gap_open
+            extend_x = X[i - 1, j] + gap_extend
+            if open_x >= extend_x:
+                X[i, j] = open_x
+                tb_X[i, j] = 0
+            else:
+                X[i, j] = extend_x
+                tb_X[i, j] = 1
+            # Y: gap in a (advance in b only) — open from M or extend Y.
+            open_y = M[i, j - 1] + gap_open
+            extend_y = Y[i, j - 1] + gap_extend
+            if open_y >= extend_y:
+                Y[i, j] = open_y
+                tb_Y[i, j] = 0
+            else:
+                Y[i, j] = extend_y
+                tb_Y[i, j] = 1
+            # M (H): local best of {reset to 0, diagonal, X gap, Y gap}. Since
+            # M folds in X and Y, M >= X, Y everywhere, so the diagonal only
+            # needs M[i-1, j-1] (== max over the three states there).
+            diag = int(M[i - 1, j - 1]) + int(s[i, j])
+            candidates = (0, diag, int(X[i, j]), int(Y[i, j]))
             choice = int(np.argmax(candidates))
             M[i, j] = candidates[choice]
-            tb[i, j] = choice
+            tb_M[i, j] = choice
             if M[i, j] > best:
                 best = int(M[i, j])
                 best_ij = (i, j)
@@ -307,23 +335,33 @@ def smith_waterman(
     out_b: list[str] = []
     i, j = best_ij
     end_a, end_b = i, j
-    while i > 0 and j > 0 and M[i, j] > 0:
-        move = int(tb[i, j])
-        if move == 1:  # diag
-            out_a.append(a[i - 1])
-            out_b.append(b[j - 1])
-            i -= 1
-            j -= 1
-        elif move == 2:  # up
+    state = 0  # 0 = M/H, 1 = X (gap in b), 2 = Y (gap in a)
+    while i > 0 or j > 0:
+        if state == 0:
+            move = int(tb_M[i, j])
+            if move == 0:  # local start: H reset to 0 here
+                break
+            if move == 1:  # diagonal match/mismatch
+                out_a.append(a[i - 1])
+                out_b.append(b[j - 1])
+                i -= 1
+                j -= 1
+            elif move == 2:  # enter an X gap run (switch state, no index move)
+                state = 1
+            else:  # move == 3: enter a Y gap run
+                state = 2
+        elif state == 1:  # X — gap in b, consume a
             out_a.append(a[i - 1])
             out_b.append("-")
+            extended = int(tb_X[i, j]) == 1
             i -= 1
-        elif move == 3:  # left
+            state = 1 if extended else 0
+        else:  # state == 2: Y — gap in a, consume b
             out_a.append("-")
             out_b.append(b[j - 1])
+            extended = int(tb_Y[i, j]) == 1
             j -= 1
-        else:
-            break
+            state = 2 if extended else 0
     start_a, start_b = i, j
     aligned_a = "".join(reversed(out_a))
     aligned_b = "".join(reversed(out_b))
