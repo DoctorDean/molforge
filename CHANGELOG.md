@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] 2026-07-13
+
 ### Added
 - **"Fetch and search databases" cookbook recipe.** A walkthrough of the
   remote-data functions — `fetch` / `fetch_many` (RCSB, AlphaFold),
@@ -380,6 +382,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   readers. Added `tests/unit/test_docstrings.py`, which parses every
   docstring under griffe and fails on any warning (skips where griffe,
   a docs-only dependency, isn't installed).
+- **TM-score and GDT now maximize over superpositions.** Both metrics are
+  defined as the *maximum* of their residue sum over rigid-body
+  superpositions, but computed the value at a single RMSD-minimizing Kabsch
+  fit. RMSD is dominated by the most-displaced residues, so both were
+  systematically *under*estimated whenever part of the structure is
+  displaced (a hinge / domain motion). Replaced with a fragment-seeded
+  iterative superposition search (Zhang & Skolnick / LGA heuristic),
+  validated against TM-align (`tmtools`) to within ~0.01. **Behavior
+  change:** scores for dissimilar structures rise — a 90° sub-domain
+  rotation of ubiquitin went from 0.27 to a correct 0.71; identical
+  structures still score 1.0.
+- **DSSP amide-hydrogen placement.** The backbone amide H was placed along
+  `(N − C_prev)`, ~57° off from the Kabsch-Sander geometry
+  `H = N + (C_prev − O_prev) / |C_prev − O_prev|` — the previous residue's
+  O coordinate was never used. The misplaced H distorted the H-bond
+  energies and degraded assignment on real proteins (agreement with
+  mdtraj's reference DSSP was ~52–80%; idealized-helix fixtures masked it).
+  Fixed; agreement rises to ~94–100%. **Behavior change:** secondary-
+  structure strings change — become more accurate — for real structures.
+- **DockQ Fnat now counts residue contacts, not atom pairs.** `fnat`
+  intersected raw heavy-atom *index* pairs between model and reference,
+  which is not the CAPRI definition (residue–residue contacts), overweights
+  residues with many close atoms, and silently assumed identical atom
+  ordering — a model with perfect interface geometry but one differing atom
+  scored ~0.67 instead of 1.0. Recomputed at the residue level, keyed by
+  residue position.
+- **DockQ iRMS robust to missing backbone atoms.** `irms` sliced backbone
+  atoms with a fixed four-per-residue stride, so a residue missing an
+  N/CA/C/O — even a non-interface one — shifted every later index, silently
+  pairing the wrong atoms or crashing. Now selects each interface residue's
+  backbone by residue position.
+- **Smith-Waterman affine-gap traceback.** `smith_waterman` ran a
+  three-state (M/X/Y) affine-gap DP but traced it back through a single
+  pointer matrix, which cannot distinguish gap-open from gap-extend. The
+  reported score was correct, but the reconstructed alignment — and the
+  `identity` / `coverage` derived from it — could be wrong (a randomized
+  search finds this in ~0.6% of cases at the default `gap_open=-10`).
+  Rewritten to the standard Gotoh three-state traceback, mirroring
+  `needleman_wunsch`; scores are unchanged.
+- **PQR charge/radius read from the last two numeric fields.** The reader
+  took the *first* two floats after column 54, so a PQR record that
+  retained the PDB occupancy/B-factor columns before the appended
+  charge/radius was misread as `charge=occupancy, radius=B-factor`. Now
+  takes the last two, per the PQR convention.
+- **README renders on PyPI; `main` → `master` links.** The README logo was
+  a relative path (and not shipped in the sdist), so it — and every
+  relative repo link — rendered broken on the PyPI project page; the
+  project Changelog URL, the docs "edit this page" link, and several doc
+  links pointed at a non-existent `main` branch. All corrected to absolute
+  `master` URLs. The 3.9 MB logo was replaced with a 1000-px lockup, a
+  dedicated emblem nav-logo, and a 21 KB favicon, and the stated test
+  counts across the README and docs were reconciled.
 
 ### Added
 - **Cα chirality checks (`molforge.structure`).** Detect D-amino acids
