@@ -12,6 +12,7 @@ from molforge.core import Protein
 from molforge.core.atom_array import AtomArray
 from molforge.io import read_pdb
 from molforge.metrics import gdt_ha, gdt_per_cutoff, gdt_ts
+from molforge.metrics.tm import _ca_coords
 from molforge.structure.superposition import superpose
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
@@ -108,6 +109,29 @@ class TestDomainMotionMaximization:
         assert score == pytest.approx(28 / 40, abs=0.06)
         # ... far above the Kabsch value (~0.10 here).
         assert score > kabsch_gdt + 0.1
+
+
+class TestReferenceValue:
+    """GDT-TS on the same hinged-ubiquitin (1UBQ) case. Guards the
+    per-cutoff superposition maximization from regressing to a single
+    Kabsch fit, which scores ~0.43 here.
+    """
+
+    def test_hinged_ubiquitin_gdt_ts(self) -> None:
+        ref_ca = _ca_coords(read_pdb(FIXTURES / "real_ubiquitin.pdb"))
+        theta = np.radians(40.0)
+        rot = np.array(
+            [
+                [np.cos(theta), -np.sin(theta), 0.0],
+                [np.sin(theta), np.cos(theta), 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+        model_ca = ref_ca.copy()
+        model_ca[45:] = (rot @ (ref_ca[45:] - ref_ca[45]).T).T + ref_ca[45]
+        score = gdt_ts(_ca_protein(model_ca), _ca_protein(ref_ca))
+        # molforge value 0.747; the old Kabsch fit gave ~0.434.
+        assert score == pytest.approx(0.747, abs=0.03)
 
 
 class TestPerCutoff:

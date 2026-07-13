@@ -11,7 +11,7 @@ import pytest
 from molforge.core import AtomArray, Protein
 from molforge.io import read_pdb
 from molforge.metrics import tm_score
-from molforge.metrics.tm import _d0
+from molforge.metrics.tm import _ca_coords, _d0
 from molforge.structure.superposition import superpose
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
@@ -129,6 +129,30 @@ class TestDomainMotionMaximization:
         assert score == pytest.approx(28 / 40, abs=0.05)
         # ... far above the RMSD-compromised Kabsch value (~0.05 here).
         assert score > kabsch_tm + 0.1
+
+
+class TestReferenceValue:
+    """Golden TM-score against TM-align (tmtools), computed offline on
+    ubiquitin (1UBQ) with a 40-degree hinge at residue 45. Guards the
+    superposition-maximizing search from regressing to a single Kabsch
+    fit, which scores ~0.45 on this case — far outside tolerance.
+    """
+
+    def test_matches_tmalign_on_hinged_ubiquitin(self) -> None:
+        ref_ca = _ca_coords(read_pdb(FIXTURES / "real_ubiquitin.pdb"))
+        theta = np.radians(40.0)
+        rot = np.array(
+            [
+                [np.cos(theta), -np.sin(theta), 0.0],
+                [np.sin(theta), np.cos(theta), 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+        model_ca = ref_ca.copy()
+        model_ca[45:] = (rot @ (ref_ca[45:] - ref_ca[45]).T).T + ref_ca[45]
+        score = tm_score(_ca_protein(model_ca), _ca_protein(ref_ca))
+        # TM-align (tmtools) golden = 0.696; the old Kabsch fit gave ~0.445.
+        assert score == pytest.approx(0.696, abs=0.03)
 
 
 class TestNormalization:

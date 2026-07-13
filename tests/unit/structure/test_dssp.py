@@ -132,6 +132,31 @@ class TestHydrogenPlacement:
         np.testing.assert_allclose(nh, co / np.linalg.norm(co), atol=1e-5)
 
 
+class TestReferenceDSSP:
+    """Golden 3-state DSSP for ubiquitin (1UBQ), computed offline with
+    mdtraj's reference DSSP. molforge must stay in strong agreement — this
+    guards the Kabsch-Sander H-bond geometry (the amide-H placement) against
+    regression on a real mixed-alpha/beta protein, where the tiny idealized
+    fixtures can't.
+    """
+
+    # mdtraj compute_dssp(simplified=True) on real_ubiquitin.pdb (76 residues).
+    _MDTRAJ_DSSP_3STATE = (
+        "CEEEEEECCCCEEEEECCCCCEHHHHHHHHHHHHCCCHHHEEEEECCEECCCCCECHHHCCCCCCEEEEEECCCCC"
+    )
+
+    def test_agrees_with_reference_dssp(self) -> None:
+        codes = dssp_3state(read_pdb(FIXTURES / "real_ubiquitin.pdb"))
+        golden = self._MDTRAJ_DSSP_3STATE
+        assert len(codes) == len(golden)
+        agreement = sum(1 for a, b in zip(codes, golden, strict=True) if a == b) / len(golden)
+        # molforge currently matches mdtraj 76/76 here; require strong (>=90%)
+        # agreement so a genuine refinement can shift a residue or two, but a
+        # regression in the H-bond geometry (which dropped this to ~55-80%)
+        # fails loudly.
+        assert agreement >= 0.90, f"DSSP agreement {agreement:.2%} below 90%: {codes}"
+
+
 class TestNonProteinHandling:
     def test_water_atoms_get_dash(self) -> None:
         # Dipeptide fixture has water; water residues should be "-"
