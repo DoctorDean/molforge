@@ -85,7 +85,7 @@ dev = [
     "pytest-xdist>=3.5",
     "pytest-benchmark>=4.0",
     "hypothesis>=6.92",
-    "ruff>=0.5",
+    "ruff==0.15.14",  # pinned to the pre-commit rev so CI and local agree
     "mypy>=1.8",
     "pre-commit>=3.6",
     "build>=1.0",
@@ -197,9 +197,10 @@ ignore = [
 # Characters that ruff's RUF001/RUF002/RUF003 flag as "ambiguous" but
 # that molforge uses deliberately as mathematical notation in
 # docstrings and comments: × for matrix dimensions (N×N), σ for the
-# standard deviation, and the en dash in prose. Allowing them keeps
-# the maths readable instead of forcing ASCII substitutes.
-allowed-confusables = ["×", "σ", "–"]
+# standard deviation, the en dash – and minus sign − in prose/maths, and
+# α (Cα, α-helix). Allowing them keeps the maths and structural-biology
+# notation readable instead of forcing ASCII substitutes.
+allowed-confusables = ["×", "σ", "–", "−", "α"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["B011", "N802", "N803", "N806"]
