@@ -47,10 +47,20 @@ class TestChargeRadiusExtractor:
 
     def test_extra_trailing_tokens_ignored(self) -> None:
         """Some PQR writers append an atom-type description after the
-        radius. The first two floats are still picked up."""
+        radius. The non-numeric trailer is ignored and charge/radius
+        are still picked up."""
         c, r = _parse_charge_radius("  -0.5  1.8  extra-description")
         assert c == pytest.approx(-0.5)
         assert r == pytest.approx(1.8)
+
+    def test_occupancy_bfactor_prefix_taken_as_last_two(self) -> None:
+        """When a PQR line retains the PDB occupancy (1.00) and B-factor
+        (0.00) columns before the appended charge and radius, the *last*
+        two floats are charge and radius — taking the first two would
+        misread the occupancy/B-factor pair."""
+        c, r = _parse_charge_radius("  1.00  0.00 -0.3090  1.8240")
+        assert c == pytest.approx(-0.309)
+        assert r == pytest.approx(1.824)
 
     def test_empty_tail_returns_defaults(self) -> None:
         c, r = _parse_charge_radius("")
@@ -119,6 +129,15 @@ class TestVariantTails:
         """A trailing atom-type description (some PDB2PQR variants
         emit this) doesn't disturb charge/radius extraction."""
         text = "ATOM      1  N   ALA A   1      27.340  24.430   2.614 -0.3090  1.8240 N3\n"
+        prot = read_pqr_string(text)
+        assert prot.atom_array.charge[0] == pytest.approx(-0.309, abs=1e-3)
+        assert prot.metadata["radii"][0] == pytest.approx(1.824, abs=1e-3)
+
+    def test_retained_occupancy_bfactor_columns(self) -> None:
+        """A PQR record that kept the leftover PDB occupancy (1.00) and
+        B-factor (0.00) columns before charge/radius must still read the
+        true charge and radius, not the occupancy/B-factor pair."""
+        text = "ATOM      1  N   ALA A   1      27.340  24.430   2.614  1.00  0.00 -0.3090  1.8240\n"
         prot = read_pqr_string(text)
         assert prot.atom_array.charge[0] == pytest.approx(-0.309, abs=1e-3)
         assert prot.metadata["radii"][0] == pytest.approx(1.824, abs=1e-3)

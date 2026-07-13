@@ -151,27 +151,24 @@ def read_pqr_string(
 def _parse_charge_radius(tail: str) -> tuple[float, float]:
     """Pull ``charge radius`` from the tail of a PQR atom line.
 
-    The tail begins at column 55 and contains whitespace-separated
-    tokens — typically just ``charge radius``, though some emitters
-    write extra trailing tokens (a description string, status flags).
-    The last two parseable floats are taken as ``(charge, radius)``.
+    In PQR the per-atom charge and radius are the final two numeric
+    fields of the record. The tail begins at column 55 and is usually
+    just ``charge radius``, but some emitters prefix it with leftover
+    occupancy / B-factor columns (when the line is a PDB record with
+    charge/radius appended) or suffix a description string. Taking the
+    *last two* parseable floats is correct for all of these; taking the
+    first two would misread a retained occupancy/B-factor pair as
+    ``(charge, radius)``.
     """
-    parts = tail.split()
-    if len(parts) < 2:
-        return 0.0, _DEFAULT_RADIUS
-    # Walk the tokens left-to-right collecting floats; the *first two*
-    # successfully-parsed floats are charge and radius.
     floats: list[float] = []
-    for tok in parts:
+    for tok in tail.split():
         try:
             floats.append(float(tok))
         except ValueError:
             continue
-        if len(floats) == 2:
-            break
     if len(floats) < 2:
         return 0.0, _DEFAULT_RADIUS
-    return floats[0], floats[1]
+    return floats[-2], floats[-1]
 
 
 # ----------------------------------------------------------------------
