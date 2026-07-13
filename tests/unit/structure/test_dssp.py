@@ -10,6 +10,7 @@ import pytest
 from molforge.core import AtomArray, Protein
 from molforge.io import read_pdb
 from molforge.structure import dssp, dssp_3state
+from molforge.structure.dssp import _place_hydrogens
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
 
@@ -102,6 +103,33 @@ class TestMetadata:
         e = result["hbond_energies"]
         assert e.shape == (15, 15)
         assert e.dtype == np.float32
+
+
+class TestHydrogenPlacement:
+    """The backbone amide H must sit 1.0 Å from N along the previous
+    residue's C=O bond direction (Kabsch-Sander). The earlier code placed
+    it along (N - C_prev) — ~57° off — which degraded H-bond detection on
+    real proteins (DSSP-vs-mdtraj agreement fell to ~50-80%; the fix
+    restores it to ~95-100%).
+    """
+
+    def test_h_along_previous_carbonyl(self) -> None:
+        # Residue 0 provides the carbonyl; residue 1 is the amide donor.
+        n = np.array([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=np.float32)
+        c = np.array([[1.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=np.float32)
+        o = np.array([[1.0, 1.0, 0.0], [3.0, 1.0, 0.0]], dtype=np.float32)
+        mask = np.array([True, True])
+        h_coords, h_mask = _place_hydrogens(n, c, o, mask, chain_starts=[0])
+        # First residue of the chain has no preceding C=O -> no H.
+        assert not h_mask[0]
+        assert h_mask[1]
+        # C=O of residue 0 is (C0 - O0) = (0, -1, 0); H is N1 + that unit
+        # vector = (2, -1, 0). The old (N - C_prev) rule would give (3,0,0).
+        np.testing.assert_allclose(h_coords[1], [2.0, -1.0, 0.0], atol=1e-5)
+        nh = h_coords[1] - n[1]
+        assert float(np.linalg.norm(nh)) == pytest.approx(1.0, abs=1e-5)
+        co = c[0] - o[0]
+        np.testing.assert_allclose(nh, co / np.linalg.norm(co), atol=1e-5)
 
 
 class TestNonProteinHandling:

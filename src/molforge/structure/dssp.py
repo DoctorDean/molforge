@@ -112,16 +112,20 @@ def _backbone_atom_coords(
 def _place_hydrogens(
     n_coords: NDArray[np.float32],
     c_coords: NDArray[np.float32],
+    o_coords: NDArray[np.float32],
     mask: NDArray[np.bool_],
     chain_starts: list[int],
 ) -> tuple[NDArray[np.float32], NDArray[np.bool_]]:
-    """Place each residue's backbone amide H by extrapolating from the
-    previous residue's C=O vector.
+    """Place each residue's backbone amide H from the previous residue's
+    C=O bond, following Kabsch & Sander.
 
-    Standard rule: H lies along the (Ci-1 - Oi-1) direction from N, at a
-    1.0 Å distance. The first residue of each chain has no preceding
-    C/O so its H is undefined (we leave it at zero and the donor mask
-    flags it as unusable).
+    The amide hydrogen is put 1.0 Å from N along the previous residue's
+    carbonyl-bond direction: ``H = N + (C_{i-1} - O_{i-1}) / |C_{i-1} -
+    O_{i-1}|``. In the planar trans-peptide unit the N-H bond is very
+    nearly parallel to the preceding C=O bond, which is what makes this
+    the standard geometric estimate used by the original DSSP. The first
+    residue of each chain has no preceding C/O, so its H is undefined
+    (left at zero and flagged unusable by the donor mask).
     """
     n_res = n_coords.shape[0]
     h_coords = np.zeros_like(n_coords)
@@ -134,21 +138,12 @@ def _place_hydrogens(
             continue  # no previous residue / chain break
         if not mask[i - 1]:
             continue
-        # H placed along the C(i-1) -> O(i-1) direction, attached to N(i)
-        # at 1.0 Å. (Kabsch-Sander uses the actual H if known; we
-        # always place ours geometrically since PDB rarely has H atoms
-        # in the standard set.)
-        ci = c_coords[i - 1]
-        # Approximate H position: extrapolate from N along -(C->prev O) vector.
-        # In practice, the simpler Kabsch-Sander placement uses:
-        #   H = N + (N - C_{i-1}) / |N - C_{i-1}|
-        # (unit vector from previous C to current N, pointing 1 Å past N).
-        n_i = n_coords[i]
-        d = n_i - ci
-        norm = np.linalg.norm(d)
+        # Unit vector along the previous residue's C=O bond (from O to C).
+        co = c_coords[i - 1] - o_coords[i - 1]
+        norm = np.linalg.norm(co)
         if norm < 1e-6:
             continue
-        h_coords[i] = n_i + d / norm
+        h_coords[i] = n_coords[i] + co / norm
         h_mask[i] = True
     return h_coords, h_mask
 
@@ -319,7 +314,7 @@ def dssp(protein: Protein) -> dict[str, object]:
         }
 
     chain_starts = _compute_chain_starts(labels)
-    h_coords, h_mask = _place_hydrogens(n_coords, c_coords, mask, chain_starts)
+    h_coords, h_mask = _place_hydrogens(n_coords, c_coords, o_coords, mask, chain_starts)
     energy = _hbond_energy_matrix(n_coords, o_coords, c_coords, h_coords, mask, h_mask)
 
     turn3, turn4, turn5 = _assign_helices(energy, n_res)
