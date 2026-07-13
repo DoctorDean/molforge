@@ -6,10 +6,29 @@ from pathlib import Path
 
 import numpy as np
 
+from molforge.core import Protein
+from molforge.core.atom_array import AtomArray
 from molforge.io import read_pdb
 from molforge.ml import ProteinGraph, to_graph
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
+
+
+def _prepend_far_water(protein: Protein) -> Protein:
+    """Copy of ``protein`` with one far-away water residue prepended."""
+    arr = protein.atom_array
+    water = AtomArray.from_dict(
+        {
+            "coords": np.array([[999.0, 999.0, 999.0]], dtype=np.float32),
+            "atom_name": np.array(["O"], dtype="U4"),
+            "element": np.array(["O"], dtype="U2"),
+            "residue_name": np.array(["HOH"], dtype="U3"),
+            "residue_id": np.array([1], dtype="int32"),
+            "chain_id": np.array(["W"], dtype="U4"),
+            "entity_type": np.array(["water"], dtype="U8"),
+        }
+    )
+    return Protein(water.append(arr))
 
 
 class TestProteinGraph:
@@ -109,3 +128,19 @@ class TestEmpty:
         g = to_graph(p)
         assert g.n_nodes == 0
         assert g.n_edges == 0
+
+
+class TestNonProteinInvariance:
+    """A far non-protein residue must not change the protein graph. Before the
+    fix, edge features were read from an all-residue distance matrix indexed by
+    CA-only edge indices, so a single water corrupted every edge feature.
+    """
+
+    def test_graph_ignores_far_water(self) -> None:
+        base = read_pdb(FIXTURES / "real_ubiquitin.pdb")
+        g_base = to_graph(base)
+        g_wat = to_graph(_prepend_far_water(base))
+        assert g_wat.n_nodes == g_base.n_nodes
+        assert np.array_equal(g_wat.edge_index, g_base.edge_index)
+        np.testing.assert_allclose(g_wat.node_features, g_base.node_features)
+        np.testing.assert_allclose(g_wat.edge_features, g_base.edge_features)

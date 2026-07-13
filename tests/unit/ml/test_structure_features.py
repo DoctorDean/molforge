@@ -7,6 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from molforge.core import Protein
+from molforge.core.atom_array import AtomArray
 from molforge.io import read_pdb
 from molforge.ml import (
     local_environment,
@@ -17,6 +19,25 @@ from molforge.ml import (
 )
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
+
+
+def _prepend_far_water(protein: Protein) -> Protein:
+    """Copy of ``protein`` with one far-away water residue prepended (its own
+    chain, 999 Å away) — a non-protein residue that must not affect the
+    protein node/edge features."""
+    arr = protein.atom_array
+    water = AtomArray.from_dict(
+        {
+            "coords": np.array([[999.0, 999.0, 999.0]], dtype=np.float32),
+            "atom_name": np.array(["O"], dtype="U4"),
+            "element": np.array(["O"], dtype="U2"),
+            "residue_name": np.array(["HOH"], dtype="U3"),
+            "residue_id": np.array([1], dtype="int32"),
+            "chain_id": np.array(["W"], dtype="U4"),
+            "entity_type": np.array(["water"], dtype="U8"),
+        }
+    )
+    return Protein(water.append(arr))
 
 
 class TestPairDistances:
@@ -140,3 +161,17 @@ class TestPerResidueFeatures:
         feats = per_residue_features(p, include_environment=False, include_dssp=False)
         # 21 only
         assert feats.shape == (15, 21)
+
+
+class TestNonProteinInvariance:
+    """Node features must not depend on non-protein residues — the canonical
+    node set is the CA-bearing protein residues. Before the fix, a single far
+    water shifted the DSSP/one-hot blocks and corrupted ~18/76 rows.
+    """
+
+    def test_per_residue_features_ignore_far_water(self) -> None:
+        base = read_pdb(FIXTURES / "real_ubiquitin.pdb")
+        f_base = per_residue_features(base)
+        f_wat = per_residue_features(_prepend_far_water(base))
+        assert f_wat.shape == f_base.shape
+        np.testing.assert_allclose(f_wat, f_base)

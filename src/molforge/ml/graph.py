@@ -98,7 +98,7 @@ def to_graph(
     """
     from molforge.ml.structure_features import (
         _ca_coords_and_labels,
-        pair_distance_features,
+        _rbf,
         per_residue_features,
     )
 
@@ -128,13 +128,12 @@ def to_graph(
     sources, targets = np.where(mask)
     edge_index = np.stack([sources, targets], axis=0).astype(np.int64)
 
-    # Edge features — distance, encoded as either RBF or raw
+    # Edge features — distance, encoded as either RBF or raw. Both come from
+    # the CA distance matrix `dist` (built over the same canonical node set as
+    # the edges), so edge features attach to the correct residue pairs even
+    # when the structure has non-protein residues.
     if edge_distance_bins > 0:
-        all_rbf = pair_distance_features(
-            protein,
-            n_bins=edge_distance_bins,
-        )
-        edge_features = all_rbf[sources, targets].astype(np.float32)
+        edge_features = _rbf(dist[sources, targets], edge_distance_bins)
     else:
         edge_features = dist[sources, targets][:, None].astype(np.float32)
 

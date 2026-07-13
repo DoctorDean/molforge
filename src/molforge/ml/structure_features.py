@@ -17,7 +17,7 @@ NumPy float32 arrays.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -43,6 +43,37 @@ def _ca_coords_and_labels(
         coords.append(arr.coords[sl][ca_idx[0]])
         labels.append((str(arr.chain_id[sl.start]), int(arr.residue_id[sl.start])))
     return np.asarray(coords, dtype=np.float32), labels
+
+
+def _protein_ca_slices(protein: Protein) -> list[slice]:
+    """Residue slices for CA-bearing protein residues — the canonical node set.
+
+    Every per-residue featurizer must build its block over exactly this set,
+    in this order, so node rows stay aligned when non-protein residues
+    (ligands, water, ions, nucleic acids) or CA-less residues are present.
+    Matches the filter in :func:`_ca_coords_and_labels`.
+    """
+    arr = protein.atom_array
+    return [
+        sl
+        for sl in arr.iter_residue_slices()
+        if str(arr.entity_type[sl.start]) == "protein" and bool(np.any(arr.atom_name[sl] == "CA"))
+    ]
+
+
+def _rbf(
+    distances: NDArray[np.float32], n_bins: int, *, d_min: float = 2.0, d_max: float = 22.0
+) -> NDArray[np.float32]:
+    """Expand distances into ``n_bins`` overlapping Gaussian basis functions.
+
+    The width is chosen so adjacent bases cross near half-max. Shared by
+    :func:`pair_distance_features` and the graph edge features so both use an
+    identical encoding.
+    """
+    centers = np.linspace(d_min, d_max, n_bins, dtype=np.float32)
+    sigma = (d_max - d_min) / (n_bins - 1) if n_bins > 1 else 1.0
+    diff = distances[..., None] - centers
+    return np.exp(-(diff * diff) / (2.0 * sigma * sigma)).astype(np.float32)
 
 
 def pair_distances(
@@ -95,11 +126,7 @@ def pair_distance_features(
         is ``exp(-(d_ij - centers[k])^2 / (2 sigma^2))``.
     """
     d = pair_distances(protein, atom_choice=atom_choice)
-    centers = np.linspace(d_min, d_max, n_bins, dtype=np.float32)
-    # Width chosen so adjacent basis functions cross at half-max
-    sigma = (d_max - d_min) / (n_bins - 1) if n_bins > 1 else 1.0
-    diff = d[..., None] - centers[None, None, :]
-    return np.exp(-(diff * diff) / (2.0 * sigma * sigma)).astype(np.float32)
+    return _rbf(d, n_bins, d_min=d_min, d_max=d_max)
 
 
 def pair_orientations(
@@ -201,6 +228,31 @@ def local_environment(
     return out
 
 
+def _dssp3_for_nodes(protein: Protein) -> list[str]:
+    """3-state DSSP codes for the canonical node residues, in node order.
+
+    ``dssp`` assigns a code to *every* residue, including non-protein ones;
+    select the codes for the CA-bearing protein residues by residue label so
+    the DSSP block lines up with the other node-feature blocks.
+    """
+    from molforge.structure import dssp
+
+    result = dssp(protein)
+    codes = cast("list[str]", result["codes_3"])
+    labels = cast("list[tuple[str, int, str]]", result["residue_labels"])
+    code_by_label = dict(zip(labels, codes, strict=True))
+    arr = protein.atom_array
+    out: list[str] = []
+    for sl in _protein_ca_slices(protein):
+        key = (
+            str(arr.chain_id[sl.start]),
+            int(arr.residue_id[sl.start]),
+            str(arr.insertion_code[sl.start]),
+        )
+        out.append(code_by_label.get(key, "C"))
+    return out
+
+
 def per_residue_features(
     protein: Protein,
     *,
@@ -225,35 +277,34 @@ def per_residue_features(
         ``(n_res, D)`` float32 array, where D depends on which blocks
         are included.
     """
+    from molforge.core.constants import three_to_one
+
+    arr = protein.atom_array
+    slices = _protein_ca_slices(protein)
+    n = len(slices)
+
     parts: list[NDArray[np.float32]] = []
     if include_sequence:
         from molforge.ml.sequence_features import one_hot
 
-        seq = protein.sequence.replace("/", "")
+        # One-letter code per canonical node residue — not protein.sequence,
+        # which spans protein+nucleic chains and every residue (with or
+        # without a CA), and would misalign against the CA-only blocks.
+        seq = "".join(three_to_one(str(arr.residue_name[sl.start])) for sl in slices)
         parts.append(one_hot(seq, include_unk=True))
 
     if include_environment:
         parts.append(local_environment(protein))
 
     if include_dssp:
-        from molforge.structure import dssp_3state
-
-        ss = dssp_3state(protein)
-        # 3 columns for H/E/C
-        ss_arr = np.zeros((len(ss), 3), dtype=np.float32)
-        for i, c in enumerate(ss):
-            if c == "H":
-                ss_arr[i, 0] = 1.0
-            elif c == "E":
-                ss_arr[i, 1] = 1.0
-            else:
-                ss_arr[i, 2] = 1.0
+        ss_arr = np.zeros((n, 3), dtype=np.float32)
+        for i, code in enumerate(_dssp3_for_nodes(protein)):
+            ss_arr[i, 0 if code == "H" else 1 if code == "E" else 2] = 1.0
         parts.append(ss_arr)
 
     if not parts:
         return np.zeros((0, 0), dtype=np.float32)
 
-    # All parts should agree on leading dim. Trim to the shortest to be safe.
-    n = min(p.shape[0] for p in parts)
-    parts = [p[:n] for p in parts]
+    # Every block is built over the same canonical node set (length n), so
+    # the rows line up by construction — no trimming, no misalignment.
     return np.concatenate(parts, axis=-1).astype(np.float32)
