@@ -61,9 +61,7 @@ def resolve_selection_mask(topology: Protein, selection: Selection) -> NDArray[n
     else:
         mask = np.asarray(selection, dtype=bool)
         if mask.shape != (len(arr),):
-            raise ValueError(
-                f"boolean selection has shape {mask.shape}, expected ({len(arr)},)"
-            )
+            raise ValueError(f"boolean selection has shape {mask.shape}, expected ({len(arr)},)")
     return np.asarray(mask, dtype=bool)
 
 
@@ -318,7 +316,7 @@ def parse_decomp_row(line: str) -> ResidueContribution | None:
         nums = [float(t) for t in tail]
     except ValueError:
         return None
-    label = " ".join(tokens[: -_DECOMP_NUMBERS][:2])
+    label = " ".join(tokens[:-_DECOMP_NUMBERS][:2])
     if not label:
         return None
     return ResidueContribution(
@@ -379,9 +377,7 @@ def decomp_species_block(
 
     block_at = after_species.find(block_marker)
     if block_at == -1:
-        raise ValueError(
-            f"{block_marker!r} not found in the {species_marker!r} section"
-        )
+        raise ValueError(f"{block_marker!r} not found in the {species_marker!r} section")
     after_block = after_species[block_at + len(block_marker) :]
 
     end = after_block.find("Energy Decomposition:")

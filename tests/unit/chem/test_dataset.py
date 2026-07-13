@@ -14,8 +14,7 @@ from itertools import count
 import pytest
 
 from molforge.chem import MoleculeDataset
-from molforge.core import Molecule, RDKitNotInstalledError
-from molforge.core import _rdkit
+from molforge.core import Molecule, RDKitNotInstalledError, _rdkit
 from molforge.validation import Criterion
 
 

@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from molforge.core import Molecule, RDKitNotInstalledError
-from molforge.core import _rdkit
+from molforge.core import Molecule, RDKitNotInstalledError, _rdkit
 from molforge.io import iter_molecules, iter_smiles, read_molecules, read_smiles
 
 
@@ -52,7 +51,7 @@ class TestReadSmiles:
 
 
 class TestReadMolecules:
-    def test_smiles_file(self, tmp_path, fake_smiles: None) -> None:  # noqa: ANN001
+    def test_smiles_file(self, tmp_path, fake_smiles: None) -> None:
         p = tmp_path / "lib.smi"
         p.write_text("CCO ethanol\nCCC propane\n")
         mols = read_molecules(p)
@@ -69,9 +68,7 @@ class TestReadMolecules:
         assert [m.name for m in mols] == ["lig1", "lig2"]
         assert mols[0].metadata["source"] == "ligs.sdf"
 
-    def test_explicit_format_overrides_extension(
-        self, tmp_path, fake_smiles: None
-    ) -> None:  # noqa: ANN001
+    def test_explicit_format_overrides_extension(self, tmp_path, fake_smiles: None) -> None:
         p = tmp_path / "molecules.txt"
         p.write_text("CCO ethanol\n")
         mols = read_molecules(p, format="smiles")
@@ -113,7 +110,7 @@ class TestIterSmiles:
 
 
 class TestIterMolecules:
-    def test_smiles_file(self, tmp_path, fake_smiles: None) -> None:  # noqa: ANN001
+    def test_smiles_file(self, tmp_path, fake_smiles: None) -> None:
         p = tmp_path / "lib.smi"
         p.write_text("CCO ethanol\nCCC propane\n")
         mols = list(iter_molecules(p))
@@ -130,9 +127,7 @@ class TestIterMolecules:
         assert [m.name for m in mols] == ["lig1", "lig2"]
         assert mols[0].metadata["source"] == "ligs.sdf"
 
-    def test_explicit_format_overrides_extension(
-        self, tmp_path, fake_smiles: None
-    ) -> None:  # noqa: ANN001
+    def test_explicit_format_overrides_extension(self, tmp_path, fake_smiles: None) -> None:
         p = tmp_path / "molecules.txt"
         p.write_text("CCO ethanol\n")
         (mol,) = list(iter_molecules(p, format="smiles"))

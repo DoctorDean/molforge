@@ -17,8 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from molforge.core import Molecule
-from molforge.core import _rdkit
+from molforge.core import Molecule, _rdkit
 
 __all__ = [
     "canonical_tautomer",

@@ -58,6 +58,6 @@ def _collect_docstring_warnings() -> list[str]:
 
 def test_docstrings_parse_clean_under_griffe() -> None:
     warnings = _collect_docstring_warnings()
-    assert warnings == [], "griffe docstring warnings (would abort the strict docs build):\n" + "\n".join(
-        warnings
+    assert warnings == [], (
+        "griffe docstring warnings (would abort the strict docs build):\n" + "\n".join(warnings)
     )

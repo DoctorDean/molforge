@@ -82,9 +82,7 @@ class TestResult:
 
     def test_convergence_array(self) -> None:
         trace = np.array([-5.0, -7.0, -8.5, -9.0], dtype=np.float64)
-        r = FreeEnergyResult(
-            delta_g=-9.0, uncertainty=0.4, method="MM/GBSA", convergence=trace
-        )
+        r = FreeEnergyResult(delta_g=-9.0, uncertainty=0.4, method="MM/GBSA", convergence=trace)
         assert r.convergence is not None
         assert r.convergence[-1] == pytest.approx(-9.0)
 
@@ -102,9 +100,7 @@ class TestRanking:
             FreeEnergyRanking({})
 
     def test_ranked_tightest_first(self) -> None:
-        rk = FreeEnergyRanking(
-            {"A": _result(-9.5), "B": _result(-8.2), "C": _result(-11.0)}
-        )
+        rk = FreeEnergyRanking({"A": _result(-9.5), "B": _result(-8.2), "C": _result(-11.0)})
         assert [label for label, _ in rk.ranked] == ["C", "A", "B"]
 
     def test_best_is_lowest_delta_g(self) -> None:
@@ -125,9 +121,7 @@ class TestRanking:
         assert d.tighter == "other"
 
     def test_delta_delta_g_uncertainty_propagates(self) -> None:
-        rk = FreeEnergyRanking(
-            {"ref": _result(-9.0, 0.3), "other": _result(-11.0, 0.4)}
-        )
+        rk = FreeEnergyRanking({"ref": _result(-9.0, 0.3), "other": _result(-11.0, 0.4)})
         d = rk.delta_delta_g("ref", "other")
         assert d.uncertainty == pytest.approx((0.3**2 + 0.4**2) ** 0.5)  # 0.5
 
@@ -143,9 +137,7 @@ class TestRanking:
             rk.delta_delta_g("A", "missing")
 
     def test_len_and_iter(self) -> None:
-        rk = FreeEnergyRanking(
-            {"A": _result(-9.5), "B": _result(-8.2), "C": _result(-11.0)}
-        )
+        rk = FreeEnergyRanking({"A": _result(-9.5), "B": _result(-8.2), "C": _result(-11.0)})
         assert len(rk) == 3
         assert [label for label, _ in rk] == ["C", "A", "B"]  # iter follows ranking
 

@@ -136,7 +136,7 @@ def _iter_bonds(
     bonds: list[
         tuple[str, int, str, int, str, tuple[str, int, str], tuple[str, int, str], float]
     ] = []
-    intra = _INTRA_BONDS + (("CA", "CB", "CA-CB"),) if include_cb else _INTRA_BONDS
+    intra = (*_INTRA_BONDS, ("CA", "CB", "CA-CB")) if include_cb else _INTRA_BONDS
 
     prev_c: tuple[int, NDArray[np.float64]] | None = None
     prev_label: tuple[str, int, str] | None = None

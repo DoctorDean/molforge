@@ -68,7 +68,7 @@ def _install_stub(engine: AmberMMGBSA, results_text: str) -> dict:
     """Replace the tool seams; return a record of what happened."""
     record: dict = {"calls": [], "mmpbsa_in": None}
 
-    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+    def fake_run(cmd, *, cwd, step):
         record["calls"].append((step, list(cmd)))
         cwd = Path(cwd)
         if step == "ante-MMPBSA":
@@ -135,17 +135,15 @@ class TestNotInstalled:
         from molforge.freeenergy import MMGBSAEngineNotInstalledError
 
         traj = _trajectory(_inputs(tmp_path))
-        with pytest.raises(MMGBSAEngineNotInstalledError, match="AmberTools|PATH"):
+        with pytest.raises(MMGBSAEngineNotInstalledError, match=r"AmberTools|PATH"):
             AmberMMGBSA().run(traj, receptor=RECEPTOR, ligand=LIGAND)
 
 
 class TestPipeline:
     def test_gb_end_to_end(self, tmp_path: Path) -> None:
         engine = AmberMMGBSA()
-        record = _install_stub(engine, FIXTURE.read_text())
-        result = engine.run(
-            _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND
-        )
+        _install_stub(engine, FIXTURE.read_text())
+        result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
         assert result.method == "MM/GBSA"
         assert result.delta_g == pytest.approx(-21.0)
         assert result.uncertainty == pytest.approx(0.7)
@@ -169,7 +167,7 @@ class TestPipeline:
         record = _install_stub(engine, FIXTURE.read_text())
         engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
 
-        steps = {step: cmd for step, cmd in record["calls"]}
+        steps = dict(record["calls"])
         assert set(steps) == {"ante-MMPBSA", "MMPBSA"}
         # ante-MMPBSA carries the resolved masks and strip mask.
         ante = steps["ante-MMPBSA"]
@@ -245,20 +243,15 @@ class TestCaching:
 
 
 DECOMP_FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "freeenergy"
-    / "FINAL_DECOMP_MMPBSA.dat"
+    Path(__file__).resolve().parents[2] / "fixtures" / "freeenergy" / "FINAL_DECOMP_MMPBSA.dat"
 )
 
 
-def _install_stub_with_decomp(
-    engine: AmberMMGBSA, results_text: str, decomp_text: str
-) -> dict:
+def _install_stub_with_decomp(engine: AmberMMGBSA, results_text: str, decomp_text: str) -> dict:
     """Stub that also writes FINAL_DECOMP_MMPBSA.dat when -do is passed."""
     record: dict = {"calls": [], "mmpbsa_in": None, "wrote_decomp": False}
 
-    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+    def fake_run(cmd, *, cwd, step):
         record["calls"].append((step, list(cmd)))
         cwd = Path(cwd)
         if step == "ante-MMPBSA":
@@ -279,9 +272,7 @@ def _install_stub_with_decomp(
 class TestDecomposition:
     def test_run_with_idecomp_attaches_decomposition(self, tmp_path: Path) -> None:
         engine = AmberMMGBSA()
-        record = _install_stub_with_decomp(
-            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
-        )
+        record = _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
         result = engine.run(
             _trajectory(_inputs(tmp_path)),
             receptor=RECEPTOR,
@@ -300,9 +291,7 @@ class TestDecomposition:
 
     def test_run_without_idecomp_has_no_decomposition(self, tmp_path: Path) -> None:
         engine = AmberMMGBSA()
-        record = _install_stub_with_decomp(
-            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
-        )
+        record = _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
         result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
         assert "&decomp" not in record["mmpbsa_in"]
         assert not record["wrote_decomp"]
@@ -322,5 +311,5 @@ class TestDecomposition:
         assert second.decomposition["LEU 40"].total == pytest.approx(-6.5)
 
 
-def _fail_if_called(cmd, *, cwd, step):  # noqa: ANN001
+def _fail_if_called(cmd, *, cwd, step):
     raise AssertionError("tools should not run on a cache hit")

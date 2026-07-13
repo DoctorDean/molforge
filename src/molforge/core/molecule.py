@@ -50,7 +50,7 @@ class Molecule:
         metadata: Free-form provenance/annotation, e.g. source file or ID.
     """
 
-    __slots__ = ("_mol", "name", "metadata")
+    __slots__ = ("_mol", "metadata", "name")
 
     def __init__(
         self,

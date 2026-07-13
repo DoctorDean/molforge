@@ -16,10 +16,7 @@ from molforge.freeenergy import Decomposition
 from molforge.wrappers.freeenergy import parse_mmpbsa_decomp
 
 FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "freeenergy"
-    / "FINAL_DECOMP_MMPBSA.dat"
+    Path(__file__).resolve().parents[2] / "fixtures" / "freeenergy" / "FINAL_DECOMP_MMPBSA.dat"
 )
 
 

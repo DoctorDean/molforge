@@ -84,8 +84,12 @@ class TestSmithWatermanAffineTraceback:
 
     @staticmethod
     def _affine_score(
-        aligned_a: str, aligned_b: str, match: int, mismatch: int,
-        gap_open: int, gap_extend: int,
+        aligned_a: str,
+        aligned_b: str,
+        match: int,
+        mismatch: int,
+        gap_open: int,
+        gap_extend: int,
     ) -> int:
         total = 0
         in_gap = False
@@ -101,8 +105,13 @@ class TestSmithWatermanAffineTraceback:
     def test_multi_residue_gap_run_reconstructed(self) -> None:
         # The two MKTV blocks must align, forcing a 3-residue gap in b.
         result = smith_waterman(
-            "MKTVANDMKTV", "MKTVMKTV",
-            matrix=None, match=3, mismatch=-2, gap_open=-4, gap_extend=-1,
+            "MKTVANDMKTV",
+            "MKTVMKTV",
+            matrix=None,
+            match=3,
+            mismatch=-2,
+            gap_open=-4,
+            gap_extend=-1,
         )
         assert result.aligned_a == "MKTVANDMKTV"
         assert result.aligned_b == "MKTV---MKTV"
@@ -120,16 +129,30 @@ class TestSmithWatermanAffineTraceback:
         ],
     )
     def test_returned_alignment_matches_reported_score(
-        self, a: str, b: str, match: int, mismatch: int,
-        gap_open: int, gap_extend: int,
+        self,
+        a: str,
+        b: str,
+        match: int,
+        mismatch: int,
+        gap_open: int,
+        gap_extend: int,
     ) -> None:
         result = smith_waterman(
-            a, b, matrix=None, match=match, mismatch=mismatch,
-            gap_open=gap_open, gap_extend=gap_extend,
+            a,
+            b,
+            matrix=None,
+            match=match,
+            mismatch=mismatch,
+            gap_open=gap_open,
+            gap_extend=gap_extend,
         )
         recomputed = self._affine_score(
-            result.aligned_a, result.aligned_b,
-            match, mismatch, gap_open, gap_extend,
+            result.aligned_a,
+            result.aligned_b,
+            match,
+            mismatch,
+            gap_open,
+            gap_extend,
         )
         assert recomputed == result.score
 

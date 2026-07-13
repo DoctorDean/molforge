@@ -137,9 +137,7 @@ def _heavy_atoms_by_residue(protein: Protein, chain_id: str) -> list[np.ndarray]
         if str(arr.chain_id[sl.start]) != chain_id:
             continue
         heavy = [
-            arr.coords[i]
-            for i in range(sl.start, sl.stop)
-            if str(arr.element[i]).upper() != "H"
+            arr.coords[i] for i in range(sl.start, sl.stop) if str(arr.element[i]).upper() != "H"
         ]
         residues.append(
             np.asarray(heavy, dtype=np.float64) if heavy else np.empty((0, 3), dtype=np.float64)

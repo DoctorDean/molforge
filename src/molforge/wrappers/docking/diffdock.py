@@ -52,10 +52,10 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from molforge.cache import get_default_cache
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
-from molforge.cache import get_default_cache
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -196,9 +196,7 @@ class DiffDock(DockingEngine):
         receptor_ref = (
             (receptor.name or "<Protein>") if isinstance(receptor, Protein) else str(receptor)
         )
-        parent = (
-            receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
-        )
+        parent = receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
         return Provenance.from_engine(
             engine="DiffDock",
             parameters={

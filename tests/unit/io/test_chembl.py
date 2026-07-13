@@ -13,8 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from molforge.core import Molecule, RDKitNotInstalledError
-from molforge.core import _rdkit
+from molforge.core import Molecule, RDKitNotInstalledError, _rdkit
 from molforge.io import fetch_chembl, fetch_chembl_many
 
 

@@ -35,7 +35,6 @@ from molforge.cache import get_default_cache
 from molforge.core import AtomArray, Protein
 from molforge.docking import DockingResult, Pose
 from molforge.wrappers.docking import DiffDock, Gnina, Vina
-
 from tests.unit.wrappers.test_diffdock import _SAMPLE_SDF
 from tests.unit.wrappers.test_gnina import _REAL_GNINA_SDF
 
@@ -81,9 +80,7 @@ def _boom(*_args: Any, **_kwargs: Any) -> Any:
 
 
 class TestVinaCacheHit:
-    def test_dock_returns_cached_without_engine(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dock_returns_cached_without_engine(self, monkeypatch: pytest.MonkeyPatch) -> None:
         engine = Vina()
         receptor = _receptor()
         ligand = "/tmp/ligand.pdbqt"
@@ -108,9 +105,7 @@ class TestVinaCacheHit:
         assert result.best.score == pytest.approx(-12.345)
         assert result.metadata["sentinel"] == "from-cache"
 
-    def test_different_params_miss_then_reach_engine(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_different_params_miss_then_reach_engine(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A different exhaustiveness is a different key — the cached
         entry must NOT satisfy it, so dock() proceeds to the engine."""
         engine = Vina()
@@ -134,9 +129,7 @@ class TestVinaCacheHit:
 
 
 class TestGninaCacheHit:
-    def test_dock_returns_cached_without_binary(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dock_returns_cached_without_binary(self, monkeypatch: pytest.MonkeyPatch) -> None:
         engine = Gnina()
         receptor = _receptor()
         ligand = "/tmp/ligand.sdf"
@@ -161,9 +154,7 @@ class TestGninaCacheHit:
 
 
 class TestDiffDockCacheHit:
-    def test_dock_returns_cached_without_install(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dock_returns_cached_without_install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         engine = DiffDock()
         receptor = _receptor()
         ligand = "CCO"
@@ -203,7 +194,9 @@ class TestGninaRoundTrip:
             proc.stderr = ""
             return proc
 
-        monkeypatch.setattr("molforge.wrappers.docking.gnina.shutil.which", lambda _: "/usr/bin/gnina")
+        monkeypatch.setattr(
+            "molforge.wrappers.docking.gnina.shutil.which", lambda _: "/usr/bin/gnina"
+        )
         monkeypatch.setattr("molforge.wrappers.docking.gnina.subprocess.run", fake_run)
 
         engine = Gnina()
@@ -236,9 +229,7 @@ class TestDiffDockRoundTrip:
         )
         return pdb
 
-    def test_second_dock_is_a_hit(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_second_dock_is_a_hit(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         repo = self._fake_install(tmp_path)
         receptor = self._receptor_pdb(tmp_path)
         calls = {"run": 0}

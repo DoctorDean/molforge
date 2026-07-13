@@ -101,7 +101,7 @@ DELTA TOTAL                 -17.0000     2.5000    0.2500
         assert r.components.electrostatic == pytest.approx(-20.0)
 
     def test_unknown_solvent_model_raises(self, dat: str) -> None:
-        with pytest.raises(ValueError, match="gb.*or.*pb|solvent_model"):
+        with pytest.raises(ValueError, match=r"gb.*or.*pb|solvent_model"):
             parse_mmpbsa_dat(dat, solvent_model="implicit")
 
     def test_missing_section_raises(self) -> None:
@@ -110,7 +110,9 @@ DELTA TOTAL                 -17.0000     2.5000    0.2500
             parse_mmpbsa_dat(self._GB_ONLY, solvent_model="pb")
 
     def test_missing_row_raises(self) -> None:
-        broken = self._GB_ONLY.replace("DELTA TOTAL                 -17.0000     2.5000    0.2500", "")
+        broken = self._GB_ONLY.replace(
+            "DELTA TOTAL                 -17.0000     2.5000    0.2500", ""
+        )
         with pytest.raises(ValueError, match="DELTA TOTAL"):
             parse_mmpbsa_dat(broken)
 

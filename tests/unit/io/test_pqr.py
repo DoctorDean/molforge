@@ -137,7 +137,9 @@ class TestVariantTails:
         """A PQR record that kept the leftover PDB occupancy (1.00) and
         B-factor (0.00) columns before charge/radius must still read the
         true charge and radius, not the occupancy/B-factor pair."""
-        text = "ATOM      1  N   ALA A   1      27.340  24.430   2.614  1.00  0.00 -0.3090  1.8240\n"
+        text = (
+            "ATOM      1  N   ALA A   1      27.340  24.430   2.614  1.00  0.00 -0.3090  1.8240\n"
+        )
         prot = read_pqr_string(text)
         assert prot.atom_array.charge[0] == pytest.approx(-0.309, abs=1e-3)
         assert prot.metadata["radii"][0] == pytest.approx(1.824, abs=1e-3)

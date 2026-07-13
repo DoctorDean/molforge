@@ -43,9 +43,27 @@ def _standard_df() -> _DF:
     return _DF(
         ["label", "DG", "uncertainty", "source", "computational"],
         [
-            {"label": "lig1", "DG": -9.5, "uncertainty": 0.3, "source": "calc", "computational": True},
-            {"label": "lig2", "DG": -11.2, "uncertainty": 0.4, "source": "calc", "computational": True},
-            {"label": "lig3", "DG": -8.0, "uncertainty": 0.2, "source": "exp", "computational": False},
+            {
+                "label": "lig1",
+                "DG": -9.5,
+                "uncertainty": 0.3,
+                "source": "calc",
+                "computational": True,
+            },
+            {
+                "label": "lig2",
+                "DG": -11.2,
+                "uncertainty": 0.4,
+                "source": "calc",
+                "computational": True,
+            },
+            {
+                "label": "lig3",
+                "DG": -8.0,
+                "uncertainty": 0.2,
+                "source": "exp",
+                "computational": False,
+            },
         ],
     )
 
@@ -77,14 +95,23 @@ class TestFromCinnabar:
     def test_no_computational_column_keeps_all(self) -> None:
         df = _DF(
             ["label", "DG", "uncertainty"],
-            [{"label": "a", "DG": -5.0, "uncertainty": 0.1}, {"label": "b", "DG": -6.0, "uncertainty": 0.1}],
+            [
+                {"label": "a", "DG": -5.0, "uncertainty": 0.1},
+                {"label": "b", "DG": -6.0, "uncertainty": 0.1},
+            ],
         )
         assert set(from_cinnabar(df)) == {"a", "b"}
 
     def test_unit_suffixed_columns_and_quantity_values(self) -> None:
         df = _DF(
             ["label", "DG (kcal/mol)", "uncertainty (kcal/mol)"],
-            [{"label": "L", "DG (kcal/mol)": _Quantity(-7.7), "uncertainty (kcal/mol)": _Quantity(0.25)}],
+            [
+                {
+                    "label": "L",
+                    "DG (kcal/mol)": _Quantity(-7.7),
+                    "uncertainty (kcal/mol)": _Quantity(0.25),
+                }
+            ],
         )
         r = from_cinnabar(df)["L"]
         assert r.delta_g == pytest.approx(-7.7)

@@ -76,12 +76,7 @@ class FreeEnergyComponents:
         ``None``, this equals the reported binding free energy (endpoint
         runs without an entropy calculation report ΔH as ΔG).
         """
-        return (
-            self.vdw
-            + self.electrostatic
-            + self.polar_solvation
-            + self.nonpolar_solvation
-        )
+        return self.vdw + self.electrostatic + self.polar_solvation + self.nonpolar_solvation
 
 
 @dataclass
@@ -310,9 +305,7 @@ class Decomposition:
         Returns:
             The ranked contributions.
         """
-        ordered = sorted(
-            self._by_residue.values(), key=lambda c: c.total, reverse=not favorable
-        )
+        ordered = sorted(self._by_residue.values(), key=lambda c: c.total, reverse=not favorable)
         return ordered if n is None else ordered[:n]
 
     def __getitem__(self, residue: str) -> ResidueContribution:

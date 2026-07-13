@@ -10,8 +10,7 @@ from __future__ import annotations
 import pytest
 
 from molforge.chem import DESCRIPTOR_NAMES, molecule_descriptors
-from molforge.core import Molecule, RDKitNotInstalledError
-from molforge.core import _rdkit
+from molforge.core import Molecule, RDKitNotInstalledError, _rdkit
 
 
 class _FakeMol:

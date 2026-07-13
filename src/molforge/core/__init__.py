@@ -15,6 +15,7 @@ Typical usage:
 
 from __future__ import annotations
 
+from molforge.core._rdkit import RDKitNotInstalledError
 from molforge.core.atom import Atom
 from molforge.core.atom_array import (
     ATOM_FIELDS,
@@ -24,9 +25,7 @@ from molforge.core.atom_array import (
     IntArray,
     StrArray,
 )
-from molforge.core._rdkit import RDKitNotInstalledError
 from molforge.core.chain import Chain
-from molforge.core.molecule import Molecule
 from molforge.core.constants import (
     NUCLEOTIDE_TO_ONE,
     ONE_TO_THREE,
@@ -38,6 +37,7 @@ from molforge.core.constants import (
     three_to_one,
 )
 from molforge.core.metadata_keys import ProteinMetadata
+from molforge.core.molecule import Molecule
 from molforge.core.protein import Protein
 from molforge.core.provenance import Provenance
 from molforge.core.residue import Residue

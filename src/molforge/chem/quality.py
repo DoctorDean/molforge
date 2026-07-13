@@ -14,8 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from molforge.core import Molecule
-from molforge.core import _rdkit
+from molforge.core import Molecule, _rdkit
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator

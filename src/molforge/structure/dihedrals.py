@@ -246,21 +246,21 @@ RamachandranCategory = Literal["General", "Glycine", "Proline"]
 _Box = tuple[float, float, float, float]
 
 _GENERAL_FAVORED: tuple[_Box, ...] = (
-    (-135.0, -40.0, -70.0, 5.0),      # right-handed α-helix
-    (-180.0, -40.0, 100.0, 180.0),    # β-sheet / polyproline-II
+    (-135.0, -40.0, -70.0, 5.0),  # right-handed α-helix
+    (-180.0, -40.0, 100.0, 180.0),  # β-sheet / polyproline-II
     (-180.0, -40.0, -180.0, -165.0),  # β-sheet (ψ wrap)
 )
 _GENERAL_ALLOWED: tuple[_Box, ...] = (
-    (-165.0, -35.0, -100.0, 40.0),    # α-helix (broad)
-    (-180.0, -35.0, 60.0, 180.0),     # β / PPII (broad)
+    (-165.0, -35.0, -100.0, 40.0),  # α-helix (broad)
+    (-180.0, -35.0, 60.0, 180.0),  # β / PPII (broad)
     (-180.0, -35.0, -180.0, -150.0),  # β (broad, ψ wrap)
-    (35.0, 80.0, 5.0, 85.0),          # left-handed α (rare but real)
+    (35.0, 80.0, 5.0, 85.0),  # left-handed α (rare but real)
 )
 
 # Proline: φ confined near −63° by the pyrrolidine ring; two ψ basins.
 _PROLINE_FAVORED: tuple[_Box, ...] = (
-    (-90.0, -35.0, -55.0, 5.0),       # α
-    (-90.0, -35.0, 120.0, 180.0),     # PPII
+    (-90.0, -35.0, -55.0, 5.0),  # α
+    (-90.0, -35.0, 120.0, 180.0),  # PPII
 )
 _PROLINE_ALLOWED: tuple[_Box, ...] = (
     (-100.0, -30.0, -80.0, 30.0),
@@ -270,9 +270,7 @@ _PROLINE_ALLOWED: tuple[_Box, ...] = (
 
 def _reflect(boxes: tuple[_Box, ...]) -> tuple[_Box, ...]:
     """Point-reflect boxes through the origin (φ,ψ) → (−φ,−ψ)."""
-    return tuple(
-        (-pmax, -pmin, -smax, -smin) for (pmin, pmax, smin, smax) in boxes
-    )
+    return tuple((-pmax, -pmin, -smax, -smin) for (pmin, pmax, smin, smax) in boxes)
 
 
 # Glycine is achiral: its Ramachandran map is symmetric under
@@ -308,10 +306,7 @@ class RamachandranResult:
 
 
 def _in_boxes(phi: float, psi: float, boxes: tuple[_Box, ...]) -> bool:
-    for pmin, pmax, smin, smax in boxes:
-        if pmin <= phi <= pmax and smin <= psi <= smax:
-            return True
-    return False
+    return any(pmin <= phi <= pmax and smin <= psi <= smax for pmin, pmax, smin, smax in boxes)
 
 
 def _category_for(residue_name: str) -> RamachandranCategory:

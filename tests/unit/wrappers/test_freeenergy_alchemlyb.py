@@ -48,12 +48,12 @@ class _Frame:
         self._a = np.asarray(array, dtype=float)
         self.attrs = attrs
 
-    def __array__(self, dtype=None):  # noqa: ANN001
+    def __array__(self, dtype=None):
         return self._a if dtype is None else self._a.astype(dtype)
 
 
 class _FakeEstimator:
-    def __init__(self, delta_f, d_delta_f) -> None:  # noqa: ANN001
+    def __init__(self, delta_f, d_delta_f) -> None:
         self.delta_f_ = delta_f
         self.d_delta_f_ = d_delta_f
 
@@ -77,9 +77,7 @@ class TestFromDeltaF:
         assert r.uncertainty == pytest.approx(0.0124)
 
     def test_kjmol_conversion(self) -> None:
-        r = from_delta_f(
-            np.array([[0.0, 7.585673]]), np.array([[0.0, 0.05]]), energy_unit="kJ/mol"
-        )
+        r = from_delta_f(np.array([[0.0, 7.585673]]), np.array([[0.0, 0.05]]), energy_unit="kJ/mol")
         assert r.delta_g == pytest.approx(7.585673 / 4.184, rel=1e-9)
 
     def test_defaults_and_shape(self) -> None:
@@ -152,7 +150,9 @@ class TestErrors:
 
     def test_non_2d_raises(self) -> None:
         with pytest.raises(ValueError, match="2-D"):
-            from_delta_f(np.array([1.0, 2.0, 3.0]), np.array([0.0, 0.0, 0.0]), energy_unit="kcal/mol")
+            from_delta_f(
+                np.array([1.0, 2.0, 3.0]), np.array([0.0, 0.0, 0.0]), energy_unit="kcal/mol"
+            )
 
 
 class TestRankingIntegration:
@@ -174,9 +174,7 @@ class TestRankingIntegration:
 
 class TestRelativeBindingFreeEnergy:
     def _leg(self, dg: float, unc: float):
-        return from_delta_f(
-            np.array([[0.0, dg]]), np.array([[0.0, unc]]), energy_unit="kcal/mol"
-        )
+        return from_delta_f(np.array([[0.0, dg]]), np.array([[0.0, unc]]), energy_unit="kcal/mol")
 
     def test_cycle_value_and_propagation(self) -> None:
         # complex leg -12, solvent leg -3 -> ΔΔG = -9 (B tighter), σ = hypot(.3,.4)
@@ -207,10 +205,18 @@ class TestRelativeBindingFreeEnergy:
         # A star map (edges from a reference) -> reference-relative results
         # plug into FreeEnergyRanking.
         edges = {
-            "B": relative_binding_free_energy(self._leg(-12.0, 0.3), self._leg(-3.0, 0.3), reference="A", other="B"),
-            "C": relative_binding_free_energy(self._leg(-7.0, 0.3), self._leg(-3.0, 0.3), reference="A", other="C"),
+            "B": relative_binding_free_energy(
+                self._leg(-12.0, 0.3), self._leg(-3.0, 0.3), reference="A", other="B"
+            ),
+            "C": relative_binding_free_energy(
+                self._leg(-7.0, 0.3), self._leg(-3.0, 0.3), reference="A", other="C"
+            ),
         }
-        results = {"A": from_delta_f(np.array([[0.0, 0.0]]), np.array([[0.0, 0.0]]), energy_unit="kcal/mol")}
+        results = {
+            "A": from_delta_f(
+                np.array([[0.0, 0.0]]), np.array([[0.0, 0.0]]), energy_unit="kcal/mol"
+            )
+        }
         for name, ddg in edges.items():
             results[name] = from_delta_f(
                 np.array([[0.0, ddg.value]]),
@@ -224,9 +230,7 @@ class TestRelativeBindingFreeEnergy:
 
 class TestAbsoluteBindingFreeEnergy:
     def _leg(self, dg: float, unc: float):
-        return from_delta_f(
-            np.array([[0.0, dg]]), np.array([[0.0, unc]]), energy_unit="kcal/mol"
-        )
+        return from_delta_f(np.array([[0.0, dg]]), np.array([[0.0, unc]]), energy_unit="kcal/mol")
 
     def test_double_decoupling_cycle(self) -> None:
         # ΔG_bind = solvent − complex + restraint = 35 − 45 − 1.5 = -11.5

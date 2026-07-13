@@ -93,8 +93,14 @@ class TestZScore:
     def test_atom_indices_and_labels(self) -> None:
         ideal, sigma = IDEAL_BOND_LENGTHS["N-CA"]
         p = _protein(
-            [{"resid": 7, "chain": "B", "resname": "LEU",
-              "atoms": {"N": (0.0, 0.0, 0.0), "CA": (ideal + 8 * sigma, 0.0, 0.0)}}]
+            [
+                {
+                    "resid": 7,
+                    "chain": "B",
+                    "resname": "LEU",
+                    "atoms": {"N": (0.0, 0.0, 0.0), "CA": (ideal + 8 * sigma, 0.0, 0.0)},
+                }
+            ]
         )
         (o,) = check_bond_lengths(p)
         assert isinstance(o, BondLengthOutlier)
@@ -155,11 +161,14 @@ class TestAggregatesAndFilters:
         ci, cs = IDEAL_BOND_LENGTHS["CA-C"]
         p = _protein(
             [
-                {"resid": 1, "atoms": {
-                    "N": (0.0, 0.0, 0.0),
-                    "CA": (ni + 5 * ns, 0.0, 0.0),
-                    "C": (ni + 5 * ns, ci + 9 * cs, 0.0),
-                }}
+                {
+                    "resid": 1,
+                    "atoms": {
+                        "N": (0.0, 0.0, 0.0),
+                        "CA": (ni + 5 * ns, 0.0, 0.0),
+                        "C": (ni + 5 * ns, ci + 9 * cs, 0.0),
+                    },
+                }
             ]
         )
         outs = check_bond_lengths(p)

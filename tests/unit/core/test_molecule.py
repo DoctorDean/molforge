@@ -14,8 +14,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from molforge.core import AtomArray, Molecule, RDKitNotInstalledError
-from molforge.core import _rdkit
+from molforge.core import AtomArray, Molecule, RDKitNotInstalledError, _rdkit
 
 
 class _FakeMol:

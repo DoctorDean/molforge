@@ -199,6 +199,4 @@ def tm_score(
     def _tm(distances: np.ndarray) -> float:
         return float((1.0 / (1.0 + (distances / d0) ** 2)).sum() / norm_length)
 
-    return _optimal_superposition_score(
-        m_coords, r_coords, select_cutoff=d0_search, score_fn=_tm
-    )
+    return _optimal_superposition_score(m_coords, r_coords, select_cutoff=d0_search, score_fn=_tm)

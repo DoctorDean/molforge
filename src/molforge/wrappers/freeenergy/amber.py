@@ -335,9 +335,7 @@ class AmberMMGBSA(MMGBSAEngine):
         receptor_mask = selection_to_amber_mask(trajectory.topology, receptor)
         ligand_mask = selection_to_amber_mask(trajectory.topology, ligand)
 
-        prmtop_path, traj_path = self._resolve_amber_inputs(
-            trajectory, prmtop, trajectory_file
-        )
+        prmtop_path, traj_path = self._resolve_amber_inputs(trajectory, prmtop, trajectory_file)
         end = end_frame if end_frame is not None else trajectory.n_frames
 
         parameters: dict[str, object] = {
@@ -386,7 +384,11 @@ class AmberMMGBSA(MMGBSAEngine):
                 )
             )
             results_text = self._invoke(
-                run_dir, prmtop_path, traj_path, receptor_mask, ligand_mask,
+                run_dir,
+                prmtop_path,
+                traj_path,
+                receptor_mask,
+                ligand_mask,
                 decomp=bool(idecomp),
             )
             decomp_text = None
@@ -421,8 +423,10 @@ class AmberMMGBSA(MMGBSAEngine):
         prmtop: str | PathLike[str] | None,
         trajectory_file: str | PathLike[str] | None,
     ) -> tuple[Path, Path]:
-        prmtop_path = Path(prmtop) if prmtop is not None else _common.input_from_metadata(
-            trajectory.metadata, "prmtop", "system.prmtop"
+        prmtop_path = (
+            Path(prmtop)
+            if prmtop is not None
+            else _common.input_from_metadata(trajectory.metadata, "prmtop", "system.prmtop")
         )
         traj_path = (
             Path(trajectory_file)
@@ -475,12 +479,18 @@ class AmberMMGBSA(MMGBSAEngine):
         complex_p, receptor_p, ligand_p = "complex.prmtop", "receptor.prmtop", "ligand.prmtop"
         ante = [
             self.antemmpbsa_executable,
-            "-p", str(prmtop),
-            "-c", complex_p,
-            "-r", receptor_p,
-            "-l", ligand_p,
-            "-m", receptor_mask,
-            "-n", ligand_mask,
+            "-p",
+            str(prmtop),
+            "-c",
+            complex_p,
+            "-r",
+            receptor_p,
+            "-l",
+            ligand_p,
+            "-m",
+            receptor_mask,
+            "-n",
+            ligand_mask,
         ]
         if self.strip_mask:
             ante += ["-s", self.strip_mask]
@@ -490,12 +500,18 @@ class AmberMMGBSA(MMGBSAEngine):
         command = [
             self.mmpbsa_executable,
             "-O",
-            "-i", "mmpbsa.in",
-            "-o", results,
-            "-cp", complex_p,
-            "-rp", receptor_p,
-            "-lp", ligand_p,
-            "-y", str(traj),
+            "-i",
+            "mmpbsa.in",
+            "-o",
+            results,
+            "-cp",
+            complex_p,
+            "-rp",
+            receptor_p,
+            "-lp",
+            ligand_p,
+            "-y",
+            str(traj),
         ]
         if decomp:
             command += ["-do", "FINAL_DECOMP_MMPBSA.dat"]

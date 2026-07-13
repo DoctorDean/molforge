@@ -824,9 +824,7 @@ class TestFreeEnergyResultRoundTrip:
         cache = Cache(directory=tmp_path)
         parent = _make_provenance(engine="AMBER.run")
         prov = _make_provenance(engine="AmberMMGBSA.run", parent=parent)
-        result = FreeEnergyResult(
-            delta_g=-21.0, uncertainty=0.7, method="MM/GBSA", provenance=prov
-        )
+        result = FreeEnergyResult(delta_g=-21.0, uncertainty=0.7, method="MM/GBSA", provenance=prov)
         cache.put(prov, result, "free_energy_result")
         restored = cache.get(prov, "free_energy_result")
 

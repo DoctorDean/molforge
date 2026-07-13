@@ -25,10 +25,7 @@ from molforge.wrappers.freeenergy import (
 )
 
 FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "freeenergy"
-    / "gmx_FINAL_RESULTS_MMPBSA.dat"
+    Path(__file__).resolve().parents[2] / "fixtures" / "freeenergy" / "gmx_FINAL_RESULTS_MMPBSA.dat"
 )
 
 
@@ -191,7 +188,7 @@ LIGAND = {"entity_type": "ligand"}
 def _install_stub(engine: GromacsMMGBSA, results_text: str) -> dict:
     record: dict = {"calls": [], "ndx": None, "mmpbsa_in": None}
 
-    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+    def fake_run(cmd, *, cwd, step):
         record["calls"].append((step, list(cmd)))
         cwd = Path(cwd)
         record["ndx"] = (cwd / "index.ndx").read_text()
@@ -214,12 +211,14 @@ class TestGromacsResolveInputs:
 
     def test_explicit_paths(self, tmp_path: Path) -> None:
         meta = _inputs(tmp_path)
-        s, t, top = GromacsMMGBSA()._resolve_inputs(_trajectory(), meta["structure"], meta["trajectory_file"], meta["topology"])
+        s, t, top = GromacsMMGBSA()._resolve_inputs(
+            _trajectory(), meta["structure"], meta["trajectory_file"], meta["topology"]
+        )
         assert (s.name, t.name, top.name) == ("md.tpr", "md.xtc", "topol.top")
 
     def test_topology_optional(self, tmp_path: Path) -> None:
         meta = _inputs(tmp_path, with_top=False)
-        s, t, top = GromacsMMGBSA()._resolve_inputs(_trajectory(meta), None, None, None)
+        _, _, top = GromacsMMGBSA()._resolve_inputs(_trajectory(meta), None, None, None)
         assert top is None  # no topol.top -> -cp omitted
 
     def test_missing_structure_raises(self) -> None:
@@ -236,7 +235,7 @@ class TestGromacsResolveInputs:
 class TestGromacsNotInstalled:
     def test_run_without_tool_raises(self, tmp_path: Path) -> None:
         traj = _trajectory(_inputs(tmp_path))
-        with pytest.raises(MMGBSAEngineNotInstalledError, match="gmx_MMPBSA|PATH"):
+        with pytest.raises(MMGBSAEngineNotInstalledError, match=r"gmx_MMPBSA|PATH"):
             GromacsMMGBSA().run(traj, receptor=RECEPTOR, ligand=LIGAND)
 
     def test_empty_selection_raises(self, tmp_path: Path) -> None:
@@ -333,20 +332,15 @@ class TestGromacsCaching:
 
 
 DECOMP_FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "fixtures"
-    / "freeenergy"
-    / "gmx_FINAL_DECOMP_MMPBSA.dat"
+    Path(__file__).resolve().parents[2] / "fixtures" / "freeenergy" / "gmx_FINAL_DECOMP_MMPBSA.dat"
 )
 
 
-def _install_stub_with_decomp(
-    engine: GromacsMMGBSA, results_text: str, decomp_text: str
-) -> dict:
+def _install_stub_with_decomp(engine: GromacsMMGBSA, results_text: str, decomp_text: str) -> dict:
     """Stub that also writes FINAL_DECOMP_MMPBSA.dat when -do is passed."""
     record: dict = {"mmpbsa_in": None, "wrote_decomp": False, "cmd": None}
 
-    def fake_run(cmd, *, cwd, step):  # noqa: ANN001
+    def fake_run(cmd, *, cwd, step):
         cwd = Path(cwd)
         record["cmd"] = list(cmd)
         record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
@@ -363,9 +357,7 @@ def _install_stub_with_decomp(
 class TestGromacsDecomposition:
     def test_run_with_idecomp_attaches_decomposition(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        record = _install_stub_with_decomp(
-            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
-        )
+        record = _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
         result = engine.run(
             _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND, idecomp=2
         )
@@ -380,9 +372,7 @@ class TestGromacsDecomposition:
 
     def test_run_without_idecomp_has_no_decomposition(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        record = _install_stub_with_decomp(
-            engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text()
-        )
+        record = _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
         result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
         assert "&decomp" not in record["mmpbsa_in"]
         assert "-do" not in record["cmd"]

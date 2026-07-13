@@ -11,8 +11,7 @@ from __future__ import annotations
 import pytest
 
 import molforge.chem as chem
-from molforge.core import Molecule, RDKitNotInstalledError
-from molforge.core import _rdkit
+from molforge.core import Molecule, RDKitNotInstalledError, _rdkit
 
 
 class _FakeMol:

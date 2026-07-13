@@ -59,7 +59,6 @@ from __future__ import annotations
 
 from molforge.io.chembl import fetch_chembl, fetch_chembl_many
 from molforge.io.dispatch import fetch, fetch_many, load, save
-from molforge.io.rcsb_search import search_rcsb
 from molforge.io.fasta import (
     FastaRecord,
     read_fasta,
@@ -75,6 +74,7 @@ from molforge.io.mmcif import (
     write_cif,
     write_cif_string,
 )
+from molforge.io.molecules import iter_molecules, iter_smiles, read_molecules, read_smiles
 from molforge.io.pdb import (
     PDBParseError,
     PDBWriteError,
@@ -84,7 +84,7 @@ from molforge.io.pdb import (
     write_pdb_string,
 )
 from molforge.io.pdb_alphafold import is_alphafold_pdb, load_alphafold
-from molforge.io.molecules import iter_molecules, iter_smiles, read_molecules, read_smiles
+from molforge.io.rcsb_search import search_rcsb
 from molforge.io.trajectory import (
     iter_trajectory,
     read_trajectory,

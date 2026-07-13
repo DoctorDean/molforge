@@ -12,8 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from molforge.core import Molecule
-from molforge.core import _rdkit
+from molforge.core import Molecule, _rdkit
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -41,9 +40,7 @@ def _infer_format(path: str | PathLike[str]) -> str:
         ) from None
 
 
-def read_smiles(
-    text: str, *, sanitize: bool = True, source: str = "<string>"
-) -> list[Molecule]:
+def read_smiles(text: str, *, sanitize: bool = True, source: str = "<string>") -> list[Molecule]:
     """Parse a SMILES block into molecules.
 
     One molecule per line, ``SMILES [name]`` (whitespace-separated); blank
@@ -70,9 +67,7 @@ def read_smiles(
         smiles = parts[0]
         name = parts[1].strip() if len(parts) > 1 else ""
         mol = _rdkit.mol_from_smiles(smiles, sanitize=sanitize)
-        molecules.append(
-            Molecule.from_rdkit(mol, name=name, metadata={"source": source})
-        )
+        molecules.append(Molecule.from_rdkit(mol, name=name, metadata={"source": source}))
     return molecules
 
 

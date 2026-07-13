@@ -50,9 +50,7 @@ def _corner(matrix: Any) -> float:
     """The first-state → last-state value of an alchemlyb delta matrix."""
     arr = np.asarray(matrix, dtype=float)
     if arr.ndim != 2 or arr.shape[0] < 1 or arr.shape[1] < 1:
-        raise ValueError(
-            f"expected a 2-D lambda-by-lambda matrix, got shape {arr.shape}"
-        )
+        raise ValueError(f"expected a 2-D lambda-by-lambda matrix, got shape {arr.shape}")
     return float(arr[0, -1])
 
 
@@ -75,9 +73,7 @@ def _unit_factor(energy_unit: str, temperature: float | None) -> float:
                 "(alchemlyb sets it from the estimator)."
             )
         return _KB_KCAL_PER_MOL_K * float(temperature)
-    raise ValueError(
-        f"unknown energy_unit {energy_unit!r}; expected 'kT', 'kcal/mol', or 'kJ/mol'"
-    )
+    raise ValueError(f"unknown energy_unit {energy_unit!r}; expected 'kT', 'kcal/mol', or 'kJ/mol'")
 
 
 def from_delta_f(

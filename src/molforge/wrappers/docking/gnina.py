@@ -81,10 +81,10 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from molforge.cache import get_default_cache
 from molforge.core import Protein
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
-from molforge.cache import get_default_cache
 from molforge.docking import (
     DockingEngine,
     DockingEngineNotInstalledError,
@@ -354,9 +354,7 @@ class Gnina(DockingEngine):
         thread the same instance into the parser. Mirrors exactly the
         parameters the parser would otherwise build itself.
         """
-        parent = (
-            receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
-        )
+        parent = receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
         return Provenance.from_engine(
             engine="Gnina",
             parameters={
