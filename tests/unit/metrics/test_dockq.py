@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from molforge.core import Protein
+from molforge.core.atom_array import AtomArray
 from molforge.io import read_pdb
 from molforge.metrics import dockq, fnat, irms, lrms
 
@@ -39,6 +42,41 @@ class TestFnat:
     def test_explicit_chains(self) -> None:
         native = read_pdb(FIXTURES / "mini_complex_native.pdb")
         assert fnat(native, native, chain_a="A", chain_b="B") == pytest.approx(1.0)
+
+    def test_fnat_robust_to_atom_indexing(self) -> None:
+        """Fnat counts residue-residue contacts (CAPRI definition), so a
+        model differing from the reference only in per-atom indexing must
+        still recover every native contact. Here the model is the native
+        with one extra heavy atom prepended to chain A (far from the
+        interface, adding no contact) — which shifts every chain-A atom
+        index. An atom-index-based intersection scored this ~0.67; the
+        residue-level definition correctly gives 1.0.
+        """
+        native = read_pdb(FIXTURES / "mini_complex_native.pdb")
+        arr = native.atom_array
+        ai = next(
+            i
+            for i in range(arr.n_atoms)
+            if str(arr.chain_id[i]) == "A" and str(arr.entity_type[i]) == "protein"
+        )
+        far = (arr.coords.mean(axis=0) + np.array([100.0, 100.0, 100.0], np.float32)).reshape(1, 3)
+        extra = AtomArray.from_dict(
+            {
+                "coords": far.astype(np.float32),
+                "element": np.array(["C"], dtype="U2"),
+                "atom_name": np.array(["CB"], dtype="U4"),
+                "chain_id": np.array([str(arr.chain_id[ai])], dtype="U4"),
+                "residue_id": np.array([int(arr.residue_id[ai])], dtype="int32"),
+                "insertion_code": np.array(
+                    [str(arr.insertion_code[ai])], dtype=arr.insertion_code.dtype
+                ),
+                "model_id": np.array([int(arr.model_id[ai])], dtype="int32"),
+                "entity_type": np.array(["protein"], dtype="U8"),
+            }
+        )
+        model = Protein(extra.append(arr))
+        assert model.atom_array.n_atoms == native.atom_array.n_atoms + 1
+        assert fnat(model, native) == pytest.approx(1.0)
 
 
 class TestIrms:

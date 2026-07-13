@@ -43,7 +43,8 @@ if TYPE_CHECKING:
 
 
 # Fnat default cutoff (Å). Standard CAPRI definition: a "native contact"
-# is any pair of heavy atoms in different chains within this distance.
+# is a pair of residues (one in each chain) with any heavy atoms within
+# this distance of each other.
 _FNAT_CUTOFF = 5.0
 # Interface-residue cutoff used to define the interface for iRMS.
 _INTERFACE_CUTOFF = 10.0
@@ -85,17 +86,55 @@ def _backbone_atom_coords_per_chain(
     return {k: np.asarray(v, dtype=np.float64) for k, v in out.items()}
 
 
-def _native_contacts(
-    coords_a: np.ndarray,
-    coords_b: np.ndarray,
+def _heavy_atoms_by_residue(protein: Protein, chain_id: str) -> list[np.ndarray]:
+    """Heavy-atom coordinates for each protein residue of ``chain_id``.
+
+    Returns one ``(n_heavy, 3)`` array per residue, in the chain's residue
+    order — so the list index is the residue's position within the chain.
+    Contacts are keyed by residue position rather than atom index, which
+    keeps the contact set comparable between model and reference even when
+    their per-residue atom counts or ordering differ (a missing side-chain
+    atom, different atom naming, etc.).
+    """
+    arr = protein.atom_array
+    residues: list[np.ndarray] = []
+    for sl in arr.iter_residue_slices():
+        if str(arr.entity_type[sl.start]) != "protein":
+            continue
+        if str(arr.chain_id[sl.start]) != chain_id:
+            continue
+        heavy = [
+            arr.coords[i]
+            for i in range(sl.start, sl.stop)
+            if str(arr.element[i]).upper() != "H"
+        ]
+        residues.append(
+            np.asarray(heavy, dtype=np.float64) if heavy else np.empty((0, 3), dtype=np.float64)
+        )
+    return residues
+
+
+def _residue_contacts(
+    residues_a: list[np.ndarray],
+    residues_b: list[np.ndarray],
     cutoff: float = _FNAT_CUTOFF,
 ) -> set[tuple[int, int]]:
-    """Pairs ``(i, j)`` of inter-chain heavy atoms within ``cutoff``."""
-    # Vectorized pairwise distance, returning the set of close pairs.
-    diff = coords_a[:, None, :] - coords_b[None, :, :]
-    d = np.linalg.norm(diff, axis=-1)
-    sources, targets = np.where(d < cutoff)
-    return set(zip(sources.tolist(), targets.tolist(), strict=True))
+    """Residue-pair contacts ``(pos_a, pos_b)``.
+
+    A pair is a contact — the CAPRI definition — when the two residues
+    have any heavy atoms within ``cutoff`` of each other.
+    """
+    contacts: set[tuple[int, int]] = set()
+    for pa, coords_a in enumerate(residues_a):
+        if coords_a.shape[0] == 0:
+            continue
+        for pb, coords_b in enumerate(residues_b):
+            if coords_b.shape[0] == 0:
+                continue
+            diff = coords_a[:, None, :] - coords_b[None, :, :]
+            if bool((np.linalg.norm(diff, axis=-1) < cutoff).any()):
+                contacts.add((pa, pb))
+    return contacts
 
 
 def fnat(
@@ -135,10 +174,18 @@ def fnat(
     if chain_a not in m_chains or chain_b not in m_chains:
         raise ValueError(f"model is missing chain {chain_a!r} or {chain_b!r}")
 
-    native = _native_contacts(r_chains[chain_a], r_chains[chain_b], cutoff)
+    native = _residue_contacts(
+        _heavy_atoms_by_residue(reference, chain_a),
+        _heavy_atoms_by_residue(reference, chain_b),
+        cutoff,
+    )
     if not native:
         return 0.0
-    predicted = _native_contacts(m_chains[chain_a], m_chains[chain_b], cutoff)
+    predicted = _residue_contacts(
+        _heavy_atoms_by_residue(model, chain_a),
+        _heavy_atoms_by_residue(model, chain_b),
+        cutoff,
+    )
     return len(native & predicted) / len(native)
 
 
