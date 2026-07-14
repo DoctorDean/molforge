@@ -149,7 +149,7 @@ class TestConfigConstruction:
     def test_includes_fasta_path(self) -> None:
         engine = RoseTTAFold()
         config = engine._build_config(fasta_path=Path("/tmp/my_query.fasta"))
-        assert "/tmp/my_query.fasta" in config
+        assert str(Path("/tmp/my_query.fasta")) in config
 
     def test_chain_id_is_A(self) -> None:
         engine = RoseTTAFold()

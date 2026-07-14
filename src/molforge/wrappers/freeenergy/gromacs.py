@@ -372,7 +372,7 @@ class GromacsMMGBSA(MMGBSAEngine):
                     raise RuntimeError(
                         f"gmx_MMPBSA did not produce FINAL_DECOMP_MMPBSA.dat in {run_dir}"
                     )
-                decomp_text = decomp_out.read_text()
+                decomp_text = decomp_out.read_text(encoding="utf-8")
 
         result = parse_gmx_mmpbsa_dat(results_text, solvent_model=solvent_model)
         if decomp_text is not None:
@@ -485,7 +485,7 @@ class GromacsMMGBSA(MMGBSAEngine):
         out = run_dir / results
         if not out.is_file():
             raise RuntimeError(f"gmx_MMPBSA did not produce {results} in {run_dir}")
-        return out.read_text()
+        return out.read_text(encoding="utf-8")
 
     def _run_subprocess(self, cmd: list[str], *, cwd: Path, step: str) -> None:
         """Single choke point for tool invocation (mockable in tests)."""

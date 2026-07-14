@@ -211,11 +211,11 @@ class TestCommandBuilder:
         )
         # The flags gnina insists on.
         assert "--receptor" in cmd
-        assert "/tmp/r.pdb" in cmd
+        assert str(Path("/tmp/r.pdb")) in cmd
         assert "--ligand" in cmd
-        assert "/tmp/l.sdf" in cmd
+        assert str(Path("/tmp/l.sdf")) in cmd
         assert "--out" in cmd
-        assert "/tmp/out.sdf" in cmd
+        assert str(Path("/tmp/out.sdf")) in cmd
         # Center, box, exhaustiveness.
         assert "--center_x" in cmd
         assert "10.0" in cmd

@@ -109,7 +109,7 @@ class TestHydraArgBuilding:
             contigs=["10-40/A20-35/10-40"],
         )
         joined = " ".join(args)
-        assert "inference.input_pdb=/some/path/target.pdb" in joined
+        assert f"inference.input_pdb={Path('/some/path/target.pdb')}" in joined
         assert "contigmap.contigs=[10-40/A20-35/10-40]" in joined
 
     def test_hotspot_residues(self) -> None:

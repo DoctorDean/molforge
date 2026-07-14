@@ -1,0 +1,15 @@
+# Normalize line endings: text files are stored and checked out as LF on
+# every platform, so parsers and text fixtures behave identically on
+# Windows CI (git's autocrlf would otherwise convert fixtures to CRLF).
+* text=auto eol=lf
+
+# Binary assets must never be line-ending normalized.
+*.png binary
+*.ico binary
+*.pdf binary
+*.gz binary
+*.npy binary
+*.npz binary
+
+# Notebooks are JSON; leave their bytes untouched.
+*.ipynb -text

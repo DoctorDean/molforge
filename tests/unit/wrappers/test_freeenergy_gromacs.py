@@ -31,7 +31,7 @@ FIXTURE = (
 
 @pytest.fixture
 def dat() -> str:
-    return FIXTURE.read_text()
+    return FIXTURE.read_text(encoding="utf-8")
 
 
 class TestGeneralizedBorn:
@@ -191,9 +191,9 @@ def _install_stub(engine: GromacsMMGBSA, results_text: str) -> dict:
     def fake_run(cmd, *, cwd, step):
         record["calls"].append((step, list(cmd)))
         cwd = Path(cwd)
-        record["ndx"] = (cwd / "index.ndx").read_text()
-        record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
-        (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text)
+        record["ndx"] = (cwd / "index.ndx").read_text(encoding="utf-8")
+        record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text(encoding="utf-8")
+        (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text, encoding="utf-8")
 
     engine._require_tool = lambda: None  # type: ignore[method-assign]
     engine._run_subprocess = fake_run  # type: ignore[assignment]
@@ -247,7 +247,7 @@ class TestGromacsNotInstalled:
 class TestGromacsPipeline:
     def test_gb_end_to_end(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        _install_stub(engine, FIXTURE.read_text())
+        _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
         assert result.method == "MM/GBSA"
         assert result.delta_g == pytest.approx(-21.0)
@@ -257,7 +257,7 @@ class TestGromacsPipeline:
 
     def test_pb_selected(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        _install_stub(engine, FIXTURE.read_text())
+        _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         result = engine.run(
             _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND, solvent_model="pb"
         )
@@ -266,7 +266,7 @@ class TestGromacsPipeline:
 
     def test_command_and_written_inputs(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        record = _install_stub(engine, FIXTURE.read_text())
+        record = _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
 
         (step, cmd) = record["calls"][0]
@@ -281,14 +281,14 @@ class TestGromacsPipeline:
 
     def test_topology_omitted_drops_cp(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        record = _install_stub(engine, FIXTURE.read_text())
+        record = _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         engine.run(_trajectory(_inputs(tmp_path, with_top=False)), receptor=RECEPTOR, ligand=LIGAND)
         assert "-cp" not in record["calls"][0][1]
 
     def test_provenance_attached_with_parent(self, tmp_path: Path) -> None:
         parent = Provenance.from_engine(engine="GROMACS.run")
         engine = GromacsMMGBSA()
-        _install_stub(engine, FIXTURE.read_text())
+        _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         result = engine.run(
             _trajectory({**_inputs(tmp_path), mk.PROVENANCE: parent}),
             receptor=RECEPTOR,
@@ -304,7 +304,7 @@ class TestGromacsCaching:
     def test_second_run_hits_cache_without_tool(self, tmp_path: Path) -> None:
         traj = _trajectory(_inputs(tmp_path))
         warm = GromacsMMGBSA()
-        _install_stub(warm, FIXTURE.read_text())
+        _install_stub(warm, FIXTURE.read_text(encoding="utf-8"))
         first = warm.run(traj, receptor=RECEPTOR, ligand=LIGAND)
 
         cold = GromacsMMGBSA()  # no stub; real _require_tool would raise
@@ -314,7 +314,7 @@ class TestGromacsCaching:
     def test_cache_hit_skips_subprocess(self, tmp_path: Path) -> None:
         traj = _trajectory(_inputs(tmp_path))
         engine = GromacsMMGBSA()
-        record = _install_stub(engine, FIXTURE.read_text())
+        record = _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
         after_first = len(record["calls"])
         engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
@@ -324,7 +324,7 @@ class TestGromacsCaching:
     def test_different_selection_misses(self, tmp_path: Path) -> None:
         traj = _trajectory(_inputs(tmp_path))
         engine = GromacsMMGBSA()
-        record = _install_stub(engine, FIXTURE.read_text())
+        record = _install_stub(engine, FIXTURE.read_text(encoding="utf-8"))
         engine.run(traj, receptor=RECEPTOR, ligand=LIGAND)
         # Swap receptor/ligand -> different index groups -> different key.
         engine.run(traj, receptor=LIGAND, ligand=RECEPTOR)
@@ -343,11 +343,11 @@ def _install_stub_with_decomp(engine: GromacsMMGBSA, results_text: str, decomp_t
     def fake_run(cmd, *, cwd, step):
         cwd = Path(cwd)
         record["cmd"] = list(cmd)
-        record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text()
-        (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text)
+        record["mmpbsa_in"] = (cwd / "mmpbsa.in").read_text(encoding="utf-8")
+        (cwd / "FINAL_RESULTS_MMPBSA.dat").write_text(results_text, encoding="utf-8")
         if "-do" in cmd:
             record["wrote_decomp"] = True
-            (cwd / "FINAL_DECOMP_MMPBSA.dat").write_text(decomp_text)
+            (cwd / "FINAL_DECOMP_MMPBSA.dat").write_text(decomp_text, encoding="utf-8")
 
     engine._require_tool = lambda: None  # type: ignore[method-assign]
     engine._run_subprocess = fake_run  # type: ignore[assignment]
@@ -357,7 +357,9 @@ def _install_stub_with_decomp(engine: GromacsMMGBSA, results_text: str, decomp_t
 class TestGromacsDecomposition:
     def test_run_with_idecomp_attaches_decomposition(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        record = _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
+        record = _install_stub_with_decomp(
+            engine, FIXTURE.read_text(encoding="utf-8"), DECOMP_FIXTURE.read_text(encoding="utf-8")
+        )
         result = engine.run(
             _trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND, idecomp=2
         )
@@ -372,7 +374,9 @@ class TestGromacsDecomposition:
 
     def test_run_without_idecomp_has_no_decomposition(self, tmp_path: Path) -> None:
         engine = GromacsMMGBSA()
-        record = _install_stub_with_decomp(engine, FIXTURE.read_text(), DECOMP_FIXTURE.read_text())
+        record = _install_stub_with_decomp(
+            engine, FIXTURE.read_text(encoding="utf-8"), DECOMP_FIXTURE.read_text(encoding="utf-8")
+        )
         result = engine.run(_trajectory(_inputs(tmp_path)), receptor=RECEPTOR, ligand=LIGAND)
         assert "&decomp" not in record["mmpbsa_in"]
         assert "-do" not in record["cmd"]
