@@ -1,0 +1,65 @@
+name: Nightly (real engines)
+
+# Opt-in nightly smoke test of the pip-installable engines against their
+# REAL implementations — the code paths the per-push `test` job can only
+# exercise with mocks. A failure here flags breakage from a new engine
+# release (or a real gap like a missing runtime dependency); it does NOT
+# gate pushes, PRs, or releases. Trigger manually from the Actions tab via
+# "Run workflow" any time.
+#
+# Scope is deliberately the CPU-only, pip-installable engines. GPU-only
+# engines (AlphaFold, Boltz, Chai, RoseTTAFold, DiffDock, RFdiffusion,
+# ProteinMPNN, gnina) can't run on free runners and stay mock-only.
+# OpenMM's real path already runs on every push (the md-openmm job in CI).
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily (GitHub may delay under load)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  docking-prep:
+    name: Docking prep (RDKit + meeko + gemmi)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install with the docking extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,docking]"
+      - name: Run the docking-prep tests against real meeko/RDKit
+        # test_prep.py's real-prep cases are skipif(not installed) + slow;
+        # with the docking extra installed they execute for real. addopts
+        # does not deselect slow, so no marker override is needed.
+        run: pytest tests/unit/wrappers/test_prep.py -v
+
+  vina:
+    name: AutoDock Vina (real docking)
+    runs-on: ubuntu-latest
+    # Best-effort: the `vina` pip package builds C++ bindings and needs
+    # Boost + SWIG. If a future runner image or Vina release breaks the
+    # build, this job goes red on its own without affecting anything else.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Boost/SWIG (Vina build deps) + the docking stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends swig libboost-all-dev
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,docking]"
+          pip install vina
+      - name: Run the Vina wrapper tests against the real engine
+        run: pytest tests/unit/wrappers/test_vina.py -v
