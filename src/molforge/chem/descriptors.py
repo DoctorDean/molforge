@@ -8,12 +8,14 @@ so a criterion written for design metrics reads naturally as a molecular
 filter::
 
     from molforge.validation import Criterion
-    drug_like = Criterion.lt("molecular_weight", 500) & Criterion.le("formal_charge", 0)
+    drug_like = Criterion.le("lipinski_violations", 1) & Criterion.lt("tpsa", 140)
     dataset.filter(drug_like)
 
-The vocabulary (:data:`DESCRIPTOR_NAMES`) is deliberately small — molecular
-weight, formal charge, and atom counts — and grows as real filters need it.
-Everything here is lazy: computing a descriptor without RDKit raises
+The vocabulary (:data:`DESCRIPTOR_NAMES`) covers the descriptors real
+compound filters reach for — molecular weight, formal charge, atom counts,
+logP, TPSA, hydrogen-bond donors/acceptors, rotatable bonds, and Lipinski
+rule-of-five violations — and grows as new filters need it. Everything here
+is lazy: computing an RDKit-backed descriptor without RDKit raises
 :class:`~molforge.core.RDKitNotInstalledError`.
 """
 
@@ -34,6 +36,12 @@ _DESCRIPTORS: dict[str, Callable[[Molecule], Any]] = {
     "formal_charge": lambda m: m.formal_charge,
     "n_atoms": lambda m: m.n_atoms,
     "n_heavy_atoms": lambda m: m.n_heavy_atoms,
+    "logp": lambda m: m.logp,
+    "tpsa": lambda m: m.tpsa,
+    "n_h_donors": lambda m: m.n_h_donors,
+    "n_h_acceptors": lambda m: m.n_h_acceptors,
+    "n_rotatable_bonds": lambda m: m.n_rotatable_bonds,
+    "lipinski_violations": lambda m: m.lipinski_violations,
 }
 
 #: The descriptor names a :class:`~molforge.validation.Criterion` may filter on.

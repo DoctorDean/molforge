@@ -186,7 +186,7 @@ class TestFilter:
 
     def test_filter_unknown_descriptor_raises_eagerly(self) -> None:
         with pytest.raises(ValueError, match="unknown descriptor"):
-            MoleculeDataset([]).filter(Criterion.lt("logp", 5))
+            MoleculeDataset([]).filter(Criterion.lt("not_a_descriptor", 5))
 
     def test_filter_rdkit_absent_on_consume(self) -> None:
         ds = MoleculeDataset([_mol("a")])

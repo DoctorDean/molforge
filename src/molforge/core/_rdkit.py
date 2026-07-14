@@ -95,6 +95,46 @@ def formal_charge(mol: Any) -> int:
     return int(chem.GetFormalCharge(mol))
 
 
+def logp(mol: Any) -> float:
+    """Crippen octanol-water partition coefficient (MolLogP)."""
+    _chem()
+    from rdkit.Chem import Descriptors
+
+    return float(Descriptors.MolLogP(mol))
+
+
+def tpsa(mol: Any) -> float:
+    """Topological polar surface area in Å²."""
+    _chem()
+    from rdkit.Chem import Descriptors
+
+    return float(Descriptors.TPSA(mol))
+
+
+def num_h_donors(mol: Any) -> int:
+    """Number of hydrogen-bond donors (Lipinski definition)."""
+    _chem()
+    from rdkit.Chem import Descriptors
+
+    return int(Descriptors.NumHDonors(mol))
+
+
+def num_h_acceptors(mol: Any) -> int:
+    """Number of hydrogen-bond acceptors (Lipinski definition)."""
+    _chem()
+    from rdkit.Chem import Descriptors
+
+    return int(Descriptors.NumHAcceptors(mol))
+
+
+def num_rotatable_bonds(mol: Any) -> int:
+    """Number of rotatable bonds."""
+    _chem()
+    from rdkit.Chem import Descriptors
+
+    return int(Descriptors.NumRotatableBonds(mol))
+
+
 def _standardize_mod() -> Any:
     """Return ``rdkit.Chem.MolStandardize.rdMolStandardize`` or raise."""
     _chem()  # clean error first if RDKit is absent

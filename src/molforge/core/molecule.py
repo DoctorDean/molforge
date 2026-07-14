@@ -275,6 +275,46 @@ class Molecule:
         """Number of non-hydrogen atoms."""
         return int(self._mol.GetNumHeavyAtoms())
 
+    @property
+    def logp(self) -> float:
+        """Crippen octanol-water partition coefficient (logP)."""
+        return _rdkit.logp(self._mol)
+
+    @property
+    def tpsa(self) -> float:
+        """Topological polar surface area in Å²."""
+        return _rdkit.tpsa(self._mol)
+
+    @property
+    def n_h_donors(self) -> int:
+        """Number of hydrogen-bond donors."""
+        return _rdkit.num_h_donors(self._mol)
+
+    @property
+    def n_h_acceptors(self) -> int:
+        """Number of hydrogen-bond acceptors."""
+        return _rdkit.num_h_acceptors(self._mol)
+
+    @property
+    def n_rotatable_bonds(self) -> int:
+        """Number of rotatable bonds."""
+        return _rdkit.num_rotatable_bonds(self._mol)
+
+    @property
+    def lipinski_violations(self) -> int:
+        """Number of Lipinski rule-of-five violations (0-4).
+
+        Counts the classic drug-likeness rules that fail: molecular weight
+        > 500, logP > 5, hydrogen-bond donors > 5, hydrogen-bond acceptors
+        > 10. A compound with 0-1 violations is considered drug-like.
+        """
+        return (
+            int(self.molecular_weight > 500.0)
+            + int(self.logp > 5.0)
+            + int(self.n_h_donors > 5)
+            + int(self.n_h_acceptors > 10)
+        )
+
     def __repr__(self) -> str:
         label = f" name={self.name!r}" if self.name else ""
         return f"Molecule(n_atoms={self.n_atoms}{label})"
