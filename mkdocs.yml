@@ -101,6 +101,7 @@ nav:
       - molforge.chem: reference/chem.md
       - molforge.freeenergy: reference/freeenergy.md
       - molforge.plugins: reference/plugins.md
+      - molforge.cache: reference/cache.md
       - molforge.wrappers:
           - Overview: reference/wrappers.md
           - molforge.wrappers.folding: reference/wrappers/folding.md
@@ -108,6 +109,7 @@ nav:
           - molforge.wrappers.md: reference/wrappers/md.md
           - molforge.wrappers.freeenergy: reference/wrappers/freeenergy.md
           - molforge.wrappers.generative: reference/wrappers/generative.md
+          - molforge.wrappers.pockets: reference/wrappers/pockets.md
   - Project:
       - Releasing: RELEASING.md
 
