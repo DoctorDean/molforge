@@ -120,6 +120,14 @@ nav:
 
 plugins:
   - search
+  - social:
+      # Card generation needs cairosvg + system cairo (installed in the docs
+      # CI job). Gate on the CI env var so local `mkdocs serve` / build works
+      # without those system libraries; cards are still generated on deploy.
+      cards: !ENV [CI, false]
+      cards_layout_options:
+        background_color: "#30419b"
+        color: "#ffffff"
   - mkdocstrings:
       default_handler: python
       handlers:

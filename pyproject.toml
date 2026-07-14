@@ -101,7 +101,7 @@ dev = [
 ]
 docs = [
     "mkdocs>=1.5",
-    "mkdocs-material>=9.5",
+    "mkdocs-material[imaging]>=9.5",  # [imaging] = cairosvg + pillow for social cards
     "mkdocstrings[python]>=0.24",
     "mkdocs-jupyter>=0.24",
 ]

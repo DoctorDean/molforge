@@ -30,6 +30,15 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Install imaging system libraries (mkdocs-material social cards)
+        # The social plugin renders per-page preview cards with cairosvg +
+        # Pillow, which need these system libraries. Official mkdocs-material
+        # requirement list for Ubuntu runners.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev
+
       - name: Install docs toolchain
         run: |
           python -m pip install --upgrade pip
