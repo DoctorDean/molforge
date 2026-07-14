@@ -64,6 +64,12 @@ prep = [
 ]
 docking = [
     "rdkit>=2023.9",
+    # meeko drives receptor/ligand prep for Vina/Gnina. It declares no
+    # install requirements of its own, so pull in the pieces it needs at
+    # runtime (RDKit above, plus gemmi) — otherwise `molforge[docking]`
+    # imports meeko and then fails on a missing gemmi.
+    "meeko>=0.5",
+    "gemmi>=0.6",
 ]
 chem = [
     "rdkit>=2023.9",
