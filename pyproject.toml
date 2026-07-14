@@ -91,7 +91,7 @@ dev = [
     "pytest-xdist>=3.5",
     "pytest-benchmark>=4.0",
     "hypothesis>=6.92",
-    "ruff==0.15.14",  # pinned to the pre-commit rev so CI and local agree
+    "ruff==0.15.21",  # pinned to the pre-commit rev so CI and local agree
     "mypy>=1.8",
     "pre-commit>=3.6",
     "build>=1.0",
