@@ -109,7 +109,9 @@ class TestHydraArgBuilding:
             contigs=["10-40/A20-35/10-40"],
         )
         joined = " ".join(args)
-        assert f"inference.input_pdb={Path('/some/path/target.pdb')}" in joined
+        # The wrapper resolves the path (Path(...).resolve()); match that so the
+        # assertion holds on Windows too, where resolve() adds a drive letter.
+        assert f"inference.input_pdb={Path('/some/path/target.pdb').resolve()}" in joined
         assert "contigmap.contigs=[10-40/A20-35/10-40]" in joined
 
     def test_hotspot_residues(self) -> None:
