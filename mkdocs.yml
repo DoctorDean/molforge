@@ -7,8 +7,12 @@ edit_uri: edit/master/docs/
 
 docs_dir: docs
 
+extra_css:
+  - stylesheets/extra.css
+
 theme:
   name: material
+  custom_dir: docs/overrides
   logo: assets/emblem.png
   favicon: assets/favicon.png
   features:
@@ -16,6 +20,7 @@ theme:
     - navigation.sections
     - navigation.top
     - navigation.indexes
+    - navigation.footer
     - content.code.copy
     - content.code.annotate
     - content.action.edit
@@ -25,15 +30,15 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -162,6 +167,9 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 extra:
   social:

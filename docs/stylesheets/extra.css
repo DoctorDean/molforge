@@ -1,0 +1,118 @@
+/* ==========================================================================
+   molforge brand theme
+   Palette derived from the emblem: teal ribbon, blue molecule, purple
+   graph, orange anvil ("forge"), navy wordmark.
+   ========================================================================== */
+
+:root {
+  --mf-teal: #16b8a6;
+  --mf-blue: #3a54c8;
+  --mf-purple: #7c5cc4;
+  --mf-orange: #ef7d1a;
+  --mf-navy: #1e2749;
+
+  /* Material primary (header, links) and accent (hover / active). */
+  --md-primary-fg-color: #30419b;
+  --md-primary-fg-color--light: #4a5cc4;
+  --md-primary-fg-color--dark: #202c6e;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffffb3;
+
+  --md-accent-fg-color: #ef7d1a;
+  --md-accent-fg-color--transparent: rgba(239, 125, 26, 0.1);
+}
+
+/* Dark mode: lift the blues and warm the accent for contrast. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #4457bd;
+  --md-primary-fg-color--light: #6274d6;
+  --md-primary-fg-color--dark: #202c6e;
+  --md-accent-fg-color: #ff9a3c;
+  --md-accent-fg-color--transparent: rgba(255, 154, 60, 0.12);
+  --md-typeset-a-color: #8f9cff;
+}
+
+/* ==========================================================================
+   Landing hero
+   ========================================================================== */
+
+.mf-hero {
+  text-align: center;
+  margin: 0 0 2.5rem;
+  padding: 2.8rem 1rem 2.2rem;
+  border-radius: 1rem;
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(58, 84, 200, 0.10), transparent 60%),
+    radial-gradient(90% 120% at 15% 10%, rgba(22, 184, 166, 0.10), transparent 55%),
+    radial-gradient(90% 120% at 85% 10%, rgba(124, 92, 196, 0.10), transparent 55%);
+}
+
+[data-md-color-scheme="slate"] .mf-hero {
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(68, 87, 189, 0.22), transparent 60%),
+    radial-gradient(90% 120% at 15% 10%, rgba(22, 184, 166, 0.14), transparent 55%),
+    radial-gradient(90% 120% at 85% 10%, rgba(124, 92, 196, 0.18), transparent 55%);
+}
+
+.mf-hero img.mf-hero-logo {
+  width: 132px;
+  height: auto;
+  margin: 0 auto 0.6rem;
+  filter: drop-shadow(0 6px 18px rgba(30, 39, 73, 0.18));
+}
+
+.mf-hero .mf-hero-title {
+  font-size: 3.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0.2rem 0 0.4rem;
+  background: linear-gradient(92deg, var(--mf-teal), var(--mf-blue) 42%, var(--mf-purple) 78%, var(--mf-orange));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mf-hero .mf-hero-tagline {
+  font-size: 1.15rem;
+  max-width: 44rem;
+  margin: 0 auto 1.4rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.mf-hero .md-button {
+  margin: 0.25rem 0.3rem;
+}
+
+/* Prominent install line under the hero. */
+.mf-install {
+  max-width: 30rem;
+  margin: -1rem auto 2.6rem;
+  text-align: center;
+}
+.mf-install .highlight > pre > code {
+  font-size: 0.95rem;
+}
+
+/* ==========================================================================
+   Feature / modality grid (uses Material's native .grid.cards)
+   ========================================================================== */
+
+.md-typeset .grid.cards > ul > li {
+  border-radius: 0.7rem;
+  transition: border-color 160ms, box-shadow 160ms, transform 160ms;
+}
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 6px 20px rgba(30, 39, 73, 0.10);
+  transform: translateY(-2px);
+}
+.md-typeset .grid.cards .twemoji,
+.md-typeset .grid.cards .md-icon {
+  color: var(--md-primary-fg-color);
+}
+
+/* Hide the redundant top-level H1 on the landing page (the hero carries it). */
+.mf-landing .md-typeset h1:first-of-type {
+  display: none;
+}

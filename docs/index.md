@@ -1,79 +1,135 @@
-# molforge
-
-**A unified Python library for structural bioinformatics, MD, protein
-engineering, and ML — without the format-conversion tax.**
-
-`molforge` is the connective tissue between the tools you already use.
-Bring your structures and sequences in, plug in your engines of choice
-(Vina, OpenMM, ESMFold, AlphaFold, RFdiffusion, ProteinMPNN, or your
-own model), and walk out with a coherent pipeline instead of five
-incompatible Python environments and a graveyard of conversion
-scripts.
-
-It is a *library*, not a framework: there is no orchestrator, no DAG
-runtime, no decorators you have to import to make things work. Use
-whatever workflow tool you like — Snakemake, Nextflow, Prefect, a
-shell script — `molforge` is just imports.
-
-[Install →](getting-started/installation.md){ .md-button .md-button--primary }
-[Quickstart →](getting-started/quickstart.md){ .md-button }
-[API reference →](reference/core.md){ .md-button }
-
+---
+hide:
+  - navigation
+  - toc
 ---
 
-## What's in the box
+<div class="mf-hero" markdown>
 
-| Subpackage          | What it does                                                                                              |
-| ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `molforge.core`     | Canonical data model: `Protein`, `Chain`, `Residue`, `Atom`, `AtomArray`, plus `Provenance` for tracking how outputs were produced. |
-| `molforge.io`       | Structure I/O (PDB, mmCIF, FASTA, SDF, MOL2, PDBQT, PQR) and trajectory I/O (XTC, TRR, DCD, NetCDF, HDF5). |
-| `molforge.sequence` | Alignment, mutations, composition, substitution matrices.                                                 |
-| `molforge.structure`| RMSD, SASA, contacts, DSSP, dihedrals, superposition.                                                     |
-| `molforge.ml`       | Sequence/structure featurization, graph construction, ESM-2 embeddings.                                   |
-| `molforge.metrics`  | TM-score, GDT-TS/HA, lDDT, DockQ.                                                                         |
-| `molforge.validation`| Composable acceptance criteria for protein design candidates.                                            |
-| `molforge.md`       | `Trajectory` and `Simulation` containers, plus the `MDEngine` interface for engine wrappers.              |
-| `molforge.prep`     | MD system preparation: heterogen removal, missing-atom completion, ACE/NME capping, pH-aware protonation. |
-| `molforge.docking`  | Pose handling and engine-agnostic docking abstractions.                                                   |
-| `molforge.plugins`  | Entry-point discovery for third-party engines, parsers, and scorers.                                      |
-| `molforge.wrappers` | Thin wrappers around external engines (folding, docking, MD, generative).                                 |
+![molforge](assets/emblem.png){ .mf-hero-logo alt="molforge" }
 
-## Design principles
+# molforge { .mf-hero-title }
 
-1. **Workflows over silos.** Every design decision is judged by
-   *"does this make it easier to chain N tools together?"*
-2. **Wrappers, not reimplementations.** We don't rebuild OpenMM or
-   AutoDock. We give them a shared vocabulary.
-3. **One data model, two views.** Hierarchical
-   (`protein.chains["A"].residues[42]`) for biology, linear
-   (`protein.atom_array.coords`) for ML — same data, no conversion.
-4. **Heterogeneous content is first-class.** Antibodies have glycans.
-   Drug targets have ligands and ions. Membrane proteins have lipids.
-   The data model handles all of it without an awkward special case
-   for *"non-protein."*
-5. **Typed, tested, documented.** Strict mypy, ruff-clean, 1,800+ tests
-   in CI, every public symbol has a Google-style docstring.
+<p class="mf-hero-tagline">
+The connective tissue for computational biology — fold, dock, simulate,
+and design across sixteen engines with one data model and no
+format-conversion tax.
+</p>
+
+[Get started](getting-started/installation.md){ .md-button .md-button--primary }
+[Quickstart](getting-started/quickstart.md){ .md-button }
+[GitHub :fontawesome-brands-github:](https://github.com/DoctorDean/molforge){ .md-button }
+
+</div>
+
+<div class="mf-install" markdown>
+
+```bash
+pip install molforge
+```
+
+</div>
+
+It is a *library*, not a framework: no orchestrator, no DAG runtime, no
+decorators to import. Bring your structures and sequences in, plug in your
+engines of choice, and walk out with a coherent pipeline instead of five
+incompatible Python environments and a graveyard of conversion scripts.
+
+## What it does
+
+<div class="grid cards" markdown>
+
+-   :material-dna:{ .lg .middle } &nbsp; **Folding**
+
+    ---
+
+    ESMFold, AlphaFold/ColabFold, Boltz, Chai-1, RoseTTAFold — with
+    multi-component cofolding on the AF3-style engines.
+
+-   :material-target:{ .lg .middle } &nbsp; **Docking**
+
+    ---
+
+    AutoDock Vina, Gnina (CNN rescoring), DiffDock — with automatic
+    meeko/RDKit ligand prep.
+
+-   :material-atom:{ .lg .middle } &nbsp; **Molecular dynamics**
+
+    ---
+
+    OpenMM, GROMACS, AMBER behind one `prepare → minimize → run` interface,
+    plus trajectory I/O and analysis.
+
+-   :material-auto-fix:{ .lg .middle } &nbsp; **Generative design**
+
+    ---
+
+    RFdiffusion for backbones, ProteinMPNN and ESM-IF1 for sequence design —
+    the full *de novo* loop in one library.
+
+-   :material-scale-balance:{ .lg .middle } &nbsp; **Binding free energy**
+
+    ---
+
+    MM-PB(GB)SA via AmberTools and gmx_MMPBSA, plus FEP/TI ingestion through
+    alchemlyb and cinnabar.
+
+-   :material-magnify-scan:{ .lg .middle } &nbsp; **Pocket detection**
+
+    ---
+
+    fpocket surface-pocket detection, feeding straight into the docking
+    workflow.
+
+</div>
+
+## Why molforge
+
+<div class="grid cards" markdown>
+
+-   **Workflows over silos**
+
+    ---
+
+    Every design decision is judged by one question: *does this make it
+    easier to chain N tools together?*
+
+-   **Wrappers, not reimplementations**
+
+    ---
+
+    We don't rebuild OpenMM or AutoDock. We give them a shared vocabulary —
+    one `Protein`, one `Provenance`, one cache.
+
+-   **One data model, two views**
+
+    ---
+
+    Hierarchical (`protein.chains["A"].residues[42]`) for biology, linear
+    (`protein.atom_array.coords`) for ML — same data, no conversion.
+
+-   **Typed, tested, documented**
+
+    ---
+
+    Strict mypy, ruff-clean, a large test suite on a 3-OS × 3-Python matrix,
+    every public symbol with a Google-style docstring.
+
+</div>
 
 ## Where to go next
 
-- **New here?** Start with [Installation](getting-started/installation.md)
-  and the [Quickstart](getting-started/quickstart.md).
-- **Trying to do something specific?** The
-  [Cookbook](cookbook/index.md) has task-oriented recipes
-  (folding, docking, MD, design) and decision-oriented comparison
-  tables (which folding / docking / generative engine for what
-  job).
-- **Want to understand the design?** Read the
-  [Architecture overview](architecture/overview.md).
-- **Looking for a specific function?** Browse the
-  [API reference](reference/core.md) or use the search box (top right).
-- **Want to see real workflows?** The
-  [walkthrough notebooks](https://github.com/DoctorDean/molforge/tree/master/notebooks/walkthroughs)
-  cover each subpackage end-to-end.
+- **New here?** [Installation](getting-started/installation.md) and the
+  [Quickstart](getting-started/quickstart.md).
+- **Trying to do something specific?** The [Cookbook](cookbook/index.md) has
+  task-oriented recipes and decision tables for choosing engines.
+- **Want the design rationale?** The
+  [Architecture overview](architecture/overview.md) and
+  [Roadmap](architecture/roadmap.md).
+- **Looking for a symbol?** Browse the [API reference](reference/core.md) or
+  hit the search box.
 
-## License & contributing
+---
 
 `molforge` is MIT-licensed. Issues and pull requests are welcome at
-[github.com/DoctorDean/molforge](https://github.com/DoctorDean/molforge);
-see [CONTRIBUTING.md](https://github.com/DoctorDean/molforge/blob/master/CONTRIBUTING.md)
-for the workflow.
+[github.com/DoctorDean/molforge](https://github.com/DoctorDean/molforge).
