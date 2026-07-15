@@ -78,6 +78,10 @@ class GenerativeEngine(ABC):
 
     name: str = "GenerativeEngine"
 
+    #: How :func:`molforge.parallel.run_many` batches this engine: ``"serial"``
+    #: (default, for GPU engines) or ``"process"`` for CPU / subprocess ones.
+    parallelism: str = "serial"
+
     @abstractmethod
     def generate(self, *args: object, **kwargs: object) -> list[object]:
         """Run the engine and return a list of designs.

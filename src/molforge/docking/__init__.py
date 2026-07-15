@@ -157,6 +157,10 @@ class DockingEngine(ABC):
 
     name: str = "DockingEngine"
 
+    #: How :func:`molforge.parallel.dock_many` batches this engine: ``"serial"``
+    #: (default) or ``"process"`` for CPU / subprocess engines like Vina.
+    parallelism: str = "serial"
+
     @abstractmethod
     def dock(
         self,

@@ -109,3 +109,26 @@ class TestEngineWrappers:
         assert _engine_backend(_Hinted(), None) == "process"  # engine hint
         assert _engine_backend(object(), None) == "serial"  # no hint -> safe default
         assert _engine_backend(_Hinted(), "thread") == "thread"  # explicit override wins
+
+
+class TestEngineParallelismHints:
+    """The batch wrappers pick their backend from the engine's `parallelism`
+    hint. GPU engines default to serial; the CPU Vina wrapper opts into
+    process parallelism.
+    """
+
+    def test_bases_default_to_serial(self) -> None:
+        from molforge.docking import DockingEngine
+        from molforge.generative import GenerativeEngine
+        from molforge.md import MDEngine
+        from molforge.wrappers.folding import FoldingEngine
+
+        assert FoldingEngine.parallelism == "serial"
+        assert DockingEngine.parallelism == "serial"
+        assert MDEngine.parallelism == "serial"
+        assert GenerativeEngine.parallelism == "serial"
+
+    def test_vina_opts_into_process(self) -> None:
+        from molforge.wrappers.docking import Vina
+
+        assert Vina.parallelism == "process"

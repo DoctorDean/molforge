@@ -168,6 +168,11 @@ class MDEngine(ABC):
 
     name: str = "MDEngine"
 
+    #: How :func:`molforge.parallel.run_many` batches this engine: ``"serial"``
+    #: (default — MD runs are heavy and usually saturate the device already)
+    #: or ``"process"`` for lightweight CPU runs.
+    parallelism: str = "serial"
+
     @abstractmethod
     def prepare(
         self,

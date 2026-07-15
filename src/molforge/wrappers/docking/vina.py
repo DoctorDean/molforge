@@ -94,6 +94,9 @@ class Vina(DockingEngine):
     """
 
     name = "Vina"
+    # Vina shells out to a CPU binary, so dock_many can run many docks across
+    # OS processes rather than one at a time.
+    parallelism = "process"
 
     def __init__(
         self,

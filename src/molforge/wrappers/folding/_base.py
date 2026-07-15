@@ -42,6 +42,12 @@ class FoldingEngine(ABC):
 
     name: str = "FoldingEngine"
 
+    #: How :func:`molforge.parallel.fold_many` batches this engine: ``"serial"``
+    #: (one at a time — the safe default for GPU engines, which just contend
+    #: for the device if run concurrently) or ``"process"`` (parallel OS
+    #: processes, for CPU / subprocess engines).
+    parallelism: str = "serial"
+
     @abstractmethod
     def predict(self, sequence: str, **kwargs: object) -> Protein:
         """Predict a single structure from a sequence.
