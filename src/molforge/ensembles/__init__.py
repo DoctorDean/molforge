@@ -21,14 +21,23 @@ of which kind it is:
 5. **Can I draw a single representative member?** Medoid pick or
    weighted average.
 
-This module focuses on **pose ensembles** in v1 (i.e. docking output —
-the same ligand in N different binding-mode candidates against one
-receptor) because that's the immediately useful case. The design
-deliberately admits MD trajectories and structural ensembles as
-future extensions: `boltzmann_weights` takes raw scores so it works
-for any kind of score, and the clustering / density functions take
-generic coordinate arrays alongside the convenience overloads that
-take `Pose` objects.
+Two ensemble surfaces live here:
+
+- **Pose ensembles** (the original focus — docking output: the same
+  ligand in N binding-mode candidates against one receptor). The
+  weighting / clustering / density / consensus functions below.
+- **Cross-engine structural ensembles** (:func:`cross_engine_fold`):
+  one sequence folded by several engines (ESMFold / AlphaFold / Boltz /
+  RoseTTAFold), superposed, with a pairwise TM / RMSD spread, a medoid
+  consensus, and a per-residue map of where the engines disagree. This
+  is the structural analogue of the pose surface — "how much do my
+  methods agree?" rather than "how much did my poses explore?".
+
+The pose functions are deliberately general: `boltzmann_weights` takes
+raw scores so it works for any kind of score, and the clustering /
+density functions take generic coordinate arrays alongside the
+convenience overloads that take `Pose` objects. MD trajectories remain a
+natural future extension of the same machinery.
 
 What's here:
 
@@ -70,6 +79,7 @@ from __future__ import annotations
 
 from molforge.ensembles.clustering import pose_clusters
 from molforge.ensembles.consensus import consensus_pose
+from molforge.ensembles.cross_engine import CrossEngineEnsemble, cross_engine_fold
 from molforge.ensembles.density import binding_site_density
 from molforge.ensembles.geometry import pairwise_rmsd, pose_diversity
 from molforge.ensembles.weighting import boltzmann_weights, resample
@@ -87,4 +97,7 @@ __all__ = [
     "binding_site_density",
     # Consensus
     "consensus_pose",
+    # Cross-engine structural ensembles
+    "cross_engine_fold",
+    "CrossEngineEnsemble",
 ]

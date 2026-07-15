@@ -12,7 +12,7 @@ class TestPublicSurface:
             assert hasattr(ens, name), f"missing from ensembles: {name}"
 
     def test_expected_functions_in_all(self) -> None:
-        """The seven advertised functions are exported."""
+        """The advertised public surface is exported."""
         expected = {
             "boltzmann_weights",
             "resample",
@@ -21,6 +21,8 @@ class TestPublicSurface:
             "pose_clusters",
             "binding_site_density",
             "consensus_pose",
+            "cross_engine_fold",
+            "CrossEngineEnsemble",
         }
         assert set(ens.__all__) == expected
 
