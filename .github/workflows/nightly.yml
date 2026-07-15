@@ -63,3 +63,21 @@ jobs:
           pip install vina
       - name: Run the Vina wrapper tests against the real engine
         run: pytest tests/unit/wrappers/test_vina.py -v
+
+  chem-descriptors:
+    name: Chem descriptors (real RDKit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install with the chem extra
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,chem]"
+      - name: Run the chem descriptor tests against real RDKit
+        # TestRealRDKit's reference-value cases are importorskip("rdkit") and
+        # skip in the per-push suite; with the chem extra installed they run
+        # the molecule descriptors against a real RDKit and check the values.
+        run: pytest tests/unit/chem/test_descriptors.py -v
