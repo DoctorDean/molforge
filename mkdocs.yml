@@ -55,6 +55,7 @@ nav:
       - Plugins: guide/plugins.md
       - Validation: guide/validation.md
       - Ensembles: guide/ensembles.md
+      - Design loop: guide/design.md
   - Cookbook:
       - Overview: cookbook/index.md
       - Fold a sequence: cookbook/folding.md
@@ -100,6 +101,7 @@ nav:
       - molforge.metrics: reference/metrics.md
       - molforge.validation: reference/validation.md
       - molforge.ensembles: reference/ensembles.md
+      - molforge.design: reference/design.md
       - molforge.md: reference/md.md
       - molforge.prep: reference/prep.md
       - molforge.docking: reference/docking.md
