@@ -6,14 +6,13 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/molforge.svg)](https://pypi.org/project/molforge/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/DoctorDean/molforge/blob/master/LICENSE)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![Docs](https://img.shields.io/badge/docs-latest-blue.svg)](https://doctordean.github.io/molforge/)
 
 ![Molforge Logo](https://raw.githubusercontent.com/DoctorDean/molforge/master/molforge.png)
 
 > **A forge for protein workflows.** One Python script, every tool in your stack: docking, MD, folding, antibody and nanobody engineering, de novo design — without the format-conversion tax.
 
 `molforge` is an open-source Python library that lets you compose protein workflows across the tools you already use. Bring your structures and sequences in, plug in your engines of choice (Vina, OpenMM, ESMFold, AlphaFold, RFdiffusion, ProteinMPNN, your own model), and walk out with a coherent pipeline instead of five incompatible Python environments and a graveyard of conversion scripts.
-
-**Documentation:** [doctordean.github.io/molforge](https://doctordean.github.io/molforge/)
 
 ---
 
