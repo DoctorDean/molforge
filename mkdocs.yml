@@ -106,6 +106,7 @@ nav:
       - molforge.chem: reference/chem.md
       - molforge.freeenergy: reference/freeenergy.md
       - molforge.plugins: reference/plugins.md
+      - molforge.parallel: reference/parallel.md
       - molforge.cache: reference/cache.md
       - molforge.wrappers:
           - Overview: reference/wrappers.md
