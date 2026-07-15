@@ -1,11 +1,17 @@
 # Ensembles
 
-`molforge.ensembles` provides weighted statistics over collections of
-related structures — the most common case being **docked poses**: one
-ligand against one receptor, returned by a docking engine as N
-plausible binding modes ranked by score.
+`molforge.ensembles` provides statistics over collections of related
+structures. Two surfaces live here:
 
-The seven public functions, organized by concern:
+- **Pose ensembles** — one ligand against one receptor, returned by a
+  docking engine as N plausible binding modes ranked by score. The
+  weighting / geometry / clustering / density / consensus functions.
+- **Cross-engine structural ensembles** — one *sequence* folded by
+  several engines (ESMFold, AlphaFold, Boltz, RoseTTAFold), superposed,
+  with a pairwise TM / RMSD spread and a per-residue map of where the
+  engines disagree. See [Cross-engine folding](#cross-engine-folding).
+
+The pose functions, organized by concern:
 
 | Concern         | Function                       | Returns                              |
 | --------------- | ------------------------------ | ------------------------------------ |
@@ -134,6 +140,60 @@ Two strategies:
 medoid = consensus_pose(poses, weights=weights)               # safe default
 synth  = consensus_pose(cluster_members, method="mean")       # for tight clusters
 ```
+
+## Cross-engine folding
+
+The most direct way to trust a predicted structure is to fold the
+sequence with more than one method and look at where they *agree*.
+Different engines carry different inductive biases; a region all of them
+place in the same spot is one to believe, and a region where they scatter
+is one to treat with suspicion — independently of any single model's
+self-reported confidence.
+
+[`cross_engine_fold`](../reference/ensembles.md) is that workflow in one
+call. It's the transpose of `molforge.parallel.fold_many` (one engine,
+many sequences): here it's **one sequence, many engines**.
+
+```python
+from molforge.ensembles import cross_engine_fold
+from molforge.wrappers.folding import ESMFold, AlphaFold, Boltz
+
+ens = cross_engine_fold(sequence, engines=[ESMFold(), AlphaFold(), Boltz()])
+
+ens.spread()          # pairwise TM / RMSD summary across the engines
+ens.consensus()       # the engine model most central to the rest (a real Protein)
+ens.disagreement()    # (L,) per-residue CA spread — where the engines diverge
+ens.tm_matrix         # (N, N) pairwise TM-score
+ens.rmsd_matrix       # (N, N) pairwise CA-RMSD, Å
+```
+
+The members come back all superposed into one frame — chosen by
+`reference` (default `"medoid"`, the model most central by TM-score;
+also `"first"`, `"most_confident"`, or an engine name) — so the ensemble
+can be written out or visualized as a single overlay.
+
+**Where the engines disagree** is the real payload. After superposition,
+`disagreement()` is the root-mean-square fluctuation of each CA about its
+cross-engine mean position — a model-agnostic per-residue confidence
+signal that complements (and often sharpens) a single engine's pLDDT:
+
+```python
+import numpy as np
+
+rmsf = ens.disagreement()
+uncertain = np.where(rmsf > 3.0)[0]      # residues the engines can't agree on
+print(f"{len(uncertain)} residues with > 3 Å cross-engine spread")
+```
+
+Engines run through `molforge.parallel.map_parallel`, defaulting to the
+`"serial"` backend — the safe choice when the members are GPU engines
+that would otherwise contend for one device. A flaky or
+uninstalled engine is skipped by default (`on_error="skip"`); the ensemble
+forms from whoever succeeded, as long as at least two do.
+
+v1 covers single-chain (monomer) sequences; the signature already admits
+a list of chain sequences for the cross-engine *complex* case, which
+currently raises `NotImplementedError`.
 
 ## What v1 doesn't do
 
