@@ -20,12 +20,12 @@ So the next chapters are **not more engines.** They are:
 1. **Trust** — verify the breadth that already exists. The 0.6.x
    correctness pass found that several from-scratch algorithms *and* the
    green-on-mocks engine tests were hiding real bugs, and that CI wasn't
-   even running on the default branch. Verification is now the
+   even running on the default branch. Verification is the
    highest-leverage work in the project.
 2. **Identity** — the glue nobody else owns: engine-agnostic cross-engine
    ensembles, a real design loop, and reproducible pipeline emission.
-   molforge already has every underlying piece; this is integration, not
-   new science.
+   molforge already had every underlying piece; this was integration, not
+   new science. **The Identity chapter is now shipped** (see §2).
 
 Everything else — more engines, ML layers, performance hotpaths — is
 **opportunistic**: pulled in when a real user needs it, not pushed to fill
@@ -33,10 +33,15 @@ a matrix.
 
 ## Now / Next / Later
 
-- **Now — Trust.** Reference-value tests for the numerical stack; the
-  nightly real-engine CI; clear the remaining correctness-audit items.
-- **Next — Identity.** `DesignLoop`, cross-engine ensembles, reproducible
-  `pipeline.yaml` emission, and a documented plugin path.
+- **Now — finish Trust.** The Identity chapter (below) is complete, so the
+  highest-leverage remaining work is the tail of §1: reference-value guards
+  for lDDT / DockQ / the sequence aligners, extending the nightly
+  real-engine CI to Vina and pinning the fragile output-parsing seams, and
+  the lDDT all-atom variant.
+- **Next — depth (§4).** A unified `molforge.scoring` layer (the gap
+  `DesignLoop` had to work around), a rolled-up `validate.report()`, and
+  the `pipeline.yaml` *replay* layer (§3) once provenance records the
+  operation.
 - **Later — opportunistic breadth.** More engines, local MSA, ML/data
   layers, performance work — pulled forward by demand, not by the matrix.
 
@@ -67,62 +72,74 @@ match the literature and its wrappers still drive the real tools.
 - **Reference-value guards — started, extend.** The metric fixes were
   validated against independent oracles (TM-align via `tmtools`, DSSP via
   `mdtraj`) and those golden values are now committed as fast regression
-  tests on a real structure (ubiquitin). Extend the same treatment to
-  lDDT and DockQ against published reference values, and to the sequence
-  aligners.
+  tests on a real structure (ubiquitin). **Still to do:** extend the same
+  treatment to lDDT and DockQ against published reference values, and to
+  the sequence aligners.
 - **Nightly real-engine smoke tests — started, extend.** An opt-in
   nightly runs the CPU-installable engines against their *real*
   implementations, not mocks — the paths the per-push suite can't reach.
   The docking-prep path (RDKit + meeko + gemmi) is live and already
-  earned its keep by exposing a missing runtime dependency. Extend
-  coverage to Vina, and pin/version-check the fragile output-parsing
-  seams (ESMFold's model→PDB conversion; the filename-glob result parsers
-  in Boltz / Chai / DiffDock / ProteinMPNN) that a new engine release
-  could silently break.
+  earned its keep by exposing a missing runtime dependency. **Still to
+  do:** extend coverage to Vina, and pin/version-check the fragile
+  output-parsing seams (ESMFold's model→PDB conversion; the filename-glob
+  result parsers in Boltz / Chai / DiffDock / ProteinMPNN) that a new
+  engine release could silently break.
 - **Correctness audit — mostly cleared, finish it.** Fixed in 0.6.x:
   Smith-Waterman affine-gap traceback, PQR charge/radius parsing, DockQ
   Fnat (now residue-level) and iRMS (robust to missing backbone atoms),
   DSSP amide-hydrogen geometry (+ B-bridge assignment), TM-score/GDT
-  (now maximized over superpositions, not a single Kabsch fit), and the
-  ML featurizer residue-set misalignment. Remaining: the thin `chem`
-  descriptor set (add logP / TPSA / HBD / HBA / rotatable-bonds / Ro5 via
-  RDKit — cheap and high-value for the comp-bio audience), and the lDDT
-  all-atom variant alongside the current CA-only one.
+  (now maximized over superpositions, not a single Kabsch fit), the
+  ML featurizer residue-set misalignment, and the thin `chem` descriptor
+  set (logP / TPSA / HBD / HBA / rotatable-bonds / Ro5 via RDKit — now
+  shipped). **Remaining:** the lDDT all-atom variant alongside the
+  current CA-only one.
 
-## 2. Distinguishing identity  — *Next*
+## 2. Distinguishing identity  — *Shipped*
 
-The long-horizon items that give molforge an identity nobody else owns.
-Build them on the now-trustworthy base.
+The long-horizon items that give molforge an identity nobody else owns,
+built on the now-trustworthy base. **All four shipped:**
 
-- **Engine-agnostic cross-engine ensembles.** "Fold this with ESMFold,
-  AlphaFold, Boltz, and RoseTTAFold; show me the ensemble and the spread."
-  Everyone else does "pick one and run." molforge already has the
-  wrappers, the common data model, and the metrics — this is the glue.
-- **`DesignLoop` tooling.** The protein-engineering loop (generate →
-  fold → dock → score → iterate) is what real labs do, and nothing glues
-  the parts cleanly. A `DesignLoop` with sane defaults, logging, and a
-  ranked design table would be unique — and every piece already exists as
-  a wrapper.
-- **Reproducibility / `pipeline.yaml`.** Most papers in this space don't
-  ship reproducible code. If molforge can run a workflow and emit a file
-  that fully describes it — engine versions, weight hashes, parameters,
-  the whole provenance chain — that artifact becomes the citable thing.
-  Provenance already records the chain; this is the emit/replay layer on
-  top.
-- **Plugin ecosystem.** `molforge.plugins` exists. Documenting it well,
-  shipping a template repo, and writing one or two example third-party
-  plugins would seed an ecosystem. Compare napari: its plugin system is
-  most of its value.
+- **Engine-agnostic cross-engine ensembles — shipped.**
+  `molforge.ensembles.cross_engine_fold`: fold one sequence with several
+  engines (ESMFold / AlphaFold / Boltz / RoseTTAFold), superpose them, and
+  get back a `CrossEngineEnsemble` — pairwise TM / RMSD matrices, a medoid
+  consensus, and the per-residue cross-engine disagreement (the
+  model-agnostic confidence signal). Everyone else does "pick one and run."
+- **`DesignLoop` tooling — shipped.** `molforge.design.DesignLoop`: the
+  generate → fold → (dock) → score → iterate loop, with a single-engine or
+  cross-engine folder, built-in objectives (self-consistency scTM / plddt /
+  affinity) plus custom callables, genuine round-to-round refinement, and a
+  ranked `DesignTable`. Round-0 backbone generation (the `generator` slot,
+  e.g. RFdiffusion) is designed-in but deferred.
+- **Reproducibility / `pipeline.yaml` — shipped (emit half).**
+  `molforge.reproducibility.emit_pipeline` linearizes an output's
+  provenance chain into a citable `pipeline.yaml` with a consolidated
+  environment block. The *replay* half is deferred: provenance records the
+  engine and parameters but not the *operation* (predict vs dock vs
+  generate) or resolvable inputs, so replay needs a provenance-schema
+  extension (an `operation` field) plus an engine registry. That's the
+  documented next step (§3).
+- **Plugin ecosystem — shipped.** `molforge.plugins` is documented, and
+  `plugins/example_plugin/` is a complete, CI-verified reference plugin
+  (registers a real `FoldingEngine`) that doubles as the copy-paste
+  template. Compare napari: its plugin system is most of its value.
 
 ## 3. Workflow primitives
 
 molforge has good *components*; these make chaining them ergonomic.
 
-- **Parallelism primitives — Next.** `dock_many`, `fold_many`, `run_many`
-  taking a list of inputs and a parallelism level, with each engine
-  declaring whether it parallelizes across processes (CPU) or within one
-  (GPU). Every user writes the same `multiprocessing.Pool` loop today;
-  this is a natural precursor to cross-engine ensembles and `DesignLoop`.
+- **Parallelism primitives — shipped.** `molforge.parallel`:
+  `map_parallel` plus `fold_many` / `dock_many` / `run_many` taking a list
+  of inputs and a backend, with each engine declaring a `parallelism` hint
+  (`"serial"` for GPU, `"process"` for CPU / subprocess). Replaced the
+  `multiprocessing.Pool` loop every user was writing, and underpins
+  `cross_engine_fold` and `DesignLoop`.
+- **`pipeline.yaml` replay — Next.** The deferred half of the
+  reproducibility work (§2): re-executing an emitted manifest. Needs a
+  `Provenance` `operation` field (predict / dock / generate / …) so a step
+  knows *which* engine method to call, plus an engine registry
+  (`molforge.plugins` is the natural home) to resolve names back to
+  callables, and a strategy for resolving recorded inputs to real objects.
 - **Provenance — shipped.** `molforge.core.Provenance`: a frozen
   dataclass (engine / version / parameters / inputs / recursive parent),
   JSON-round-trippable, on `metadata[PROVENANCE]`, adopted across every
@@ -151,10 +168,12 @@ Deeper, not wider — on the things users actually gate on.
   gmx_MMPBSA (with per-residue decomposition), plus FEP/TI ingestion via
   alchemlyb and cinnabar network ingestion. Follow-ups: Boltz-2 affinity
   prediction, and running (not just ingesting) an FEP calculation.
-- **Unified scoring.** A `molforge.scoring` layer exposing docking
+- **Unified scoring — Next.** A `molforge.scoring` layer exposing docking
   scorers (Vina, Gnina CNN) and learned scorers (ESM perplexity,
   ProteinMPNN confidence) as a common interface, so users can score *any*
   structure with *any* scorer — decoupled from the docking wrappers.
+  `DesignLoop` had to work around its absence (objectives are currently
+  ad-hoc callables), so this now has a concrete consumer waiting.
 - **Enhanced sampling — later.** PLUMED metadynamics, replica exchange,
   MELD. Heavy, but what serious MD users do.
 - **Pocket detection.** fpocket is shipped; P2Rank (the ML-based modern
