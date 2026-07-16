@@ -207,3 +207,63 @@ class TestFormat:
         # 3 lines per block (top / matches / bottom)
         assert "MKTV" in lines[0]
         assert "MKTV" in lines[2]
+
+
+# BLOSUM62, gap_open=-10, gap_extend=-1 (the aligner defaults) — golden
+# scores computed offline with Biopython's Bio.Align.PairwiseAligner
+# (global for NW, local for SW). molforge reproduces every one exactly.
+# Biopython is NOT a test-time dependency; the goldens are hard-coded, per
+# the TM-align / DSSP reference-value precedent.
+#
+#   from Bio.Align import PairwiseAligner, substitution_matrices
+#   al = PairwiseAligner(); al.mode = "global" | "local"
+#   al.substitution_matrix = substitution_matrices.load("BLOSUM62")
+#   al.open_gap_score = -10; al.extend_gap_score = -1
+#   al.score(a, b)
+_GLOBAL_GOLDENS = [
+    ("HEAGAWGHEE", "PAWHEAE", 3.0),  # Durbin et al. textbook pair
+    ("MKTAYIAKQR", "MKTAYIAKQR", 49.0),
+    ("ACDEFGHIKLMNPQRSTVWY", "ACDEFGHILMNPQRSTVWY", 101.0),  # one deletion
+    ("WWWWACDEFGHIKLMNWWWW", "ACDEFGHIKLMN", 42.0),
+]
+_LOCAL_GOLDENS = [
+    ("HEAGAWGHEE", "PAWHEAE", 18.0),  # Durbin et al. textbook pair
+    ("MKTAYIAKQR", "MKTAYIAKQR", 49.0),
+    ("ACDEFGHIKLMNPQRSTVWY", "ACDEFGHILMNPQRSTVWY", 101.0),
+    ("WWWWACDEFGHIKLMNWWWW", "ACDEFGHIKLMN", 68.0),  # local island
+]
+
+
+class TestReferenceValue:
+    """Golden alignment scores against Biopython's PairwiseAligner."""
+
+    @pytest.mark.parametrize(("a", "b", "expected"), _GLOBAL_GOLDENS)
+    def test_needleman_wunsch_matches_biopython(self, a: str, b: str, expected: float) -> None:
+        assert needleman_wunsch(a, b).score == pytest.approx(expected)
+
+    @pytest.mark.parametrize(("a", "b", "expected"), _LOCAL_GOLDENS)
+    def test_smith_waterman_matches_biopython(self, a: str, b: str, expected: float) -> None:
+        assert smith_waterman(a, b).score == pytest.approx(expected)
+
+    def test_smith_waterman_traceback_extracts_local_region(self) -> None:
+        # Guards the affine-gap traceback fix: the core must be located
+        # inside the W-flanked sequence, not mis-bounded.
+        al = smith_waterman("WWWWACDEFGHIKLMNWWWW", "ACDEFGHIKLMN")
+        assert al.aligned_a == "ACDEFGHIKLMN"
+        assert al.aligned_b == "ACDEFGHIKLMN"
+        assert al.identity == pytest.approx(1.0)
+        assert (al.start_a, al.end_a) == (4, 16)
+        assert (al.start_b, al.end_b) == (0, 12)
+
+    def test_smith_waterman_textbook_alignment(self) -> None:
+        # The classic HEAGAWGHEE / PAWHEAE local alignment (Durbin et al.).
+        al = smith_waterman("HEAGAWGHEE", "PAWHEAE")
+        assert al.aligned_a == "AWGHE"
+        assert al.aligned_b == "AW-HE"
+        assert al.score == pytest.approx(18.0)
+
+    def test_needleman_wunsch_places_the_gap(self) -> None:
+        al = needleman_wunsch("ACDEFGHIKLMNPQRSTVWY", "ACDEFGHILMNPQRSTVWY")
+        assert al.aligned_a == "ACDEFGHIKLMNPQRSTVWY"
+        assert al.aligned_b == "ACDEFGHI-LMNPQRSTVWY"
+        assert al.identity == pytest.approx(1.0)
