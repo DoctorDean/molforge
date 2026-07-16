@@ -1,4 +1,4 @@
-"""Bump the project version in src/biocore/__init__.py.
+"""Bump the project version in src/molforge/__init__.py.
 
 Usage:
     python scripts/bump_version.py 0.0.2
