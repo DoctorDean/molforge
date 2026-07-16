@@ -5,10 +5,26 @@
 *       @DoctorDean
 
 # Per-subpackage owners (adjust as the team grows)
-/src/biocore/core/        @DoctorDean
-/src/biocore/structure/   @DoctorDean
-/src/biocore/md/          @DoctorDean
-/src/biocore/docking/     @DoctorDean
-/src/biocore/ml/          @DoctorDean
-/src/biocore/wrappers/    @DoctorDean
-/.github/                 @DoctorDean
+/src/molforge/core/               @DoctorDean
+/src/molforge/io/                 @DoctorDean
+/src/molforge/sequence/           @DoctorDean
+/src/molforge/structure/          @DoctorDean
+/src/molforge/metrics/            @DoctorDean
+/src/molforge/validation/         @DoctorDean
+/src/molforge/ensembles/          @DoctorDean
+/src/molforge/prep/               @DoctorDean
+/src/molforge/docking/            @DoctorDean
+/src/molforge/md/                 @DoctorDean
+/src/molforge/freeenergy/         @DoctorDean
+/src/molforge/chem/               @DoctorDean
+/src/molforge/ml/                 @DoctorDean
+/src/molforge/wrappers/           @DoctorDean
+/src/molforge/plugins/            @DoctorDean
+
+# Top-level modules
+/src/molforge/generative.py       @DoctorDean
+/src/molforge/parallel.py         @DoctorDean
+/src/molforge/design.py           @DoctorDean
+/src/molforge/reproducibility.py  @DoctorDean
+
+/.github/                         @DoctorDean
