@@ -11,6 +11,21 @@ A plugin is a Python package that:
 
 That's it. Users opt in by calling `molforge.plugins.discover()`.
 
+## Start from the template
+
+The fastest way to build a plugin is to copy the working reference plugin
+that ships in the repo — [`plugins/example_plugin/`](https://github.com/DoctorDean/molforge/tree/master/plugins/example_plugin).
+It's a complete, tested package that registers `ExtendedChainFolder`, a
+real [`FoldingEngine`](../reference/wrappers/folding.md):
+
+```bash
+cp -r plugins/example_plugin /path/to/my-molforge-plugin
+```
+
+Rename the package (`src/example_plugin/` and the `pyproject.toml` `name` /
+entry-point target), swap `ExtendedChainFolder` for your engine, and
+publish. The rest of this page explains the moving parts.
+
 ## Writing a plugin
 
 Suppose you've built a new docking engine and want it usable from
