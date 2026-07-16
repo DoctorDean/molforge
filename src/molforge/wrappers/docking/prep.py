@@ -139,8 +139,12 @@ def prepare_receptor(
         if mol is None:
             raise RuntimeError(f"RDKit could not load receptor PDB at {src_pdb}")
         prep = MoleculePreparation(rigid_macrocycles=rigid_only)
-        prep.prepare(mol)
-        pdbqt_text, _, _ = PDBQTWriterLegacy.write_string(prep.setup)
+        # meeko >= 0.5: prepare() returns the list of MoleculeSetup objects.
+        # (The old `prep.setup` attribute is deprecated and slated for
+        # removal — using the return value keeps prep working across meeko
+        # releases.)
+        setups = prep.prepare(mol)
+        pdbqt_text, _, _ = PDBQTWriterLegacy.write_string(setups[0])
         out.write_text(pdbqt_text, encoding="utf-8")
         return out
     except Exception as e:
@@ -226,10 +230,12 @@ def prepare_ligand(
         AllChem.EmbedMolecule(mol, randomSeed=42)
         AllChem.MMFFOptimizeMolecule(mol)
 
-    # Prep with meeko
+    # Prep with meeko. meeko >= 0.5 returns the MoleculeSetup list from
+    # prepare(); the old `prep.setup` attribute is deprecated and slated
+    # for removal, so use the return value.
     prep = MoleculePreparation()
-    prep.prepare(mol)
-    pdbqt_text, _, _ = PDBQTWriterLegacy.write_string(prep.setup)
+    setups = prep.prepare(mol)
+    pdbqt_text, _, _ = PDBQTWriterLegacy.write_string(setups[0])
     out.write_text(pdbqt_text, encoding="utf-8")
     return out
 
