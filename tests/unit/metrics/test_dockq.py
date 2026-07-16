@@ -155,3 +155,41 @@ class TestDockQ:
         p = read_pdb(FIXTURES / "mini_complex_native.pdb")
         result = dockq(p, p)
         assert set(result.keys()) == {"DockQ", "fnat", "iRMS", "LRMS"}
+
+
+class TestReferenceValue:
+    """Golden DockQ values against the reference implementation.
+
+    Computed offline with the authors' ``DockQ`` package (Basu & Wallner,
+    the canonical implementation) on the committed fixtures::
+
+        DockQ mini_complex_good.pdb mini_complex_native.pdb --short
+        # DockQ 0.955 iRMSD 0.455 LRMSD 0.530 fnat 0.952
+
+        DockQ mini_complex_bad.pdb  mini_complex_native.pdb --short
+        # DockQ 0.042 iRMSD 11.823 LRMSD 24.000 fnat 0.000
+
+    molforge's from-scratch DockQ reproduces every component to three
+    decimals. These guard the Fnat (residue-level) and iRMS/LRMS fixes
+    from regressing away from the reference. ``DockQ`` is not a test-time
+    dependency — the goldens are hard-coded, matching the TM-align/DSSP
+    reference-value precedent.
+    """
+
+    def test_matches_reference_on_good_model(self) -> None:
+        native = read_pdb(FIXTURES / "mini_complex_native.pdb")
+        good = read_pdb(FIXTURES / "mini_complex_good.pdb")
+        result = dockq(good, native)
+        assert result["DockQ"] == pytest.approx(0.955, abs=0.01)
+        assert result["fnat"] == pytest.approx(0.952, abs=0.01)
+        assert result["iRMS"] == pytest.approx(0.455, abs=0.02)
+        assert result["LRMS"] == pytest.approx(0.530, abs=0.02)
+
+    def test_matches_reference_on_bad_model(self) -> None:
+        native = read_pdb(FIXTURES / "mini_complex_native.pdb")
+        bad = read_pdb(FIXTURES / "mini_complex_bad.pdb")
+        result = dockq(bad, native)
+        assert result["DockQ"] == pytest.approx(0.042, abs=0.01)
+        assert result["fnat"] == pytest.approx(0.0, abs=1e-6)
+        assert result["iRMS"] == pytest.approx(11.823, abs=0.05)
+        assert result["LRMS"] == pytest.approx(24.000, abs=0.05)
