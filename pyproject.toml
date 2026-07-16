@@ -74,6 +74,12 @@ docking = [
 chem = [
     "rdkit>=2023.9",
 ]
+repro = [
+    # pipeline.yaml emit/load. PyYAML is pure-Python and tiny, but kept an
+    # opt-in extra so the core stays numpy-only; the in-memory manifest and
+    # its JSON form need no extra.
+    "pyyaml>=6.0",
+]
 ml = [
     "torch>=2.1",
     "transformers>=4.40",
@@ -83,7 +89,7 @@ io = [
     "biotite>=0.40",
 ]
 all = [
-    "molforge[structure,sequence,md,prep,docking,ml,io,chem]",
+    "molforge[structure,sequence,md,prep,docking,ml,io,chem,repro]",
 ]
 dev = [
     "pytest>=7.4",
@@ -250,5 +256,6 @@ module = [
     "torch.*",
     "transformers.*",
     "vina.*",
+    "yaml.*",
 ]
 ignore_missing_imports = true
