@@ -34,6 +34,7 @@ import numpy as np
 from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.wrappers._versions import check_engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -185,8 +186,14 @@ class ESMFold(FoldingEngine):
         can build the Provenance upfront for cache lookup. Pure
         function of inputs + constructor parameters.
         """
+        # transformers >= 4.40 is required by the `ml` extra and provides the
+        # EsmForProteinFolding + convert_outputs_to_pdb utilities this wrapper
+        # parses. Record the version (for provenance / reproducibility) and
+        # warn if it's below that floor.
+        version = check_engine_version("transformers", engine="ESMFold", minimum="4.40")
         return Provenance.from_engine(
             engine="ESMFold",
+            engine_version=version,
             parameters={
                 "model_name": self.model_name,
                 "device": self.device,

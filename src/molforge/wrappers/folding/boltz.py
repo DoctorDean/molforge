@@ -53,6 +53,7 @@ from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
 from molforge.folding import ComplexSpec, Entity
+from molforge.wrappers._versions import engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
@@ -282,6 +283,7 @@ class Boltz(FoldingEngine):
             prov_inputs = {"complex_spec": _serialize_spec_for_provenance(spec)}
         return Provenance.from_engine(
             engine="Boltz",
+            engine_version=engine_version("boltz"),
             parameters={
                 "model_version": self.model_version,
                 "use_msa_server": self.use_msa_server,
