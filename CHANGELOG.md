@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] 2026-07-18
+
+This release completes molforge's **Identity** chapter — the engine-agnostic
+glue that sets it apart: cross-engine folding ensembles, a full protein-design
+loop, and citable reproducibility manifests — built on a new parallelism layer
+and a reference-validated core. All changes are additive and backwards
+compatible with 0.6.0.
+
+### Added
+- **Cross-engine folding ensembles — `molforge.ensembles.cross_engine_fold`.**
+  Fold one sequence with several engines (ESMFold / AlphaFold / Boltz /
+  RoseTTAFold), superpose the models, and return a `CrossEngineEnsemble`:
+  pairwise TM-score and Cα-RMSD matrices, a medoid consensus (the model most
+  central to the rest), and the per-residue cross-engine disagreement — a
+  model-agnostic map of where the engines agree and where they diverge.
+  Selectable superposition reference (`"medoid"` / `"first"` /
+  `"most_confident"` / an engine name); failing engines are skipped by
+  default. New module `ensembles/cross_engine.py`.
+- **`DesignLoop` — the protein-design loop (`molforge.design`).** Orchestrates
+  generate → fold → (dock) → score → iterate over the existing wrappers. A
+  single-engine or cross-engine folder; built-in objectives (self-consistency
+  scTM/scRMSD, pLDDT, docked affinity) plus custom callables, all normalized so
+  higher is better; genuine round-to-round refinement onto the previous round's
+  folded winners; and a ranked `DesignTable` with a DataFrame-ready
+  `to_records()`. Round-0 backbone generation (the `generator` slot, e.g.
+  RFdiffusion) is designed-in but deferred.
+- **Reproducible `pipeline.yaml` emission — `molforge.reproducibility`.**
+  `emit_pipeline(output, path)` linearizes an output's provenance chain into a
+  citable manifest with a consolidated environment block (molforge / Python /
+  platform versions plus the engine versions that ran). The in-memory
+  `PipelineManifest` and its `to_dict` / `to_json` forms need no third-party
+  dependency; the `.yaml` form uses PyYAML via the opt-in `repro` extra.
+  `load_pipeline()` round-trips it; `describe()` prints a summary. Emit and
+  inspect only in v1 — replay is deferred.
+- **Parallelism primitives — `molforge.parallel`.** `map_parallel(func, items,
+  backend=...)` with input-order-preserving results and per-item error control,
+  plus `fold_many` / `dock_many` / `run_many` convenience wrappers. Replaces the
+  `multiprocessing.Pool` loop every user was writing, and underpins
+  `cross_engine_fold` and `DesignLoop`.
+- **`parallelism` hint on the engine base classes.** Folding / docking / MD /
+  generative engines declare `"serial"` (GPU-safe default) or `"process"` (CPU /
+  subprocess engines like Vina), so the batch wrappers pick the right backend
+  automatically.
+- **All-atom lDDT — `lddt(..., atom_set="heavy")`.** The canonical all-atom
+  variant alongside the Cα-only default: grades every non-hydrogen atom
+  (including side-chain placement) and excludes intra-residue pairs per Mariani
+  et al. 2013.
+- **Engine version recording + drift warnings — `molforge.wrappers._versions`.**
+  The pip-package folding engines (ESMFold / Boltz / Chai) now record the
+  installed engine version into `Provenance` (also populating `pipeline.yaml`),
+  and warn non-fatally when the version drifts outside the range the output
+  parser was written for.
+- **Drug-likeness chem descriptors.** logP, TPSA, HBD, HBA, rotatable bonds, and
+  Lipinski Ro5 for small molecules via RDKit (lazy).
+- **Reference-value guards for the numerical stack.** Golden values computed
+  offline against independent oracles and committed as fast regression tests:
+  DockQ (vs the authors' `DockQ` package), lDDT (vs an independent from-scratch
+  implementation and a hand-computed case), and the Needleman-Wunsch /
+  Smith-Waterman aligners (vs Biopython's `PairwiseAligner`, including
+  Smith-Waterman traceback correctness) — extending the TM-score / GDT / DSSP
+  guards.
+- **Working plugin template — `plugins/example_plugin/`.** A complete,
+  CI-verified reference plugin that registers a real `FoldingEngine` and doubles
+  as a copy-paste starting point for third-party plugins.
+- **`repro` extra.** Pulls in PyYAML for `pipeline.yaml` read/write, keeping the
+  core numpy-only.
+- **Opt-in nightly CI against real engines.** Runs the CPU-installable engines
+  (docking prep, Vina, chem descriptors) against their real implementations —
+  the code paths the per-push mock suite can't reach.
+- **Documentation.** User guides and API-reference pages for cross-engine
+  folding, the design loop, reproducibility, and `molforge.parallel`; a
+  documentation badge; social cards (link previews); and a branded site with a
+  redesigned landing page.
+
+### Changed
+- **Roadmap reframed** around a Trust → Identity posture, and updated to mark
+  the Identity chapter and the parallelism primitives as shipped.
+- **CI now runs on `master`** (it had silently run on a non-existent branch and
+  gated nothing), with ruff pinned to the pre-commit revision and the mypy job
+  pinned to `numpy < 2.5`.
+
+### Fixed
+- **DSSP secondary-structure assignment.** Corrected amide-hydrogen geometry,
+  added isolated β-bridge (B) assignment with helix-first priority, and kept
+  strand priority ahead of helix.
+- **ML featurizers aligned to the canonical node residue set**, fixing a
+  residue-set misalignment across featurizers.
+- **`docking` extra completeness.** Pulls in meeko's real runtime needs — RDKit,
+  gemmi, and now `scipy` — so `molforge[docking]` imports cleanly instead of
+  failing on a missing dependency.
+- **Docking prep migrated off meeko's deprecated `.setup`** to the value
+  `MoleculePreparation.prepare()` returns, so a future meeko release doesn't
+  silently break receptor/ligand preparation.
+- **Windows compatibility.** UTF-8 encoding and OS-agnostic path handling in
+  tests; the RFdiffusion path assertion now matches `Path.resolve()`.
+- **Stale `biocore` (pre-rename) references** repaired in `.github/CODEOWNERS`
+  (rules matched nothing, so code-owner reviews never fired), the
+  `scripts/bump_version.py` docstring, and the example plugin (which couldn't
+  import).
+
 ## [0.6.0] 2026-07-13
 
 ### Added
