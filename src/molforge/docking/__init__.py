@@ -161,6 +161,13 @@ class DockingEngine(ABC):
     #: (default) or ``"process"`` for CPU / subprocess engines like Vina.
     parallelism: str = "serial"
 
+    #: Which way is better for this engine's ``Pose.score``:
+    #: ``"lower_is_better"`` (default — the Vina / DiffDock affinity/energy
+    #: convention) or ``"higher_is_better"``. Read by
+    #: :meth:`molforge.scoring.DockingScorer.from_engine` so a pose's score can
+    #: be compared in the right direction without knowing the engine.
+    score_direction: str = "lower_is_better"
+
     @abstractmethod
     def dock(
         self,

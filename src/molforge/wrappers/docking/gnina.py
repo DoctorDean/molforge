@@ -190,6 +190,10 @@ class Gnina(DockingEngine):
         self.cpu = cpu
         self.timeout = timeout
         self.verbose = verbose
+        # Direction of Pose.score follows the configured sort_order: "Energy"
+        # is a Vina energy (lower is better); the CNN scores ("CNNscore" /
+        # "CNNaffinity") are higher-is-better. Read by DockingScorer.from_engine.
+        self.score_direction = "lower_is_better" if sort_order == "Energy" else "higher_is_better"
 
     # ------------------------------------------------------------------
     # Public API
