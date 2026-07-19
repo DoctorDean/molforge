@@ -59,6 +59,10 @@ loop = DesignLoop(
 )
 ```
 
+- **a [`Scorer`](scoring.md)** — any `molforge.scoring.Scorer` grades each
+  candidate's folded structure by its `ranking_key` (higher is always
+  better), e.g. `objective=ConfidenceScorer()`.
+
 Every candidate records *all* the metrics it accumulated (`sc_tm`,
 `sc_rmsd`, `plddt`, `mpnn_score`, `affinity`, …) in `candidate.metrics`,
 regardless of which one the objective used — so you can re-rank or filter
