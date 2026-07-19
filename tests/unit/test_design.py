@@ -220,6 +220,21 @@ class TestObjectives:
         # mpnn scores are -1, -2, -3; highest (best) is -1.
         assert table.best.score == pytest.approx(-1.0)
 
+    def test_scorer_objective(self, backbone) -> None:
+        from molforge.scoring import ConfidenceScorer
+
+        # Varying noise → folder confidence 100/90/80 (conf = 100 - 10*noise);
+        # a ConfidenceScorer objective ranks the folded structures by pLDDT.
+        loop = DesignLoop(
+            designer=_FakeDesigner(3),
+            folder=_FakeFolder("F", [0.0, 1.0, 2.0]),
+            objective=ConfidenceScorer(),
+        )
+        table = loop.run(backbone)
+        assert table.objective == "confidence"
+        scores = [c.score for c in table]
+        assert scores == pytest.approx([100.0, 90.0, 80.0])
+
 
 class TestToRecords:
     def test_records_are_flat_and_aligned(self, backbone) -> None:

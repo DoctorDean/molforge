@@ -54,6 +54,7 @@ from molforge.core import metadata_keys as mk
 from molforge.ensembles import cross_engine_fold
 from molforge.metrics import tm_score
 from molforge.parallel import fold_many
+from molforge.scoring import Scorer
 from molforge.structure import rmsd
 
 if TYPE_CHECKING:
@@ -210,7 +211,7 @@ class DesignLoop:
         folder: FoldingEngine | Sequence[FoldingEngine],
         docker: DockingEngine | None = None,
         generator: GenerativeEngine | None = None,
-        objective: DesignObjective | Callable[[DesignCandidate], float] = "self_consistency",
+        objective: DesignObjective | Callable[[DesignCandidate], float] | Scorer = "self_consistency",
         n_designs: int = 8,
         n_rounds: int = 1,
         select_top: int = 4,
@@ -313,7 +314,7 @@ class DesignLoop:
         return DesignTable(
             candidates=_rank(all_candidates),
             rounds=self.n_rounds,
-            objective=self.objective if isinstance(self.objective, str) else "custom",
+            objective=_objective_name(self.objective),
         )
 
     # ---------- stages ----------
@@ -436,9 +437,16 @@ def _self_consistency(structure: Protein, backbone: Protein) -> tuple[float | No
 
 
 def _resolve_objective(
-    objective: DesignObjective | Callable[[DesignCandidate], float],
+    objective: DesignObjective | Callable[[DesignCandidate], float] | Scorer,
 ) -> Callable[[DesignCandidate], float]:
-    """Turn a preset name or callable into an ``(candidate) -> float`` scorer."""
+    """Turn a preset name, callable, or :class:`~molforge.scoring.Scorer` into
+    an ``(candidate) -> float`` scorer (always higher-is-better)."""
+    if isinstance(objective, Scorer):
+        # A Scorer grades the folded structure; its ranking_key is
+        # higher-is-better regardless of the scorer's native direction.
+        return lambda c: (
+            objective.score(c.structure).ranking_key if c.structure is not None else math.nan
+        )
     if callable(objective):
         return objective
     if objective == "self_consistency":
@@ -453,6 +461,15 @@ def _resolve_objective(
         f"unknown objective {objective!r}; expected 'self_consistency', "
         "'plddt', 'affinity', or a callable."
     )
+
+
+def _objective_name(objective: DesignObjective | Callable[[DesignCandidate], float] | Scorer) -> str:
+    """Human-readable objective label for the DesignTable."""
+    if isinstance(objective, str):
+        return objective
+    if isinstance(objective, Scorer):
+        return objective.name
+    return "custom"
 
 
 def _rank(candidates: list[DesignCandidate]) -> list[DesignCandidate]:
