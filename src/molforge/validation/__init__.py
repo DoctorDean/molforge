@@ -64,6 +64,11 @@ from molforge.validation.orchestration import (
     consensus,
     cross_validate,
 )
+from molforge.validation.quality import (
+    QualityCheck,
+    QualityReport,
+    report,
+)
 from molforge.validation.verdict import (
     Verdict,
     rank_verdicts,
@@ -81,4 +86,8 @@ __all__ = [  # noqa: RUF022 — grouped by concern
     "Validator",
     "cross_validate",
     "consensus",
+    # Structure-quality report
+    "report",
+    "QualityReport",
+    "QualityCheck",
 ]
