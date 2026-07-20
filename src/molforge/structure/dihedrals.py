@@ -47,9 +47,11 @@ def dihedral(
         p4: ``(3,)`` Cartesian coordinates of the fourth point.
 
     Returns:
-        Angle in degrees in ``[-180, 180]``. Uses the standard atan2
-        formula which avoids the numerical issues of acos near
-        ``±1`` and naturally captures the sign.
+        Angle in degrees in ``[-180, 180]``, in the standard IUPAC sign
+        convention (matching Biopython's ``calc_dihedral``): a right-handed
+        α-helix is φ ≈ −60°, ψ ≈ −45°. Uses the atan2 formula, which avoids
+        the numerical issues of acos near ``±1`` and naturally captures the
+        sign.
     """
     p1 = np.asarray(p1, dtype=np.float64)
     p2 = np.asarray(p2, dtype=np.float64)
@@ -64,9 +66,11 @@ def dihedral(
         return float("nan")
     b2_u = b2 / b2_norm
     # Projection of b1 perpendicular to b2, and b3 perpendicular to b2.
+    # m1 = b2_u × n1 (not n1 × b2_u) gives the IUPAC sign convention, so a
+    # right-handed α-helix reads as negative φ/ψ, matching Biopython.
     n1 = np.cross(b1, b2)
     n2 = np.cross(b2, b3)
-    m1 = np.cross(n1, b2_u)
+    m1 = np.cross(b2_u, n1)
     x = float(np.dot(n1, n2))
     y = float(np.dot(m1, n2))
     return float(np.degrees(np.arctan2(y, x)))
@@ -101,7 +105,8 @@ def dihedrals_batch(
     b2_u = np.where(valid[:, None], b2 / np.maximum(b2_norms, 1e-12), 0.0)
     n1 = np.cross(b1, b2)
     n2 = np.cross(b2, b3)
-    m1 = np.cross(n1, b2_u)
+    # m1 = b2_u × n1 for the IUPAC sign convention (see `dihedral`).
+    m1 = np.cross(b2_u, n1)
     x = (n1 * n2).sum(axis=1)
     y = (m1 * n2).sum(axis=1)
     angles = np.degrees(np.arctan2(y, x))
