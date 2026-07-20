@@ -133,6 +133,15 @@ IPTM = "iptm"
 CONFIDENCE_SCORE = "confidence_score"
 """Composite confidence score (float). Set by Boltz."""
 
+AFFINITY_VALUE = "affinity_value"
+"""Predicted binding affinity (float). Set by Boltz-2's affinity prediction —
+its ``affinity_pred_value``, a log-scale IC50-like value where *lower* means
+stronger predicted binding."""
+
+AFFINITY_PROBABILITY = "affinity_probability"
+"""Probability that the ligand is a binder (float, 0-1). Set by Boltz-2 from
+``affinity_probability_binary``."""
+
 PAE = "pae"
 """``(L, L)`` predicted aligned error matrix (float array). Set by RoseTTAFold."""
 

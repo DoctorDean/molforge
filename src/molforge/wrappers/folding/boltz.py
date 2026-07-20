@@ -214,6 +214,42 @@ class Boltz(FoldingEngine):
         """
         return self._predict_spec(spec, single_sequence=None)
 
+    def predict_affinity(self, spec: ComplexSpec, **kwargs: object) -> Protein:
+        """Predict a protein-ligand complex *and its binding affinity* (Boltz-2).
+
+        Boltz-2's headline capability: alongside the folded complex, it
+        predicts how tightly the ligand binds. This method folds ``spec``
+        with an ``affinity`` property on the ligand and surfaces the result
+        in the returned structure's metadata.
+
+        Args:
+            spec: A :class:`ComplexSpec` with exactly one ligand entity —
+                the binder whose affinity is predicted — plus at least one
+                protein chain. Build it with
+                :meth:`ComplexSpec.protein_ligand`.
+            **kwargs: Reserved for future per-call options.
+
+        Returns:
+            The folded complex as a :class:`Protein` whose ``metadata`` adds,
+            on top of the usual confidence keys:
+
+            - ``affinity_value``: Boltz-2's ``affinity_pred_value`` (log-scale IC50-like; lower = stronger binding).
+            - ``affinity_probability``: probability the ligand is a binder (0-1).
+            - ``affinity``: the full affinity JSON, verbatim.
+
+        Raises:
+            ValueError: If this engine wasn't constructed with
+                ``model_version="boltz2"`` (affinity is a Boltz-2 feature),
+                or ``spec`` doesn't have exactly one ligand entity.
+        """
+        if self.model_version != "boltz2":
+            raise ValueError(
+                "affinity prediction requires Boltz-2; construct the engine with "
+                f'Boltz(model_version="boltz2"). Got {self.model_version!r}.'
+            )
+        binder = _single_ligand_chain_id(spec)
+        return self._predict_spec(spec, single_sequence=None, affinity_binder=binder)
+
     # ------------------------------------------------------------------
     # Local-execution path (testable seam)
     # ------------------------------------------------------------------
@@ -222,6 +258,7 @@ class Boltz(FoldingEngine):
         spec: ComplexSpec,
         *,
         single_sequence: str | None,
+        affinity_binder: str | None = None,
     ) -> Protein:
         """The shared spec-based execution path.
 
@@ -234,7 +271,9 @@ class Boltz(FoldingEngine):
         """
         # Cache lookup. Build the Provenance upfront so we can
         # check the cache *before* spawning the boltz subprocess.
-        provenance = self._build_provenance(spec, single_sequence=single_sequence)
+        provenance = self._build_provenance(
+            spec, single_sequence=single_sequence, affinity_binder=affinity_binder
+        )
         cache = get_default_cache()
         cached: Protein | None = cache.get(provenance, "protein")
         if cached is not None:
@@ -249,7 +288,7 @@ class Boltz(FoldingEngine):
             output_dir.mkdir()
 
             input_yaml.write_text(
-                self._build_input_yaml_from_spec(spec),
+                self._build_input_yaml_from_spec(spec, affinity_binder=affinity_binder),
                 encoding="utf-8",
             )
 
@@ -258,6 +297,9 @@ class Boltz(FoldingEngine):
             self._invoke(cmd, env=env)
 
             cif_text, confidence_json = self._collect_outputs(output_dir)
+            affinity_json = (
+                self._collect_affinity(output_dir) if affinity_binder is not None else {}
+            )
 
         result = self._parse_outputs(
             cif_text=cif_text,
@@ -265,16 +307,26 @@ class Boltz(FoldingEngine):
             sequence=single_sequence,
             spec=spec,
             provenance=provenance,
+            affinity_json=affinity_json,
         )
         cache.put(provenance, result, "protein")
         return result
 
-    def _build_provenance(self, spec: ComplexSpec, *, single_sequence: str | None) -> Provenance:
-        """Construct the Provenance for a predict / predict_complex call.
+    def _build_provenance(
+        self,
+        spec: ComplexSpec,
+        *,
+        single_sequence: str | None,
+        affinity_binder: str | None = None,
+    ) -> Provenance:
+        """Construct the Provenance for a predict / predict_complex /
+        predict_affinity call.
 
         Factored out of :meth:`_parse_outputs` so :meth:`_predict_spec`
         can build it upfront for cache lookup. Pure function of inputs
-        + constructor parameters — does not touch the boltz CLI.
+        + constructor parameters — does not touch the boltz CLI. The
+        ``affinity_binder`` is recorded in the parameters so an affinity
+        run doesn't collide with a plain fold in the cache.
         """
         prov_inputs: dict[str, object]
         if single_sequence is not None:
@@ -291,6 +343,7 @@ class Boltz(FoldingEngine):
                 "diffusion_samples": self.diffusion_samples,
                 "sampling_steps": self.sampling_steps,
                 "device": self.device,
+                "affinity_binder": affinity_binder,
             },
             inputs=prov_inputs,
         )
@@ -328,7 +381,9 @@ class Boltz(FoldingEngine):
         """
         return self._build_input_yaml_from_spec(ComplexSpec.from_protein(sequence))
 
-    def _build_input_yaml_from_spec(self, spec: ComplexSpec) -> str:
+    def _build_input_yaml_from_spec(
+        self, spec: ComplexSpec, *, affinity_binder: str | None = None
+    ) -> str:
         """Construct the Boltz YAML input for a ComplexSpec.
 
         Boltz's input format is a YAML document with a top-level
@@ -350,9 +405,30 @@ class Boltz(FoldingEngine):
         for entity, chain_ids in zip(spec.entities, chain_ids_per_entity, strict=True):
             lines.extend(_boltz_yaml_entity(entity, chain_ids))
 
+        # Affinity request: a top-level `properties` block naming the
+        # binder chain. Boltz-2 computes affinity when this is present.
+        if affinity_binder is not None:
+            lines += ["properties:", "  - affinity:", f"      binder: {affinity_binder}"]
+
         # Trailing newline keeps Boltz's parser happy on some
         # versions and makes diffing the file pleasant.
         return "\n".join(lines) + "\n"
+
+    def _collect_affinity(self, output_dir: Path) -> dict[str, Any]:
+        """Locate and parse Boltz-2's ``affinity_*.json`` sidecar.
+
+        Missing / malformed affinity output isn't fatal — the folded
+        structure is still returned; the affinity metadata is simply
+        absent. Boltz writes the file alongside the model outputs.
+        """
+        candidates = sorted(output_dir.rglob("affinity_*.json"))
+        if not candidates:
+            return {}
+        try:
+            data = json.loads(candidates[0].read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
 
     def _build_command(
         self,
@@ -465,6 +541,7 @@ class Boltz(FoldingEngine):
         sequence: str | None,
         spec: ComplexSpec | None = None,
         provenance: Provenance | None = None,
+        affinity_json: dict[str, Any] | None = None,
     ) -> Protein:
         """Parse a Boltz mmCIF + confidence JSON into a Protein with metadata.
 
@@ -549,13 +626,64 @@ class Boltz(FoldingEngine):
         if pair_chains_iptm is not None:
             metadata_update["pair_chains_iptm"] = pair_chains_iptm
 
+        # Boltz-2 affinity (only present on predict_affinity calls).
+        if affinity_json:
+            value = _affinity_value(affinity_json)
+            probability = _affinity_probability(affinity_json)
+            if value is not None:
+                metadata_update[mk.AFFINITY_VALUE] = value
+            if probability is not None:
+                metadata_update[mk.AFFINITY_PROBABILITY] = probability
+            metadata_update["affinity"] = affinity_json
+
         protein.metadata.update(metadata_update)
         return protein
 
 
 # ---------------------------------------------------------------------
-# Module-level YAML serialization helpers (testable without a Boltz instance)
+# Module-level helpers (testable without a Boltz instance)
 # ---------------------------------------------------------------------
+
+
+def _single_ligand_chain_id(spec: ComplexSpec) -> str:
+    """Return the chain id of ``spec``'s sole ligand — the affinity binder.
+
+    Raises:
+        ValueError: If the spec doesn't have exactly one ligand entity.
+    """
+    chain_ids_per_entity = spec.assigned_chain_ids()
+    ligand_chains = [
+        chain_ids[0]
+        for entity, chain_ids in zip(spec.entities, chain_ids_per_entity, strict=True)
+        if entity.is_ligand and chain_ids
+    ]
+    if len(ligand_chains) != 1:
+        raise ValueError(
+            "affinity prediction needs exactly one ligand entity (the binder); "
+            f"the spec has {len(ligand_chains)}. Build it with "
+            "ComplexSpec.protein_ligand(...)."
+        )
+    return ligand_chains[0]
+
+
+def _affinity_value(affinity_json: dict[str, Any]) -> float | None:
+    """Boltz-2's headline ``affinity_pred_value`` (log-scale, lower = stronger)."""
+    return _maybe_float(affinity_json.get("affinity_pred_value"))
+
+
+def _affinity_probability(affinity_json: dict[str, Any]) -> float | None:
+    """Boltz-2's ``affinity_probability_binary`` (probability of being a binder)."""
+    return _maybe_float(affinity_json.get("affinity_probability_binary"))
+
+
+def _maybe_float(value: object) -> float | None:
+    """Coerce ``value`` to float, or ``None`` when missing / non-numeric."""
+    if value is None:
+        return None
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 def _boltz_yaml_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
