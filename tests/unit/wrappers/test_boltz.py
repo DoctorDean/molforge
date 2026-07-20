@@ -513,6 +513,106 @@ class TestUniformConfidenceConvention:
 
 
 # ----------------------------------------------------------------------
+# Boltz-2 affinity prediction
+# ----------------------------------------------------------------------
+
+
+class TestAffinity:
+    """predict_affinity — YAML properties block, JSON parsing, validation.
+
+    Boltz is GPU-only, so we target the seams: the input YAML, the affinity
+    sidecar parser, and the validation gates.
+    """
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKTVRQ", ligand_smiles="CCO")
+
+    def test_single_ligand_chain_id(self) -> None:
+        from molforge.wrappers.folding.boltz import _single_ligand_chain_id
+
+        assert _single_ligand_chain_id(self._spec()) == "B"
+
+    def test_no_ligand_raises(self) -> None:
+        from molforge.folding import ComplexSpec
+        from molforge.wrappers.folding.boltz import _single_ligand_chain_id
+
+        with pytest.raises(ValueError, match="exactly one ligand"):
+            _single_ligand_chain_id(ComplexSpec.from_protein("MKTVRQ"))
+
+    def test_two_ligands_raises(self) -> None:
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.wrappers.folding.boltz import _single_ligand_chain_id
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKTVRQ"),
+                Entity(kind="ligand", smiles="CCO"),
+                Entity(kind="ligand", smiles="CCC"),
+            )
+        )
+        with pytest.raises(ValueError, match="exactly one ligand"):
+            _single_ligand_chain_id(spec)
+
+    def test_yaml_has_affinity_properties_block(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        y = engine._build_input_yaml_from_spec(self._spec(), affinity_binder="B")
+        assert "properties:" in y
+        assert "- affinity:" in y
+        assert "binder: B" in y
+
+    def test_yaml_without_affinity_has_no_properties(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        assert "properties:" not in engine._build_input_yaml_from_spec(self._spec())
+
+    def test_affinity_json_helpers(self) -> None:
+        from molforge.wrappers.folding.boltz import _affinity_probability, _affinity_value
+
+        aj = {"affinity_pred_value": -1.23, "affinity_probability_binary": 0.87}
+        assert _affinity_value(aj) == pytest.approx(-1.23)
+        assert _affinity_probability(aj) == pytest.approx(0.87)
+        assert _affinity_value({}) is None
+        assert _affinity_probability({}) is None
+
+    def test_parse_outputs_surfaces_affinity_metadata(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        protein = engine._parse_outputs(
+            cif_text=_TINY_CIF,
+            confidence_json={"ptm": 0.8, "iptm": 0.5},
+            sequence=None,
+            spec=self._spec(),
+            affinity_json={"affinity_pred_value": -2.5, "affinity_probability_binary": 0.91},
+        )
+        assert protein.metadata["affinity_value"] == pytest.approx(-2.5)
+        assert protein.metadata["affinity_probability"] == pytest.approx(0.91)
+        assert protein.metadata["affinity"]["affinity_pred_value"] == -2.5
+
+    def test_parse_outputs_without_affinity_omits_keys(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        protein = engine._parse_outputs(cif_text=_TINY_CIF, confidence_json={}, sequence="AG")
+        assert "affinity_value" not in protein.metadata
+
+    def test_boltz1_rejects_affinity(self) -> None:
+        with pytest.raises(ValueError, match="requires Boltz-2"):
+            Boltz(model_version="boltz1").predict_affinity(self._spec())
+
+    def test_collect_affinity_globs_json(self, tmp_path: Path) -> None:
+        import json
+
+        engine = Boltz(model_version="boltz2")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "affinity_query.json").write_text(
+            json.dumps({"affinity_pred_value": -1.0, "affinity_probability_binary": 0.7})
+        )
+        data = engine._collect_affinity(tmp_path)
+        assert data["affinity_pred_value"] == -1.0
+
+    def test_collect_affinity_missing_returns_empty(self, tmp_path: Path) -> None:
+        assert Boltz(model_version="boltz2")._collect_affinity(tmp_path) == {}
+
+
+# ----------------------------------------------------------------------
 # End-to-end (skipped unless boltz is on PATH)
 # ----------------------------------------------------------------------
 
