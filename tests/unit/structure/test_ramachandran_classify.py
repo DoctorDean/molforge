@@ -107,22 +107,24 @@ class TestClassifyProtein:
 
 class TestAggregates:
     def test_outliers_are_a_subset(self) -> None:
-        p = read_pdb(FIXTURES / "real_small_protein.pdb")
+        # mini_beta_sheet.pdb mixes canonical β residues with a disallowed
+        # region, so it has both outliers and non-outliers.
+        p = read_pdb(FIXTURES / "mini_beta_sheet.pdb")
         results = classify_ramachandran(p)
         outliers = ramachandran_outliers(p)
         assert all(r.classification == "Outlier" for r in outliers)
         assert len(outliers) == sum(1 for r in results if r.classification == "Outlier")
         assert 0 < len(outliers) < len(results)
 
-    def test_mirror_beta_fixture_all_outliers(self) -> None:
-        # mini_beta_sheet.pdb sits at the mirror-β region (+120, −120),
-        # disallowed for L-amino acids → every classifiable residue is an
-        # outlier and the favored fraction is zero.
+    def test_beta_sheet_residues_are_favored(self) -> None:
+        # mini_beta_sheet.pdb's extended residues sit at φ ≈ −120, ψ ≈ +120 —
+        # the canonical β-sheet region, Favored for L-amino acids. (Before
+        # the dihedral sign fix these read as mirror-β outliers.)
         p = read_pdb(FIXTURES / "mini_beta_sheet.pdb")
         results = classify_ramachandran(p)
-        assert results
-        assert all(r.classification == "Outlier" for r in results)
-        assert ramachandran_favored_fraction(p) == 0.0
+        beta = [r for r in results if r.phi < -90 and r.psi > 90]
+        assert beta
+        assert all(r.classification == "Favored" for r in beta)
 
     def test_favored_fraction_math(self) -> None:
         p = read_pdb(FIXTURES / "real_small_protein.pdb")
