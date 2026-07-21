@@ -127,6 +127,10 @@ class Provenance:
         engine: Name of the producer — typically an engine name
             (``"ESMFold"``, ``"Vina"``) or a molforge function path
             (``"molforge.prep.prepare_for_md"``).
+        operation: The engine method that produced the output
+            (``"predict"``, ``"dock"``, ``"generate"``, ...). ``""`` when
+            unrecorded. Consumed by :func:`molforge.reproducibility.replay`
+            to know which method to re-invoke.
         engine_version: Version string of the engine itself. ``""``
             when the engine doesn't expose one. Distinct from
             :attr:`molforge_version`.
@@ -151,6 +155,7 @@ class Provenance:
     """
 
     engine: str
+    operation: str = ""
     engine_version: str = ""
     molforge_version: str = ""
     timestamp: str = ""
@@ -167,6 +172,7 @@ class Provenance:
         cls,
         engine: str,
         *,
+        operation: str = "",
         engine_version: str = "",
         parameters: dict[str, Any] | None = None,
         inputs: dict[str, Any] | None = None,
@@ -181,6 +187,8 @@ class Provenance:
 
         Args:
             engine: Producer name (engine name or function path).
+            operation: The engine method that produced the output
+                (``"predict"`` / ``"dock"`` / ...). Enables replay.
             engine_version: Producer version. Pass ``""`` if the engine
                 doesn't expose one.
             parameters: Engine-specific arguments. Must be
@@ -212,6 +220,7 @@ class Provenance:
 
         return cls(
             engine=engine,
+            operation=operation,
             engine_version=engine_version,
             molforge_version=_molforge_version(),
             timestamp=_utc_timestamp(),
@@ -284,6 +293,7 @@ class Provenance:
 
             {
                 "engine": str,
+                "operation": str,
                 "engine_version": str,
                 "molforge_version": str,
                 "timestamp": str,        # ISO-8601 UTC
@@ -298,6 +308,7 @@ class Provenance:
         """
         return {
             "engine": self.engine,
+            "operation": self.operation,
             "engine_version": self.engine_version,
             "molforge_version": self.molforge_version,
             "timestamp": self.timestamp,
@@ -329,6 +340,7 @@ class Provenance:
         parent = cls.from_dict(parent_data) if parent_data else None
         return cls(
             engine=str(data["engine"]),
+            operation=str(data.get("operation", "")),
             engine_version=str(data.get("engine_version", "")),
             molforge_version=str(data.get("molforge_version", "")),
             timestamp=str(data.get("timestamp", "")),
