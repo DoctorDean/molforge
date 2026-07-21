@@ -48,6 +48,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - Coming from another library: getting-started/migrating.md
   - User guide:
       - Data model: guide/data-model.md
       - File I/O: guide/io.md
@@ -92,6 +93,7 @@ nav:
   - Architecture:
       - Overview: architecture/overview.md
       - Binding free energy: architecture/free-energy.md
+      - Performance benchmarks: architecture/benchmarks.md
       - API stability: architecture/api-stability.md
       - Roadmap: architecture/roadmap.md
   - API reference:
