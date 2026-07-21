@@ -387,6 +387,7 @@ class RoseTTAFold(FoldingEngine):
         meta: dict[str, object] = {
             mk.PROVENANCE: Provenance.from_engine(
                 engine="RoseTTAFold",
+                operation="predict",
                 parameters={
                     "repo_dir": self.repo_dir,
                     "python_executable": self.python_executable,

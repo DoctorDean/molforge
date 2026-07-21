@@ -193,6 +193,7 @@ class ESMFold(FoldingEngine):
         version = check_engine_version("transformers", engine="ESMFold", minimum="4.40")
         return Provenance.from_engine(
             engine="ESMFold",
+            operation="predict",
             engine_version=version,
             parameters={
                 "model_name": self.model_name,

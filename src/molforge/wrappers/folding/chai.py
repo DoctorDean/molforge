@@ -304,6 +304,7 @@ class Chai1(FoldingEngine):
             prov_inputs = {"complex_spec": _serialize_spec_for_provenance(spec)}
         return Provenance.from_engine(
             engine="Chai-1",
+            operation="predict",
             engine_version=engine_version("chai_lab"),
             parameters={
                 "device": self.device,

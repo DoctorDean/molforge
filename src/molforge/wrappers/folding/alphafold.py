@@ -225,6 +225,7 @@ class AlphaFold(FoldingEngine):
         # carried inside parameters in a canonical shape.
         prov = Provenance.from_engine(
             engine="AlphaFold",
+            operation="predict",
             parameters={
                 "mode": self.mode,
                 "model_type": self.model_type,

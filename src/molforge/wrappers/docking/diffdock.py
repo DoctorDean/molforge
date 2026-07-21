@@ -199,6 +199,7 @@ class DiffDock(DockingEngine):
         parent = receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
         return Provenance.from_engine(
             engine="DiffDock",
+            operation="dock",
             parameters={
                 "samples_per_complex": self.samples_per_complex,
                 "inference_steps": self.inference_steps,
@@ -422,6 +423,7 @@ class DiffDock(DockingEngine):
         elif receptor_ref is not None or ligand_ref is not None:
             result_metadata[mk.PROVENANCE] = Provenance.from_engine(
                 engine="DiffDock",
+                operation="dock",
                 parameters={
                     "samples_per_complex": self.samples_per_complex,
                     "inference_steps": self.inference_steps,

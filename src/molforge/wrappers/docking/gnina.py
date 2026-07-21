@@ -361,6 +361,7 @@ class Gnina(DockingEngine):
         parent = receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
         return Provenance.from_engine(
             engine="Gnina",
+            operation="dock",
             parameters={
                 "cnn_scoring": self.cnn_scoring,
                 "cnn": self.cnn,

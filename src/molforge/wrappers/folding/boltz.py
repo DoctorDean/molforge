@@ -335,6 +335,7 @@ class Boltz(FoldingEngine):
             prov_inputs = {"complex_spec": _serialize_spec_for_provenance(spec)}
         return Provenance.from_engine(
             engine="Boltz",
+            operation="predict",
             engine_version=engine_version("boltz"),
             parameters={
                 "model_version": self.model_version,

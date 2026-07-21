@@ -247,6 +247,7 @@ class Vina(DockingEngine):
         parent = receptor.metadata.get(mk.PROVENANCE) if isinstance(receptor, Protein) else None
         return Provenance.from_engine(
             engine="Vina",
+            operation="dock",
             parameters={
                 "center": list(center),
                 "box_size": list(box_size),
@@ -451,6 +452,7 @@ class Vina(DockingEngine):
         elif provenance_parameters is not None or provenance_inputs is not None:
             result_metadata[mk.PROVENANCE] = Provenance.from_engine(
                 engine="Vina",
+                operation="dock",
                 parameters=provenance_parameters or {},
                 inputs=provenance_inputs or {},
                 parent=provenance_parent,
