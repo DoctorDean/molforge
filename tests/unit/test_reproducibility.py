@@ -13,9 +13,12 @@ from molforge.core.provenance import Provenance
 from molforge.reproducibility import (
     PipelineManifest,
     PipelineStep,
+    ReplayError,
     emit_pipeline,
     load_pipeline,
     pipeline_manifest,
+    register_replay_handler,
+    replay,
 )
 
 if TYPE_CHECKING:
@@ -172,3 +175,142 @@ def _hide_yaml(monkeypatch: pytest.MonkeyPatch) -> None:
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", _blocked)
+
+
+# ----------------------------------------------------------------------
+# Replay
+# ----------------------------------------------------------------------
+
+
+class _FakeFolder:
+    name = "FakeFold"
+    parallelism = "serial"
+
+    def __init__(self, temperature: float = 1.0) -> None:
+        self.temperature = temperature
+
+    def predict(self, sequence: str, **kwargs: object) -> str:
+        return f"structure({sequence},T={self.temperature})"
+
+
+class _FakeDocker:
+    name = "FakeDock"
+
+    def __init__(self, exhaustiveness: int = 8) -> None:
+        self.exhaustiveness = exhaustiveness
+
+    def dock(self, receptor: object, ligand: object) -> str:
+        return f"poses(rec={receptor},lig={ligand},ex={self.exhaustiveness})"
+
+
+@pytest.fixture
+def registered_fakes():
+    """Register fake fold/dock engines in the plugin registry for a test."""
+    from molforge import plugins
+
+    plugins.register_engine("FakeFold", _FakeFolder)
+    plugins.register_engine("FakeDock", _FakeDocker)
+    yield
+    plugins.clear()
+
+
+def _fold_prov() -> Provenance:
+    return Provenance.from_engine(
+        "FakeFold",
+        operation="predict",
+        parameters={"temperature": 0.5},
+        inputs={"sequence": "MKTV"},
+    )
+
+
+def _fold_dock_prov() -> Provenance:
+    return Provenance.from_engine(
+        "FakeDock",
+        operation="dock",
+        parameters={"exhaustiveness": 16},
+        inputs={"receptor": "model.pdb", "ligand": "aspirin.sdf"},
+        parent=_fold_prov(),
+    )
+
+
+class TestReplay:
+    def test_fold_only(self, registered_fakes) -> None:
+        assert replay(_fold_prov()) == "structure(MKTV,T=0.5)"
+
+    def test_fold_then_dock_threads_output(self, registered_fakes) -> None:
+        # The fold output becomes the dock receptor; ligand from context;
+        # constructor params (temperature, exhaustiveness) reconstructed.
+        out = replay(_fold_dock_prov(), context={"ligand": "CCO"})
+        assert out == "poses(rec=structure(MKTV,T=0.5),lig=CCO,ex=16)"
+
+    def test_ligand_falls_back_to_recorded_literal(self, registered_fakes) -> None:
+        # No context → the recorded ligand identifier is used verbatim.
+        out = replay(_fold_dock_prov())
+        assert "lig=aspirin.sdf" in out
+
+    def test_replay_from_manifest(self, registered_fakes) -> None:
+        manifest = pipeline_manifest(_fold_dock_prov())
+        assert replay(manifest, context={"ligand": "CCO"}).startswith("poses(")
+
+    def test_replay_round_tripped_manifest(self, registered_fakes) -> None:
+        # A manifest that survived to_dict/from_dict still replays.
+        manifest = PipelineManifest.from_dict(pipeline_manifest(_fold_dock_prov()).to_dict())
+        assert replay(manifest, context={"ligand": "CCO"}).startswith("poses(")
+
+    def test_missing_engine_raises(self, registered_fakes) -> None:
+        from molforge import plugins
+
+        plugins.clear()
+        plugins.register_engine("FakeFold", _FakeFolder)  # dock engine absent
+        with pytest.raises(ReplayError, match="no engine registered as 'FakeDock'"):
+            replay(_fold_dock_prov(), context={"ligand": "CCO"})
+
+    def test_missing_operation_raises(self, registered_fakes) -> None:
+        prov = Provenance.from_engine("FakeFold", inputs={"sequence": "MKTV"})
+        with pytest.raises(ReplayError, match="no recorded operation"):
+            replay(prov)
+
+    def test_unregistered_operation_raises(self, registered_fakes) -> None:
+        prov = Provenance.from_engine("FakeFold", operation="teleport", inputs={"sequence": "M"})
+        with pytest.raises(ReplayError, match="no replay handler"):
+            replay(prov)
+
+    def test_missing_input_raises(self, registered_fakes) -> None:
+        prov = Provenance.from_engine("FakeFold", operation="predict", inputs={})
+        with pytest.raises(ReplayError, match="needs a sequence"):
+            replay(prov)
+
+    def test_context_overrides_recorded_input(self, registered_fakes) -> None:
+        out = replay(_fold_prov(), context={"sequence": "AAAA"})
+        assert out == "structure(AAAA,T=0.5)"
+
+    def test_builtin_engines_resolve(self) -> None:
+        from molforge.reproducibility import _resolve_engine
+
+        assert _resolve_engine("ESMFold").__name__ == "ESMFold"
+        assert _resolve_engine("Vina").__name__ == "Vina"
+
+    def test_custom_operation_handler(self, registered_fakes) -> None:
+        from molforge import plugins
+
+        seen = {}
+
+        @register_replay_handler("scan")
+        def _scan(factory, step, upstream, context):  # type: ignore[no-untyped-def]
+            seen["ran"] = True
+            return "scanned"
+
+        plugins.register_engine("Scanner", _FakeFolder)
+        prov = Provenance.from_engine("Scanner", operation="scan", inputs={})
+        assert replay(prov) == "scanned"
+        assert seen["ran"]
+
+
+class TestOperationInManifest:
+    def test_operation_flows_into_step(self) -> None:
+        m = pipeline_manifest(_fold_prov())
+        assert m.steps[0].operation == "predict"
+
+    def test_operation_round_trips(self) -> None:
+        step = PipelineStep(step=1, engine="E", operation="dock")
+        assert PipelineStep.from_dict(step.to_dict()).operation == "dock"
