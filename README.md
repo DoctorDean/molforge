@@ -184,6 +184,27 @@ molforge is inspired by [Protkit](https://github.com/silicogenesis/protkit) (Sil
 
 We welcome contributions. See [`CONTRIBUTING.md`](https://github.com/DoctorDean/molforge/blob/master/CONTRIBUTING.md) and the [Code of Conduct](https://github.com/DoctorDean/molforge/blob/master/CODE_OF_CONDUCT.md) before opening an issue or PR.
 
+## Statement of need
+
+Modern protein science is multi-tool by nature: a single study may fold a
+sequence with one deep-learning model, dock a ligand with another engine,
+relax the complex with molecular dynamics, design new sequences generatively,
+and score the result with a learned potential. Each tool speaks its own
+dialect — different file formats, atom-naming conventions, and notions of what
+"the structure" is — so much of a researcher's time goes into format
+conversion and glue code, and workflows are rarely reproducible end to end.
+
+Biopython, Biotite, MDAnalysis, and RDKit each solve part of this, but none
+offers a single data model spanning the *current* engine landscape —
+deep-learning folding, diffusion docking and design, classical docking, and
+MD — together with the provenance and reproducibility a multi-engine workflow
+needs. `molforge` fills that gap: one canonical `Protein` representation that
+every wrapped engine reads and writes, a from-scratch analysis stack validated
+against independent reference implementations, and first-class provenance that
+emits a citable, re-executable `pipeline.yaml`. It is a library, not a
+framework — plain imports, usable inside Snakemake, Nextflow, a notebook, or a
+shell script.
+
 ## License
 
 MIT — see [`LICENSE`](https://github.com/DoctorDean/molforge/blob/master/LICENSE).
