@@ -10,6 +10,7 @@ covers concrete workflows.
 
 | Task                                                            | Recipe                                                    |
 | --------------------------------------------------------------- | --------------------------------------------------------- |
+| See the whole Identity layer in one script (design → reproduce) | [End to end](end-to-end.md)                               |
 | Predict a structure from a sequence                             | [Fold a sequence](folding.md)                             |
 | Predict a protein + ligand or multi-chain complex               | [Multi-component cofolding](multi-component-folding.md)   |
 | Dock a small molecule against a folded receptor                 | [Fold then dock](folding-then-docking.md)                 |

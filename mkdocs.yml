@@ -61,6 +61,7 @@ nav:
       - Reproducibility: guide/reproducibility.md
   - Cookbook:
       - Overview: cookbook/index.md
+      - "End to end: design → reproduce": cookbook/end-to-end.md
       - Fold a sequence: cookbook/folding.md
       - Multi-component cofolding: cookbook/multi-component-folding.md
       - Fold then dock: cookbook/folding-then-docking.md
