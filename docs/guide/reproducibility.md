@@ -88,14 +88,45 @@ Without it, `to_yaml()` / a `.yaml` `load_pipeline` raise a clear
 manifest back with [`load_pipeline`](../reference/reproducibility.md), which
 picks the format by file suffix.
 
+## Replaying a pipeline
+
+`replay()` re-executes a manifest's chain, threading each step's output into
+the next:
+
+```python
+from molforge.reproducibility import load_pipeline, replay
+
+manifest = load_pipeline("pipeline.yaml")
+result = replay(manifest, context={"ligand": "aspirin.sdf"})
+```
+
+It resolves each step's engine from the registry (molforge's own wrappers,
+plus anything registered under [`molforge.plugins`](plugins.md)),
+reconstructs the call from the recorded parameters, and runs it. Each
+*operation* (`predict`, `dock`, …) has a **replay handler** that owns its
+reconstruction, so the "which recorded input is the previous step's output
+vs. a literal" wiring is handled per operation rather than guessed — a
+docking step's receptor is threaded from the fold that preceded it, its
+ligand comes from `context` or the recorded value.
+
+Register a handler for a custom operation with `register_replay_handler`:
+
+```python
+from molforge.reproducibility import register_replay_handler
+
+@register_replay_handler("my_op")
+def _replay_my_op(engine_factory, step, upstream_output, context):
+    ...
+```
+
+Replay is inherently partial: the engines must be installed, GPU steps need
+the hardware (replay orchestrates, it doesn't provide compute), and inputs
+that aren't literals must be supplied via `context`. A missing engine, an
+operation with no handler, or an unresolvable input raises a clear
+`ReplayError`. molforge ships `predict` and `dock` handlers in v1.
+
 ## What v1 doesn't do
 
-- **No replay.** v1 *emits and inspects* a pipeline; it does not re-execute
-  one. Provenance records the engine and its parameters but not the
-  *operation* (predict vs dock vs generate) or resolvable input objects, so
-  faithful replay needs a provenance-schema extension (an `operation`
-  field) plus an engine registry to map names back to callables. That's the
-  documented next step.
 - **Single output, linear chain.** A manifest describes one output's
   provenance chain (provenance has a single parent pointer). Merging
   several outputs' chains — e.g. an entire `DesignTable` — into one manifest

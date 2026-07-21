@@ -41,13 +41,34 @@ forms need no third-party dependency. Reading and writing the ``.yaml``
 form needs PyYAML — an opt-in extra (``pip install "molforge[repro]"``) so
 molforge's core stays numpy-only.
 
-Scope (v1): **emit and inspect**. Replaying a manifest — re-executing the
-steps — is deliberately out of scope: provenance records the engine and
-its parameters but not the *operation* (predict vs dock vs generate) or
-resolvable input objects, so replay needs a provenance-schema extension and
-an engine registry. That's the documented next step, not part of this
-module. A manifest is also single-output and linear (provenance has one
-parent pointer); merging several outputs' chains is a future extension.
+Replay
+------
+
+:func:`replay` re-executes a manifest's chain, threading each step's output
+into the next::
+
+    from molforge.reproducibility import load_pipeline, replay
+
+    manifest = load_pipeline("pipeline.yaml")
+    output = replay(manifest, context={"ligand": "aspirin.sdf"})
+
+It resolves each step's engine from the registry (molforge's own wrappers
+plus anything under :mod:`molforge.plugins`), reconstructs the call with a
+per-*operation* **replay handler** (``molforge`` ships ``predict`` /
+``dock``), and runs it. Handlers own the reconstruction, so the fragile
+"which recorded input is upstream vs. a literal" wiring is contained per
+operation rather than guessed globally.
+
+Replay is inherently partial: engines must be installed, GPU steps need the
+hardware (replay orchestrates, it doesn't provide compute), and inputs that
+aren't literals (a docking receptor is really the previous step's output; a
+ligand may be a path that no longer exists) come from the previous step or a
+supplied ``context``. An unresolvable input, an unknown engine, or an
+operation with no registered handler raises a clear :class:`ReplayError`.
+Register a handler for a custom operation with :func:`register_replay_handler`.
+
+A manifest is single-output and linear (provenance has one parent pointer);
+merging several outputs' chains is a future extension.
 """
 
 from __future__ import annotations
@@ -63,14 +84,17 @@ from molforge.core.provenance import Provenance
 
 if TYPE_CHECKING:
     import os
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
 __all__ = [
     "PipelineManifest",
     "PipelineStep",
+    "ReplayError",
     "emit_pipeline",
     "load_pipeline",
     "pipeline_manifest",
+    "register_replay_handler",
+    "replay",
 ]
 
 #: On-disk schema version, emitted as the ``molforge_pipeline`` key. Bump
@@ -109,6 +133,8 @@ class PipelineStep:
     Attributes:
         step: 1-indexed position in the pipeline (1 = oldest / originating).
         engine: Producer name (engine name or molforge function path).
+        operation: The engine method that produced the output
+            (``"predict"`` / ``"dock"`` / ...); ``""`` when unrecorded.
         engine_version: Producer version, ``""`` when not exposed.
         timestamp: ISO-8601 UTC time the step ran.
         inputs: Input identifiers (sequence, paths, hashes).
@@ -117,6 +143,7 @@ class PipelineStep:
 
     step: int
     engine: str
+    operation: str = ""
     engine_version: str = ""
     timestamp: str = ""
     inputs: dict[str, Any] = field(default_factory=dict)
@@ -127,6 +154,7 @@ class PipelineStep:
         return {
             "step": self.step,
             "engine": self.engine,
+            "operation": self.operation,
             "engine_version": self.engine_version,
             "timestamp": self.timestamp,
             "inputs": dict(self.inputs),
@@ -141,6 +169,7 @@ class PipelineStep:
         return cls(
             step=int(data["step"]),
             engine=str(data["engine"]),
+            operation=str(data.get("operation", "")),
             engine_version=str(data.get("engine_version", "")),
             timestamp=str(data.get("timestamp", "")),
             inputs=dict(data.get("inputs") or {}),
@@ -258,6 +287,7 @@ def pipeline_manifest(obj: Provenance | object) -> PipelineManifest:
         PipelineStep(
             step=i + 1,
             engine=p.engine,
+            operation=p.operation,
             engine_version=p.engine_version,
             timestamp=p.timestamp,
             inputs=dict(p.inputs),
@@ -381,3 +411,194 @@ def _describe_output(obj: Provenance | object) -> dict[str, Any]:
     if isinstance(name, str) and name:
         out["name"] = name
     return out
+
+
+# ======================================================================
+# Replay
+# ======================================================================
+
+
+class ReplayError(RuntimeError):
+    """Raised when a manifest can't be replayed — a missing engine, an
+    operation with no handler, or an input that can't be resolved."""
+
+
+#: operation name -> handler. A handler reconstructs and runs one step:
+#: ``handler(engine_factory, step, upstream_output, context) -> output``.
+_REPLAY_HANDLERS: dict[str, Callable[..., Any]] = {}
+
+
+def register_replay_handler(
+    operation: str,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator registering a replay handler for ``operation``.
+
+    A handler has the signature ``(engine_factory, step, upstream_output,
+    context) -> output`` — it reconstructs the engine from ``step.parameters``
+    and calls the right method, using ``upstream_output`` (the previous
+    step's result) and ``context`` (user-supplied inputs) as needed::
+
+        @register_replay_handler("dock")
+        def _dock(factory, step, upstream, context): ...
+    """
+
+    def decorator(handler: Callable[..., Any]) -> Callable[..., Any]:
+        _REPLAY_HANDLERS[operation] = handler
+        return handler
+
+    return decorator
+
+
+def replay(
+    source: PipelineManifest | Provenance | object, *, context: dict[str, Any] | None = None
+) -> Any:
+    """Re-execute a pipeline's chain, returning the terminal output.
+
+    Args:
+        source: A :class:`PipelineManifest` (e.g. from :func:`load_pipeline`),
+            a :class:`~molforge.core.provenance.Provenance`, or any output
+            carrying one.
+        context: Objects to resolve recorded inputs that aren't literals —
+            keyed by the input name (``{"ligand": "aspirin.sdf"}``). A step's
+            primary input is threaded from the previous step automatically;
+            ``context`` covers the rest.
+
+    Returns:
+        The output of the final step.
+
+    Raises:
+        ReplayError: If a step has no recorded operation, its engine can't be
+            resolved, no handler is registered for its operation, or a
+            required input can't be resolved.
+    """
+    manifest = source if isinstance(source, PipelineManifest) else pipeline_manifest(source)
+    ctx = context or {}
+    if not manifest.steps:
+        raise ReplayError("manifest has no steps to replay.")
+
+    output: Any = None
+    for step in manifest.steps:  # oldest-first
+        if not step.operation:
+            raise ReplayError(
+                f"step {step.step} ({step.engine}) has no recorded operation, so "
+                "replay can't know which method to call. It predates the operation "
+                "field or was produced by an engine that doesn't record one."
+            )
+        handler = _REPLAY_HANDLERS.get(step.operation)
+        if handler is None:
+            raise ReplayError(
+                f"no replay handler registered for operation {step.operation!r} "
+                f"(step {step.step}, engine {step.engine}). Register one with "
+                "register_replay_handler()."
+            )
+        factory = _resolve_engine(step.engine)
+        output = handler(factory, step, output, ctx)
+    return output
+
+
+# ---------- engine + input resolution ----------
+
+
+def _resolve_engine(name: str) -> Callable[..., Any]:
+    """Resolve an engine name to its factory (class), via the registry."""
+    from molforge import plugins
+
+    _register_builtin_engines()
+    try:
+        return plugins.get("engine", name)  # type: ignore[no-any-return]
+    except KeyError as e:
+        available = plugins.available("engine")
+        raise ReplayError(
+            f"no engine registered as {name!r}; can't replay this step. "
+            f"Registered engines: {sorted(available)}. Install the engine or "
+            "register it via molforge.plugins.register_engine()."
+        ) from e
+
+
+def _register_builtin_engines() -> None:
+    """Register molforge's built-in folding / docking engines by name.
+
+    Idempotent and cheap (importing an engine class doesn't import its heavy
+    deps — those are lazy). Run on every resolve so a cleared registry
+    (e.g. in tests) is repopulated.
+    """
+    from molforge import plugins
+    from molforge.docking import DockingEngine
+    from molforge.wrappers import docking, folding
+    from molforge.wrappers.folding import FoldingEngine
+
+    for module, base in ((folding, FoldingEngine), (docking, DockingEngine)):
+        for attr in getattr(module, "__all__", []):
+            obj = getattr(module, attr, None)
+            if isinstance(obj, type) and issubclass(obj, base) and obj not in (base,):
+                plugins.register_engine(obj.name, obj)
+
+
+def _construct(factory: Callable[..., Any], parameters: dict[str, Any]) -> Any:
+    """Instantiate ``factory`` from recorded parameters.
+
+    Filters ``parameters`` to the constructor's accepted keyword arguments,
+    so call-level parameters recorded in provenance (e.g. Boltz's
+    ``affinity_binder``) don't break construction.
+    """
+    import inspect
+
+    try:
+        accepted = set(inspect.signature(factory).parameters)
+        kwargs = {k: v for k, v in parameters.items() if k in accepted}
+    except (TypeError, ValueError):
+        kwargs = dict(parameters)
+    return factory(**kwargs)
+
+
+def _resolve_input(step: PipelineStep, key: str, context: dict[str, Any], *, what: str) -> Any:
+    """Resolve an input named ``key`` for ``step`` — context first, else the
+    recorded literal (a sequence string, a path). Raises if neither exists."""
+    if key in context:
+        return context[key]
+    if key in step.inputs and step.inputs[key] is not None:
+        return step.inputs[key]
+    raise ReplayError(
+        f"step {step.step} ({step.engine}) needs {what} but it isn't a recorded "
+        f"literal — pass it via context={{{key!r}: ...}}."
+    )
+
+
+# ---------- built-in operation handlers ----------
+
+
+@register_replay_handler("predict")
+def _replay_predict(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a folding ``predict(sequence)`` step. (``upstream`` unused —
+    a fold is a chain root.)"""
+    engine = _construct(factory, step.parameters)
+    sequence = _resolve_input(step, "sequence", context, what="a sequence")
+    return engine.predict(sequence)
+
+
+@register_replay_handler("dock")
+def _replay_dock(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a docking ``dock(receptor, ligand)`` step.
+
+    The receptor is the previous step's output (a folded structure) when
+    there is one; otherwise it must come from ``context``. The ligand comes
+    from ``context`` or the recorded literal.
+    """
+    engine = _construct(factory, step.parameters)
+    receptor = (
+        upstream
+        if upstream is not None
+        else _resolve_input(step, "receptor", context, what="a receptor")
+    )
+    ligand = _resolve_input(step, "ligand", context, what="a ligand")
+    return engine.dock(receptor, ligand)
