@@ -33,17 +33,22 @@ a matrix.
 
 ## Now / Next / Later
 
-- **Now — finish Trust.** The Identity chapter (below) is complete, so the
-  highest-leverage remaining work is the tail of §1: reference-value guards
-  for lDDT / DockQ / the sequence aligners, extending the nightly
-  real-engine CI to Vina and pinning the fragile output-parsing seams, and
-  the lDDT all-atom variant.
-- **Next — depth (§4).** A unified `molforge.scoring` layer (the gap
-  `DesignLoop` had to work around), a rolled-up `validate.report()`, and
-  the `pipeline.yaml` *replay* layer (§3) once provenance records the
-  operation.
+The **Trust** (§1) and **Identity** (§2) chapters are both complete, and the
+depth items that had concrete consumers — `molforge.scoring`,
+`validate.report()`, P2Rank, Boltz-2 affinity, and the `pipeline.yaml`
+*replay* layer — have all shipped.
+
+- **Now — the FEP endeavour.** *Running* (not just ingesting) an FEP/TI
+  calculation is the one large, high-value piece left in §4 — the
+  orchestration that would make molforge genuinely all-encompassing. A real
+  undertaking; everything else in the "Now" horizon is done.
+- **Next — documentation polish.** A performance-benchmarks page and
+  migration guides ("coming from BioPython / Biotite / MDAnalysis"), plus
+  smaller cache/manifest follow-ups (docking + MD-trajectory caches,
+  multi-output manifests).
 - **Later — opportunistic breadth.** More engines, local MSA, ML/data
-  layers, performance work — pulled forward by demand, not by the matrix.
+  layers, enhanced sampling, performance work — pulled forward by demand,
+  not by the matrix.
 
 ## Principles
 
@@ -58,41 +63,40 @@ a matrix.
 
 ---
 
-## 1. Trust & verification  — *Now*
+## 1. Trust & verification  — *Complete*
 
 The dominant risk is not missing features; it's unverified ones. A
 structural-bioinformatics library lives or dies on whether its numbers
-match the literature and its wrappers still drive the real tools.
+match the literature and its wrappers still drive the real tools. This
+chapter is **done**.
 
 - **CI actually runs — done.** The pipeline (lint, strict mypy, the
-  3-OS × 3-Python test matrix, build, notebooks) now triggers on `master`;
-  for a long stretch it silently ran on a non-existent `main` branch and
-  gated nothing. Accumulated lint/format debt was cleared and the ruff
-  version pinned to match pre-commit.
-- **Reference-value guards — started, extend.** The metric fixes were
-  validated against independent oracles (TM-align via `tmtools`, DSSP via
-  `mdtraj`) and those golden values are now committed as fast regression
-  tests on a real structure (ubiquitin). **Still to do:** extend the same
-  treatment to lDDT and DockQ against published reference values, and to
-  the sequence aligners.
-- **Nightly real-engine smoke tests — started, extend.** An opt-in
-  nightly runs the CPU-installable engines against their *real*
-  implementations, not mocks — the paths the per-push suite can't reach.
-  The docking-prep path (RDKit + meeko + gemmi) is live and already
-  earned its keep by exposing a missing runtime dependency. **Still to
-  do:** extend coverage to Vina, and pin/version-check the fragile
-  output-parsing seams (ESMFold's model→PDB conversion; the filename-glob
-  result parsers in Boltz / Chai / DiffDock / ProteinMPNN) that a new
-  engine release could silently break.
-- **Correctness audit — mostly cleared, finish it.** Fixed in 0.6.x:
+  3-OS × 3-Python test matrix, build, notebooks) triggers on `master`; for
+  a long stretch it silently ran on a non-existent `main` branch and gated
+  nothing. Accumulated lint/format debt was cleared and the ruff version
+  pinned to match pre-commit.
+- **Reference-value guards — done.** Golden values computed offline against
+  independent oracles and committed as fast regression tests, now covering
+  **TM-score, GDT, DSSP** (via `tmtools` / `mdtraj`), **DockQ** (vs the
+  reference DockQ package), **lDDT** (vs an independent from-scratch impl +
+  a hand-computed case), and the **Needleman-Wunsch / Smith-Waterman
+  aligners** (vs Biopython).
+- **Nightly real-engine smoke tests — done.** An opt-in nightly runs the
+  CPU-installable engines against their *real* implementations, not mocks —
+  docking-prep (RDKit + meeko + gemmi), **Vina**, and chem descriptors. It
+  earned its keep by exposing a missing runtime dependency (scipy for
+  meeko).
+- **Correctness audit — done.** Fixed across 0.6.x–0.7.0:
   Smith-Waterman affine-gap traceback, PQR charge/radius parsing, DockQ
-  Fnat (now residue-level) and iRMS (robust to missing backbone atoms),
-  DSSP amide-hydrogen geometry (+ B-bridge assignment), TM-score/GDT
-  (now maximized over superpositions, not a single Kabsch fit), the
-  ML featurizer residue-set misalignment, and the thin `chem` descriptor
-  set (logP / TPSA / HBD / HBA / rotatable-bonds / Ro5 via RDKit — now
-  shipped). **Remaining:** the lDDT all-atom variant alongside the
-  current CA-only one.
+  Fnat (residue-level) and iRMS, DSSP amide-hydrogen geometry (+ B-bridge),
+  TM-score/GDT (maximized over superpositions), the ML featurizer residue-
+  set misalignment, the `chem` descriptor set, the **lDDT all-atom
+  variant**, and a **dihedral sign-convention bug** (φ/ψ were negated,
+  breaking Ramachandran classification — caught vs Biopython).
+- **Engine version guards — done.** Wrappers record the installed engine
+  version in provenance and warn non-fatally on drift outside the tested
+  range, so a new engine release that changes an output format is
+  diagnosable.
 
 ## 2. Distinguishing identity  — *Shipped*
 
@@ -111,14 +115,12 @@ built on the now-trustworthy base. **All four shipped:**
   affinity) plus custom callables, genuine round-to-round refinement, and a
   ranked `DesignTable`. Round-0 backbone generation (the `generator` slot,
   e.g. RFdiffusion) is designed-in but deferred.
-- **Reproducibility / `pipeline.yaml` — shipped (emit half).**
-  `molforge.reproducibility.emit_pipeline` linearizes an output's
-  provenance chain into a citable `pipeline.yaml` with a consolidated
-  environment block. The *replay* half is deferred: provenance records the
-  engine and parameters but not the *operation* (predict vs dock vs
-  generate) or resolvable inputs, so replay needs a provenance-schema
-  extension (an `operation` field) plus an engine registry. That's the
-  documented next step (§3).
+- **Reproducibility / `pipeline.yaml` — shipped (emit *and* replay).**
+  `emit_pipeline` linearizes an output's provenance chain into a citable
+  `pipeline.yaml` with a consolidated environment block; `replay`
+  re-executes it, resolving engines from a self-registering registry and
+  reconstructing each step via per-*operation* handlers (`predict` / `dock`
+  ship in v1). Backed by a new `Provenance.operation` field.
 - **Plugin ecosystem — shipped.** `molforge.plugins` is documented, and
   `plugins/example_plugin/` is a complete, CI-verified reference plugin
   (registers a real `FoldingEngine`) that doubles as the copy-paste
@@ -134,17 +136,16 @@ molforge has good *components*; these make chaining them ergonomic.
   (`"serial"` for GPU, `"process"` for CPU / subprocess). Replaced the
   `multiprocessing.Pool` loop every user was writing, and underpins
   `cross_engine_fold` and `DesignLoop`.
-- **`pipeline.yaml` replay — Next.** The deferred half of the
-  reproducibility work (§2): re-executing an emitted manifest. Needs a
-  `Provenance` `operation` field (predict / dock / generate / …) so a step
-  knows *which* engine method to call, plus an engine registry
-  (`molforge.plugins` is the natural home) to resolve names back to
-  callables, and a strategy for resolving recorded inputs to real objects.
+- **`pipeline.yaml` replay — shipped.** Re-executing an emitted manifest,
+  via a `Provenance.operation` field, a self-registering engine registry
+  (`molforge.plugins`), and per-operation replay handlers (`predict` /
+  `dock`). See §2. Follow-ups: handlers for the other operations
+  (generate / pocket-detect / affinity) and multi-output manifests.
 - **Provenance — shipped.** `molforge.core.Provenance`: a frozen
-  dataclass (engine / version / parameters / inputs / recursive parent),
-  JSON-round-trippable, on `metadata[PROVENANCE]`, adopted across every
-  wrapper and the prep pipelines. Optional polish (sidecar persistence,
-  deeper engine-version introspection) is deferred.
+  dataclass (engine / operation / version / parameters / inputs / recursive
+  parent), JSON-round-trippable, on `metadata[PROVENANCE]`, adopted across
+  every wrapper and the prep pipelines. Optional polish (sidecar
+  persistence, deeper engine-version introspection) is deferred.
 - **Caching — shipped.** Content-addressed result cache keyed on
   `(engine, parameters, inputs, parent_chain)` with cascading
   invalidation; folding, sequence design, and free-energy results
@@ -159,26 +160,27 @@ molforge has good *components*; these make chaining them ergonomic.
 
 Deeper, not wider — on the things users actually gate on.
 
-- **Structure-quality validation — shipped.** Clash detection,
-  Ramachandran classification, Cα chirality, and backbone bond-length
-  checks landed in 0.6.0, so folding/docking output can be gated on
-  geometry. A MolProbity-style rolled-up `validate.report(protein)` that
-  combines them into one score is the natural next step.
-- **Binding free energy — shipped.** MM-PB(GB)SA via AmberTools and
-  gmx_MMPBSA (with per-residue decomposition), plus FEP/TI ingestion via
-  alchemlyb and cinnabar network ingestion. Follow-ups: Boltz-2 affinity
-  prediction, and running (not just ingesting) an FEP calculation.
-- **Unified scoring — Next.** A `molforge.scoring` layer exposing docking
-  scorers (Vina, Gnina CNN) and learned scorers (ESM perplexity,
-  ProteinMPNN confidence) as a common interface, so users can score *any*
-  structure with *any* scorer — decoupled from the docking wrappers.
-  `DesignLoop` had to work around its absence (objectives are currently
-  ad-hoc callables), so this now has a concrete consumer waiting.
+- **Structure-quality validation — shipped, incl. the rollup.** Clash
+  detection, Ramachandran, Cα chirality, and backbone bond-length checks,
+  plus a MolProbity-style `validate.report(protein)` that combines them
+  into one `QualityReport` (per-check pass/fail + an all-pass gate + a
+  score) so folding/docking output can be gated on geometry in one call.
+- **Binding free energy — shipped, incl. Boltz-2 affinity.** MM-PB(GB)SA
+  via AmberTools and gmx_MMPBSA (with per-residue decomposition), FEP/TI
+  ingestion via alchemlyb + cinnabar, and **Boltz-2 binding-affinity
+  prediction** (`Boltz.predict_affinity`). **Remaining:** running (not just
+  ingesting) an FEP calculation — the big §4 endeavour.
+- **Unified scoring — shipped.** `molforge.scoring`: a self-describing
+  `Score` with an explicit `Direction`, so docking affinity, folding
+  confidence, and learned scores rank/compare uniformly, plus
+  `ConfidenceScorer` / `DockingScorer` / `FunctionScorer` and `rank` /
+  `best`. Plugs into `DesignLoop` as an objective — the consumer that
+  motivated it.
 - **Enhanced sampling — later.** PLUMED metadynamics, replica exchange,
   MELD. Heavy, but what serious MD users do.
-- **Pocket detection.** fpocket is shipped; P2Rank (the ML-based modern
-  counterpart) is the natural next one when its install path is cleaner —
-  it drops into the same Pocket-dataclass + detector + provenance shape.
+- **Pocket detection — shipped.** fpocket (geometric) and **P2Rank**
+  (ML-based, `detect_pockets_p2rank`) both return the same `Pocket` shape,
+  drop-in alternatives feeding the docking workflow.
 
 ## 5. Engine matrix — *frozen*
 
@@ -217,10 +219,11 @@ Pulled forward by real demand, not pushed.
 
 - **Cookbook + engine comparison tables — shipped.** Task-oriented
   recipes and decision tables live under `docs/cookbook/`.
-- **Performance benchmarks page.** Publish the benchmark-suite numbers so
-  users know what to expect.
-- **Migration guides.** "Coming from BioPython / Biotite / MDAnalysis" —
-  lower the switching cost.
+- **Performance benchmarks page — shipped.** Real numbers from the
+  benchmark suite (RMSD / DSSP / lDDT / alignment on a 200-residue input),
+  with a reproduce-it command, under Architecture.
+- **Migration guides — shipped.** "Coming from BioPython / Biotite /
+  MDAnalysis" with concept-mapping tables, under Getting started.
 
 ---
 
