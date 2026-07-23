@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] 2026-07-23
+
+This release rounds out molforge's reproducibility and scoring story. Pipeline
+manifests are no longer just emitted but **replayed** — a `pipeline.yaml` can be
+re-executed end to end; a unified, direction-aware scoring layer lets
+heterogeneous scorers rank and compare together and plug into the design loop;
+and a single structure-quality report rolls up the geometry checks. It also adds
+two engine capabilities — Boltz-2 binding-affinity prediction and P2Rank ML
+pocket detection. All changes are additive and backwards compatible with 0.7.0,
+**except** a corrected backbone-dihedral sign convention (see Fixed) that changes
+φ/ψ/ω signs and Ramachandran classification.
+
+### Added
+- **Unified, direction-aware scoring — `molforge.scoring`.** Every score carries
+  an explicit `Direction` (`HIGHER_IS_BETTER` / `LOWER_IS_BETTER`) so
+  heterogeneous scorers — docking affinity (lower is better), folding confidence
+  (higher is better), learned potentials — rank and compare on one axis without
+  the caller tracking which way is good. A `Scorer` protocol with built-ins
+  (`DockingScorer`, `ConfidenceScorer`, `FunctionScorer`), a `Score` value type,
+  and `rank` / `best` helpers. A `DesignLoop` now accepts a `Scorer` directly as
+  its objective, so the design loop and the scoring layer share one vocabulary.
+  New subpackage `molforge/scoring/`; reference and guide pages.
+- **Rolled-up structure-quality report — `molforge.validation.report()`.** One
+  call gathers the standalone geometry checks (steric clashes, Ramachandran,
+  backbone bond lengths, Cα chirality) into a single `QualityReport` of
+  `QualityCheck`s — a one-look "is this folded/docked structure physically
+  sane?" gate over the per-check functions shipped in 0.7. New module
+  `validation/quality.py`; guide and cookbook coverage.
+- **Pipeline replay — `molforge.reproducibility.replay()`.** A `pipeline.yaml`
+  manifest is now re-executable, not just inspectable: `replay(manifest)` walks
+  the steps, reconstructs each engine call from its recorded operation and
+  parameters, and re-runs the workflow. Backed by a new `operation` field on
+  `Provenance` (the engine *method* that produced an output — the wrappers now
+  record it), per-operation `register_replay_handler(...)` extensibility, and a
+  `ReplayError` for unresolvable steps. Emit (0.7) → replay (0.8) closes the
+  reproducibility loop.
+- **Boltz-2 binding-affinity prediction — `Boltz.predict_affinity()`.** Predicts
+  a protein-ligand complex *and* its binding affinity in one call, surfacing
+  `affinity_value` (log-scale, lower = stronger), `affinity_probability` (0-1
+  binder likelihood), and the raw affinity JSON on the returned `Protein`.
+  Requires a Boltz-2 engine (`model_version="boltz2"`).
+- **P2Rank ML pocket detection — `detect_pockets_p2rank()`.** A machine-learning
+  (random-forest) ligand-binding-site detector alongside the geometric fpocket,
+  returning `Pocket`s ranked by P2Rank score and feeding straight into the
+  docking workflow. Runs `prank predict` in its own Java process;
+  `P2RankNotInstalledError` when absent. New wrapper
+  `wrappers/pockets/p2rank.py`.
+- **Documentation.** A [benchmarks page](docs/architecture/benchmarks.md) with
+  real measured timings for the analysis stack; a
+  [migration guide](docs/getting-started/migrating.md) mapping BioPython /
+  Biotite / MDAnalysis idioms to molforge; a whole-stack
+  [end-to-end cookbook recipe](docs/cookbook/end-to-end.md) exercising the
+  Identity layer (design → fold → score → reproduce); and a **Getting help**
+  section in `CONTRIBUTING.md` plus a statement-of-need paragraph in the README.
+
+### Fixed
+- **Backbone dihedral sign convention.** `dihedral()` and `dihedrals_batch()`
+  returned the *negation* of the IUPAC convention (verified: molforge ==
+  −`Bio.PDB.calc_dihedral` exactly over hundreds of quartets), so φ/ψ/ω and all
+  Ramachandran classification were sign-flipped — right-handed α-helices read as
+  outliers. Corrected the cross-product order; a reference-value guard now pins
+  the sign against Biopython, and two Ramachandran tests that had encoded the
+  flipped sign were fixed. **Behavior change:** dihedral signs flip and
+  Ramachandran labels change — becoming correct (ubiquitin now reads ~90%
+  favored with a single outlier).
+
 ## [0.7.0] 2026-07-18
 
 This release completes molforge's **Identity** chapter — the engine-agnostic

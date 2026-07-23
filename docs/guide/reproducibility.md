@@ -26,7 +26,7 @@ consolidated environment block:
 molforge_pipeline: 1
 generated: "2026-07-15T12:00:00+00:00"
 environment:
-  molforge_version: "0.7.0"
+  molforge_version: "0.8.0"
   python_version: "3.12.13"
   platform: "macOS-14.3-arm64"
   engines: {ESMFold: "1.0.3", Vina: "1.2.5"}
@@ -54,7 +54,7 @@ from molforge.reproducibility import pipeline_manifest
 
 m = pipeline_manifest(docked)
 print(m.describe())
-# pipeline (2 steps) — molforge 0.7.0
+# pipeline (2 steps) — molforge 0.8.0
 #   1. ESMFold v1.0.3
 #   2. Vina v1.2.5
 
