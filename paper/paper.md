@@ -15,7 +15,7 @@ authors:
 affiliations:
   - name: "Independent, South Africa"
     index: 1
-date: 1 August 2026                  # TODO: submission date
+date: 23 July 2026
 bibliography: paper.bib
 ---
 
