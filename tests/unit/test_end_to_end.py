@@ -114,10 +114,12 @@ class TestIdentityStackComposes:
         assert ensemble.disagreement().shape[0] == len(best.sequence)
         assert {"tm_mean", "rmsd_mean"} <= set(ensemble.spread())
 
-        # 5. Reproducibility — emit a manifest, then replay it.
+        # 5. Reproducibility — emit a manifest, then replay it. Use the JSON
+        #    form so this stays runnable without the optional ``repro`` (PyYAML)
+        #    extra; the YAML serialization is covered in test_reproducibility.py.
         assert best.structure is not None
-        path = tmp_path / "pipeline.yaml"
-        emit_pipeline(best.structure, path)
+        path = tmp_path / "pipeline.json"
+        emit_pipeline(best.structure, path, fmt="json")
         manifest = load_pipeline(path)
         assert len(manifest) >= 1
         assert all(s.operation == "predict" for s in manifest)
