@@ -96,6 +96,7 @@ nav:
       - Binding free energy: architecture/free-energy.md
       - Performance benchmarks: architecture/benchmarks.md
       - API stability: architecture/api-stability.md
+      - Longevity & maintenance: architecture/longevity.md
       - Roadmap: architecture/roadmap.md
   - API reference:
       - molforge.core: reference/core.md
