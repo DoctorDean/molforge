@@ -120,13 +120,15 @@ good = [m for m in ligands if is_valid(m)]
 
 `unique` removes structural duplicates, keeping the first occurrence so
 input order is preserved. It compares on InChIKey by default (or
-`key="smiles"`):
+`key="smiles"`, or `key="scaffold"` to keep one molecule per chemical
+series — see [Group by scaffold](#group-by-scaffold)):
 
 ```python
 from molforge.chem import unique
 
 distinct = unique(good)                    # by InChIKey
 distinct = unique(good, key="smiles")      # or by canonical SMILES
+one_per_series = unique(good, key="scaffold")   # or by Bemis-Murcko scaffold
 ```
 
 # The MoleculeDataset pipeline
@@ -161,7 +163,8 @@ The combinators:
 - `valid()` keeps only molecules that sanitize cleanly.
 - `dedup(key="inchikey")` drops structural duplicates, streaming with a
   running set of seen identities — only the identities, not the
-  molecules, stay in memory.
+  molecules, stay in memory. `key="scaffold"` dedups by chemical series
+  instead of exact structure.
 - `filter(criterion)` keeps molecules whose descriptors satisfy a
   criterion (next section).
 - `take(n)` keeps the first `n`; it short-circuits, so it's safe over an
@@ -214,6 +217,73 @@ sorted(DESCRIPTOR_NAMES)
 `n_atoms` counts the atoms actually in the graph, so for a freshly parsed
 molecule it matches `n_heavy_atoms`; it only rises above the heavy-atom
 count once hydrogens are made explicit.
+
+# Group by scaffold
+
+A library's chemistry is often better described by its **scaffolds** than
+by its individual structures. `murcko_scaffold` reduces a molecule to its
+Bemis-Murcko scaffold — the ring systems plus the linkers between them,
+side chains stripped — and returns it as a `Molecule`, so it composes with
+everything above:
+
+```python
+from molforge.chem import murcko_scaffold
+
+murcko_scaffold(aspirin).smiles          # 'c1ccccc1'
+aspirin.scaffold_smiles                  # 'c1ccccc1' — the same, as a key
+```
+
+`generic=True` gives the *framework* instead: every atom becomes a carbon
+and every bond a single bond, so scaffolds that differ only in their
+heteroatoms collapse together — benzene and pyridine share one generic
+frame. Use it when you want topology-level grouping rather than
+element-level:
+
+```python
+murcko_scaffold(nicotinamide).smiles                  # 'c1ccncc1'
+murcko_scaffold(nicotinamide, generic=True).smiles    # 'C1CCCCC1'
+```
+
+To group a whole set, `group_by_scaffold` returns
+`{scaffold_smiles: [molecules]}` — keys in first-seen order, each list in
+dataset order:
+
+```python
+from molforge.chem import MoleculeDataset, standardize
+
+groups = (
+    MoleculeDataset(read_molecules("vendor_library.sdf"))
+    .map(standardize)
+    .valid()
+    .group_by_scaffold()
+)
+
+len(groups)                                    # how many distinct series
+max(groups.values(), key=len)                  # the biggest series
+sorted(groups, key=lambda s: -len(groups[s]))[:5]   # the top five scaffolds
+```
+
+Unlike the combinators above, `group_by_scaffold` is a **terminal**
+operation like `collect` — grouping can't know a scaffold is complete
+until the stream ends, so it consumes the dataset. When you only need one
+representative per series and want to stay lazy, use
+`dedup(key="scaffold")` instead:
+
+```python
+representatives = (
+    MoleculeDataset(ligands).map(standardize).dedup(key="scaffold").collect()
+)
+```
+
+Two things worth knowing before you rely on scaffold keys:
+
+- **Acyclic molecules have no scaffold.** That's Bemis-Murcko's own
+  convention, so they come back as an empty molecule (`n_atoms == 0`,
+  `smiles == ""`) and all share the `""` group. Filter them out first if a
+  bucket of unrelated acyclics would mislead you.
+- **Standardize first.** A salt and its parent, or two tautomers, can
+  otherwise land in different groups for reasons that have nothing to do
+  with their scaffolds.
 
 # Stream a library larger than memory
 

@@ -4,9 +4,9 @@ Ingestion and standardization produce molecules; before scoring, docking,
 or training you usually want to keep only the ones that are chemically
 sound and drop repeats. :func:`is_valid` reports whether a molecule passes
 RDKit sanitization, and :func:`unique` removes duplicates by structural
-identity (InChIKey or SMILES), keeping the first occurrence so input order
-is preserved. Both are RDKit-backed (via :mod:`molforge.core._rdkit`) and
-lazy — calling one without RDKit raises
+identity (InChIKey, SMILES, or Bemis-Murcko scaffold), keeping the first
+occurrence so input order is preserved. Both are RDKit-backed (via
+:mod:`molforge.core._rdkit`) and lazy — calling one without RDKit raises
 :class:`~molforge.core.RDKitNotInstalledError`.
 """
 
@@ -17,12 +17,21 @@ from typing import TYPE_CHECKING
 from molforge.core import Molecule, _rdkit
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
 __all__ = [
     "is_valid",
     "unique",
 ]
+
+#: How each ``key`` turns a molecule into the string identity dedup compares
+#: on. ``"scaffold"`` collapses a whole chemical series to one representative,
+#: where the two structural keys only collapse exact repeats.
+_IDENTITIES: dict[str, Callable[[Molecule], str]] = {
+    "inchikey": lambda m: m.inchikey,
+    "scaffold": lambda m: m.scaffold_smiles,
+    "smiles": lambda m: m.smiles,
+}
 
 
 def is_valid(molecule: Molecule) -> bool:
@@ -51,16 +60,20 @@ def unique(molecules: Iterable[Molecule], *, key: str = "inchikey") -> list[Mole
     Args:
         molecules: The molecules to deduplicate.
         key: Which identity to compare on — ``"inchikey"`` (the default, a
-            stable structural hash) or ``"smiles"`` (canonical isomeric
-            SMILES). InChIKey is the safer default; SMILES is there for when
-            InChI generation is unavailable or undesirable.
+            stable structural hash), ``"smiles"`` (canonical isomeric
+            SMILES), or ``"scaffold"`` (Bemis-Murcko scaffold SMILES).
+            InChIKey is the safer default; SMILES is there for when InChI
+            generation is unavailable or undesirable. ``"scaffold"`` dedups
+            at the level of the *chemical series* rather than the exact
+            structure — one representative per scaffold — and treats all
+            acyclic molecules as a single (empty) scaffold.
 
     Returns:
         A new list with duplicates removed, preserving input order and
         keeping the first molecule of each identity.
 
     Raises:
-        ValueError: If ``key`` is neither ``"inchikey"`` nor ``"smiles"``.
+        ValueError: If ``key`` isn't one of the supported identities.
         RDKitNotInstalledError: If RDKit isn't installed.
     """
     _check_key(key)
@@ -69,8 +82,9 @@ def unique(molecules: Iterable[Molecule], *, key: str = "inchikey") -> list[Mole
 
 def _check_key(key: str) -> None:
     """Validate a dedup ``key``, raising ``ValueError`` if unsupported."""
-    if key not in ("inchikey", "smiles"):
-        raise ValueError(f"key must be 'inchikey' or 'smiles', got {key!r}")
+    if key not in _IDENTITIES:
+        options = ", ".join(repr(k) for k in sorted(_IDENTITIES))
+        raise ValueError(f"key must be one of {options}, got {key!r}")
 
 
 def _iter_unique(molecules: Iterable[Molecule], *, key: str) -> Iterator[Molecule]:
@@ -80,9 +94,10 @@ def _iter_unique(molecules: Iterable[Molecule], *, key: str) -> Iterator[Molecul
     :meth:`molforge.chem.MoleculeDataset.dedup` — keeps the first occurrence
     of each identity, holding only the set of seen identities in memory.
     """
+    identity_of = _IDENTITIES[key]
     seen: set[str] = set()
     for molecule in molecules:
-        identity = molecule.inchikey if key == "inchikey" else molecule.smiles
+        identity = identity_of(molecule)
         if identity in seen:
             continue
         seen.add(identity)

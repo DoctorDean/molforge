@@ -2,8 +2,8 @@
 
 These don't require the ``boltz`` CLI to be installed. They exercise
 construction, lazy CLI detection, sequence validation, YAML input
-construction, command-line assembly, output collection, and CIF →
-Protein post-processing in isolation.
+construction, command-line assembly, seed handling, output collection,
+and CIF → Protein post-processing in isolation.
 
 End-to-end folding against the real engine is gated on the ``boltz``
 CLI being on $PATH and is marked ``@pytest.mark.slow``.
@@ -39,6 +39,7 @@ class TestConstruction:
         assert engine.recycling_steps is None
         assert engine.diffusion_samples is None
         assert engine.sampling_steps is None
+        assert engine.seed is None
         assert engine.device is None
         assert engine.executable is None
         assert engine.cache_dir is None
@@ -50,6 +51,7 @@ class TestConstruction:
             recycling_steps=5,
             diffusion_samples=3,
             sampling_steps=50,
+            seed=42,
             device="cpu",
             executable="/opt/boltz/bin/boltz",
             cache_dir="/tmp/my-boltz",
@@ -59,6 +61,7 @@ class TestConstruction:
         assert engine.recycling_steps == 5
         assert engine.diffusion_samples == 3
         assert engine.sampling_steps == 50
+        assert engine.seed == 42
         assert engine.device == "cpu"
         assert engine.executable == "/opt/boltz/bin/boltz"
         assert engine.cache_dir == "/tmp/my-boltz"
@@ -66,6 +69,15 @@ class TestConstruction:
     def test_invalid_model_version_raises(self) -> None:
         with pytest.raises(ValueError, match="model_version must be"):
             Boltz(model_version="boltz3")
+
+    def test_seed_zero_is_kept(self) -> None:
+        """0 is a legitimate seed, not a stand-in for "unseeded"."""
+        assert Boltz(seed=0).seed == 0
+
+    @pytest.mark.parametrize("bad", ["42", 4.2, True, [1]])
+    def test_non_int_seed_rejected(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="seed must be an int or None"):
+            Boltz(seed=bad)
 
     def test_construction_does_not_invoke_cli(self) -> None:
         """Construction must not shell out to the boltz binary."""
@@ -242,11 +254,185 @@ class TestCommandConstruction:
         cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--accelerator" not in cmd
 
+    def test_seed_passed_when_set(self, tmp_path: Path) -> None:
+        engine = Boltz(seed=42)
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--seed" in cmd
+        assert cmd[cmd.index("--seed") + 1] == "42"
+
+    def test_seed_absent_when_unset(self, tmp_path: Path) -> None:
+        """An unseeded engine leaves --seed off so boltz keeps its own default."""
+        cmd = Boltz()._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--seed" not in cmd
+
+    def test_seed_zero_passed(self, tmp_path: Path) -> None:
+        cmd = Boltz(seed=0)._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert cmd[cmd.index("--seed") + 1] == "0"
+
+    def test_per_call_seed_overrides_constructor(self, tmp_path: Path) -> None:
+        engine = Boltz(seed=1)
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o", seed=7)
+        assert cmd[cmd.index("--seed") + 1] == "7"
+        assert engine.seed == 1  # the engine itself is unchanged
+
+    def test_per_call_seed_on_unseeded_engine(self, tmp_path: Path) -> None:
+        cmd = Boltz()._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o", seed=7)
+        assert cmd[cmd.index("--seed") + 1] == "7"
+
     def test_override_flag_present(self, tmp_path: Path) -> None:
         """We always pass --override since we're working in a tempdir."""
         engine = Boltz()
         cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--override" in cmd
+
+
+# ----------------------------------------------------------------------
+# Per-call options (seed) and unknown-keyword rejection
+# ----------------------------------------------------------------------
+
+
+class TestPerCallOptions:
+    """``seed`` is honoured per call; anything else raises.
+
+    The methods take ``**kwargs``, which used to swallow everything — so a
+    ``predict(seq, seed=7)`` ran unseeded while looking reproducible. These
+    all run without the boltz CLI: rejection happens before the binary is
+    looked up.
+    """
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKTVRQ", ligand_smiles="CCO")
+
+    def test_resolve_returns_constructor_seed_by_default(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({}, method="predict") == 3
+
+    def test_resolve_returns_none_when_unseeded(self) -> None:
+        assert Boltz()._resolve_call_seed({}, method="predict") is None
+
+    def test_per_call_seed_wins(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({"seed": 9}, method="predict") == 9
+
+    def test_per_call_none_inherits_constructor_seed(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({"seed": None}, method="predict") == 3
+
+    def test_per_call_seed_zero_wins(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({"seed": 0}, method="predict") == 0
+
+    def test_per_call_non_int_seed_rejected(self) -> None:
+        with pytest.raises(TypeError, match="seed must be an int or None"):
+            Boltz()._resolve_call_seed({"seed": "7"}, method="predict")
+
+    def test_unknown_kwarg_rejected(self) -> None:
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            Boltz()._resolve_call_seed({"temperature": 0.5}, method="predict")
+
+    def test_rejection_names_the_offender_and_the_supported_option(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Boltz()._resolve_call_seed({"sed": 1}, method="predict")
+        message = str(excinfo.value)
+        assert "Boltz.predict()" in message
+        assert "'sed'" in message
+        assert "'seed'" in message  # points at what the caller probably meant
+
+    def test_all_unknown_kwargs_reported(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Boltz()._resolve_call_seed({"a": 1, "b": 2}, method="predict")
+        assert "'a', 'b'" in str(excinfo.value)
+
+    def test_predict_rejects_unknown_kwarg_without_cli(self) -> None:
+        """Fails on the keyword, not on the missing boltz binary."""
+        with patch("shutil.which", return_value=None), pytest.raises(TypeError, match="'nsamples'"):
+            Boltz().predict("MKTVRQ", nsamples=3)
+
+    def test_predict_complex_rejects_unknown_kwarg(self) -> None:
+        with patch("shutil.which", return_value=None), pytest.raises(TypeError, match="'device'"):
+            Boltz().predict_complex(self._spec(), device="cpu")
+
+    def test_predict_affinity_rejects_unknown_kwarg(self) -> None:
+        with patch("shutil.which", return_value=None), pytest.raises(TypeError, match="'binder'"):
+            Boltz(model_version="boltz2").predict_affinity(self._spec(), binder="B")
+
+    def test_predict_many_forwards_seed(self) -> None:
+        """The inherited batch loop passes per-call options through."""
+        engine = Boltz()
+        seen: list[object] = []
+        with patch.object(
+            Boltz, "predict", side_effect=lambda _seq, **kw: seen.append(kw.get("seed"))
+        ):
+            engine.predict_many(["MK", "AG"], seed=5)
+        assert seen == [5, 5]
+
+    def test_per_call_seed_reaches_the_invoked_command(self) -> None:
+        """The whole path, not just the seams: predict(seq, seed=...) must
+        end up as ``--seed`` on the command line boltz is actually run with."""
+        engine = Boltz(seed=1, use_msa_server=False)
+        commands: list[list[str]] = []
+        with (
+            patch.object(Boltz, "_require_boltz", return_value="/bin/boltz"),
+            patch.object(Boltz, "_invoke", side_effect=lambda cmd, **_: commands.append(cmd)),
+            patch.object(Boltz, "_collect_outputs", return_value=(_TINY_CIF, {})),
+        ):
+            engine.predict("AG", seed=7)
+            engine.predict("AG")  # falls back to the constructor's seed
+
+        assert commands[0][commands[0].index("--seed") + 1] == "7"
+        assert commands[1][commands[1].index("--seed") + 1] == "1"
+
+
+# ----------------------------------------------------------------------
+# Provenance / caching of the seed
+# ----------------------------------------------------------------------
+
+
+class TestSeedProvenance:
+    """The seed must reach provenance: it is part of "how was this made",
+    and therefore part of the cache key and of a replayed manifest."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def test_constructor_seed_recorded(self) -> None:
+        prov = Boltz(seed=42)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["seed"] == 42
+
+    def test_unseeded_records_none(self) -> None:
+        prov = Boltz()._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["seed"] is None
+
+    def test_per_call_seed_recorded(self) -> None:
+        prov = Boltz(seed=1)._build_provenance(self._spec(), single_sequence="MKTVRQ", seed=9)
+        assert prov.parameters["seed"] == 9
+
+    def test_different_seeds_do_not_share_a_cache_entry(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        keys = {
+            cache_key(Boltz(seed=s)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for s in (1, 2, None)
+        }
+        assert len(keys) == 3
+
+    def test_same_seed_gives_the_same_cache_key(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        first = cache_key(Boltz(seed=7)._build_provenance(spec, single_sequence="MKTVRQ"))
+        second = cache_key(Boltz(seed=7)._build_provenance(spec, single_sequence="MKTVRQ"))
+        assert first == second
+
+    def test_replay_can_reconstruct_a_seeded_engine(self) -> None:
+        """``seed`` is a constructor argument, so replay rebuilds the engine
+        with it — the point of recording it in the first place."""
+        from molforge.reproducibility import _construct
+
+        prov = Boltz(seed=42)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        engine = _construct(Boltz, dict(prov.parameters))
+        assert engine.seed == 42
 
 
 # ----------------------------------------------------------------------

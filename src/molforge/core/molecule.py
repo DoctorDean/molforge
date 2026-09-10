@@ -256,6 +256,23 @@ class Molecule:
         return _rdkit.formula(self._mol)
 
     @property
+    def scaffold_smiles(self) -> str:
+        """Canonical SMILES of the molecule's Bemis-Murcko scaffold.
+
+        The scaffold is the molecule's ring systems plus the linkers between
+        them, with side chains stripped — the identity that scaffold-level
+        grouping and deduplication compare on (see
+        :meth:`molforge.chem.MoleculeDataset.group_by_scaffold` and
+        ``dedup(key="scaffold")``). An acyclic molecule has no scaffold and
+        gives ``""``.
+
+        For the scaffold as a :class:`Molecule` — or for the element- and
+        bond-order-agnostic generic framework — use
+        :func:`molforge.chem.murcko_scaffold`.
+        """
+        return _rdkit.to_smiles(_rdkit.murcko_scaffold(self._mol))
+
+    @property
     def molecular_weight(self) -> float:
         """Average molecular weight in g/mol."""
         return _rdkit.molecular_weight(self._mol)
