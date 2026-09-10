@@ -61,7 +61,15 @@ from molforge.wrappers.folding._base import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from molforge.core import Protein
+
+#: The only keywords the public predict methods accept per call. Anything
+#: else is a caller mistake — and a silently dropped ``seed=`` is the worst
+#: kind, since the run looks reproducible and isn't — so unknown keywords
+#: raise instead of being swallowed.
+_PER_CALL_OPTIONS = frozenset({"seed"})
 
 
 class Boltz(FoldingEngine):
@@ -83,6 +91,17 @@ class Boltz(FoldingEngine):
             Higher = more thorough sampling, slower.
         sampling_steps: Number of diffusion sampling steps. Default
             ``None`` uses Boltz's own (200 for boltz1, 30 for boltz2).
+        seed: Seed for Boltz's random number generator, passed through as
+            ``--seed`` so diffusion sampling is reproducible — the same
+            spec, engine settings, and seed give the same structure.
+            ``None`` (default) leaves Boltz unseeded, matching the CLI.
+            The seed is recorded in the returned structure's provenance
+            (and so is part of the cache key). Note: as with any
+            GPU-accelerated sampler, exact bit-for-bit reproducibility
+            also depends on device and non-determinism settings; small
+            numerical drift across machines is expected.
+            Can be overridden per call, e.g. ``predict(seq, seed=7)``,
+            which is the cheap way to draw a seeded ensemble.
         device: Which device to use. Default ``None`` lets Boltz
             auto-detect (CUDA → CPU fallback). Pass ``"cpu"`` to
             force CPU even when a GPU is present.
@@ -113,6 +132,7 @@ class Boltz(FoldingEngine):
         recycling_steps: int | None = None,
         diffusion_samples: int | None = None,
         sampling_steps: int | None = None,
+        seed: int | None = None,
         device: str | None = None,
         executable: str | None = None,
         cache_dir: str | None = None,
@@ -124,6 +144,7 @@ class Boltz(FoldingEngine):
         self.recycling_steps = recycling_steps
         self.diffusion_samples = diffusion_samples
         self.sampling_steps = sampling_steps
+        self.seed = _validate_seed(seed)
         self.device = device
         self.executable = executable
         self.cache_dir = cache_dir
@@ -136,7 +157,10 @@ class Boltz(FoldingEngine):
 
         Args:
             sequence: One-letter amino-acid sequence.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: Per-call options. Only ``seed`` is accepted — an
+                ``int`` (or ``None``) overriding the constructor's ``seed``
+                for this call. Any other keyword raises :class:`TypeError`
+                rather than being silently ignored.
 
         Returns:
             A :class:`Protein` with:
@@ -157,14 +181,16 @@ class Boltz(FoldingEngine):
                 on ``$PATH`` (or at the configured ``executable``).
             RuntimeError: If the CLI runs but produces no output, or
                 its output can't be parsed.
+            TypeError: If an unsupported keyword argument is passed.
         """
+        seed = self._resolve_call_seed(kwargs, method="predict")
         sequence = _validate_sequence(sequence)
         # Delegate to the spec-based code path with a single-entity
         # spec. This keeps the multi-component machinery as the one
         # canonical implementation — single-sequence is just a
         # degenerate special case.
         spec = ComplexSpec.from_protein(sequence)
-        return self._predict_spec(spec, single_sequence=sequence)
+        return self._predict_spec(spec, single_sequence=sequence, seed=seed)
 
     def predict_complex(self, spec: ComplexSpec, **kwargs: object) -> Protein:
         """Fold a multi-component complex via the boltz CLI.
@@ -181,7 +207,10 @@ class Boltz(FoldingEngine):
                 its ``atom_array`` per polymer entity (or per copy,
                 for homo-oligomers). Ligand atoms appear as
                 hetero-atoms with chain IDs assigned by the spec.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: Per-call options. Only ``seed`` is accepted — an
+                ``int`` (or ``None``) overriding the constructor's ``seed``
+                for this call. Any other keyword raises :class:`TypeError`
+                rather than being silently ignored.
 
         Returns:
             A :class:`Protein` with multi-chain ``atom_array`` and
@@ -197,6 +226,7 @@ class Boltz(FoldingEngine):
                 isn't installed.
             RuntimeError: If the CLI runs but produces no parseable
                 output.
+            TypeError: If an unsupported keyword argument is passed.
 
         Examples:
             Protein-ligand complex::
@@ -212,7 +242,8 @@ class Boltz(FoldingEngine):
                 # complex_struct.atom_array has chain A (protein) and
                 # chain B (ligand atoms).
         """
-        return self._predict_spec(spec, single_sequence=None)
+        seed = self._resolve_call_seed(kwargs, method="predict_complex")
+        return self._predict_spec(spec, single_sequence=None, seed=seed)
 
     def predict_affinity(self, spec: ComplexSpec, **kwargs: object) -> Protein:
         """Predict a protein-ligand complex *and its binding affinity* (Boltz-2).
@@ -227,7 +258,10 @@ class Boltz(FoldingEngine):
                 the binder whose affinity is predicted — plus at least one
                 protein chain. Build it with
                 :meth:`ComplexSpec.protein_ligand`.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: Per-call options. Only ``seed`` is accepted — an
+                ``int`` (or ``None``) overriding the constructor's ``seed``
+                for this call. Any other keyword raises :class:`TypeError`
+                rather than being silently ignored.
 
         Returns:
             The folded complex as a :class:`Protein` whose ``metadata`` adds,
@@ -241,24 +275,50 @@ class Boltz(FoldingEngine):
             ValueError: If this engine wasn't constructed with
                 ``model_version="boltz2"`` (affinity is a Boltz-2 feature),
                 or ``spec`` doesn't have exactly one ligand entity.
+            TypeError: If an unsupported keyword argument is passed.
         """
+        seed = self._resolve_call_seed(kwargs, method="predict_affinity")
         if self.model_version != "boltz2":
             raise ValueError(
                 "affinity prediction requires Boltz-2; construct the engine with "
                 f'Boltz(model_version="boltz2"). Got {self.model_version!r}.'
             )
         binder = _single_ligand_chain_id(spec)
-        return self._predict_spec(spec, single_sequence=None, affinity_binder=binder)
+        return self._predict_spec(spec, single_sequence=None, affinity_binder=binder, seed=seed)
 
     # ------------------------------------------------------------------
     # Local-execution path (testable seam)
     # ------------------------------------------------------------------
+    def _resolve_call_seed(self, kwargs: Mapping[str, object], *, method: str) -> int | None:
+        """Validate a call's keywords and return the seed it should run with.
+
+        A per-call ``seed=`` wins over the constructor's; absent (or
+        ``None``) means "use the engine's". Unrecognized keywords raise
+        rather than being dropped — a swallowed ``seed=`` is how a run that
+        looks reproducible quietly isn't.
+        """
+        unknown = sorted(k for k in kwargs if k not in _PER_CALL_OPTIONS)
+        if unknown:
+            unknown_list = ", ".join(repr(k) for k in unknown)
+            supported = ", ".join(repr(k) for k in sorted(_PER_CALL_OPTIONS))
+            raise TypeError(
+                f"Boltz.{method}() got unexpected keyword argument(s) {unknown_list}. "
+                f"Supported per-call option(s): {supported}; everything else is set on "
+                f"the constructor, e.g. Boltz(diffusion_samples=3)."
+            )
+        return self._seed_for(_validate_seed(kwargs.get("seed")))
+
+    def _seed_for(self, seed: int | None) -> int | None:
+        """The effective seed: an explicit per-call value, else the engine's."""
+        return self.seed if seed is None else seed
+
     def _predict_spec(
         self,
         spec: ComplexSpec,
         *,
         single_sequence: str | None,
         affinity_binder: str | None = None,
+        seed: int | None = None,
     ) -> Protein:
         """The shared spec-based execution path.
 
@@ -272,7 +332,7 @@ class Boltz(FoldingEngine):
         # Cache lookup. Build the Provenance upfront so we can
         # check the cache *before* spawning the boltz subprocess.
         provenance = self._build_provenance(
-            spec, single_sequence=single_sequence, affinity_binder=affinity_binder
+            spec, single_sequence=single_sequence, affinity_binder=affinity_binder, seed=seed
         )
         cache = get_default_cache()
         cached: Protein | None = cache.get(provenance, "protein")
@@ -292,7 +352,7 @@ class Boltz(FoldingEngine):
                 encoding="utf-8",
             )
 
-            cmd = self._build_command(binary, input_yaml, output_dir)
+            cmd = self._build_command(binary, input_yaml, output_dir, seed=seed)
             env = self._build_env()
             self._invoke(cmd, env=env)
 
@@ -318,6 +378,7 @@ class Boltz(FoldingEngine):
         *,
         single_sequence: str | None,
         affinity_binder: str | None = None,
+        seed: int | None = None,
     ) -> Provenance:
         """Construct the Provenance for a predict / predict_complex /
         predict_affinity call.
@@ -326,7 +387,10 @@ class Boltz(FoldingEngine):
         can build it upfront for cache lookup. Pure function of inputs
         + constructor parameters — does not touch the boltz CLI. The
         ``affinity_binder`` is recorded in the parameters so an affinity
-        run doesn't collide with a plain fold in the cache.
+        run doesn't collide with a plain fold in the cache; ``seed`` is
+        recorded for the same reason (two seeds are two different runs)
+        and so a replayed manifest re-runs with the seed it was folded
+        with. ``seed=None`` falls back to the engine's own.
         """
         prov_inputs: dict[str, object]
         if single_sequence is not None:
@@ -343,6 +407,7 @@ class Boltz(FoldingEngine):
                 "recycling_steps": self.recycling_steps,
                 "diffusion_samples": self.diffusion_samples,
                 "sampling_steps": self.sampling_steps,
+                "seed": self._seed_for(seed),
                 "device": self.device,
                 "affinity_binder": affinity_binder,
             },
@@ -357,7 +422,9 @@ class Boltz(FoldingEngine):
         :meth:`_predict_spec` instead.
         """
         sequence = _validate_sequence(sequence)
-        return self._predict_spec(ComplexSpec.from_protein(sequence), single_sequence=sequence)
+        return self._predict_spec(
+            ComplexSpec.from_protein(sequence), single_sequence=sequence, seed=self.seed
+        )
 
     # ------------------------------------------------------------------
     # Process plumbing (each step a testable seam)
@@ -436,8 +503,19 @@ class Boltz(FoldingEngine):
         binary: str,
         input_path: Path,
         output_dir: Path,
+        *,
+        seed: int | None = None,
     ) -> list[str]:
-        """Assemble the ``boltz predict ...`` command line."""
+        """Assemble the ``boltz predict ...`` command line.
+
+        Args:
+            binary: The resolved ``boltz`` executable.
+            input_path: The YAML spec written for this call.
+            output_dir: Where Boltz should write its output.
+            seed: Seed for this call; ``None`` falls back to the engine's
+                ``seed``, and an unseeded engine omits ``--seed`` so Boltz
+                keeps its own (unseeded) default.
+        """
         cmd: list[str] = [
             binary,
             "predict",
@@ -460,6 +538,9 @@ class Boltz(FoldingEngine):
             cmd.extend(["--diffusion_samples", str(self.diffusion_samples)])
         if self.sampling_steps is not None:
             cmd.extend(["--sampling_steps", str(self.sampling_steps)])
+        effective_seed = self._seed_for(seed)
+        if effective_seed is not None:
+            cmd.extend(["--seed", str(effective_seed)])
         if self.device == "cpu":
             cmd.extend(["--accelerator", "cpu"])
         elif self.device is not None and self.device.startswith("cuda"):
@@ -675,6 +756,20 @@ def _affinity_value(affinity_json: dict[str, Any]) -> float | None:
 def _affinity_probability(affinity_json: dict[str, Any]) -> float | None:
     """Boltz-2's ``affinity_probability_binary`` (probability of being a binder)."""
     return _maybe_float(affinity_json.get("affinity_probability_binary"))
+
+
+def _validate_seed(seed: object) -> int | None:
+    """Check a user-supplied seed is an ``int`` (or ``None``).
+
+    Typed on the constructor, but checked at runtime too: a seed arriving as
+    a string from a config file, or as a stray ``bool``, would otherwise sail
+    into the command line and be rejected by the CLI several minutes later.
+    """
+    if seed is None:
+        return None
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise TypeError(f"seed must be an int or None, got {type(seed).__name__}: {seed!r}")
+    return seed
 
 
 def _maybe_float(value: object) -> float | None:

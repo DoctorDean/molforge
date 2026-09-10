@@ -22,6 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cookbook coverage under
   [Group by scaffold](docs/cookbook/small-molecules.md#group-by-scaffold).
   Closes [#21](https://github.com/DoctorDean/molforge/issues/21).
+- **Seed control for Boltz — `Boltz(seed=...)`.** Diffusion sampling is now
+  reproducible: the seed is passed to the CLI as `--seed`, can be overridden
+  per call (`predict(seq, seed=7)` — the cheap way to draw a seeded ensemble),
+  and is recorded in provenance, so it participates in the cache key and a
+  replayed manifest re-runs with the seed it was folded with. This brings Boltz
+  in line with `Chai1`, which has taken a `seed` since it was wrapped.
+  Closes [#23](https://github.com/DoctorDean/molforge/issues/23).
+
+### Changed
+- **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject
+  unknown keyword arguments.** Their `**kwargs` were documented as "reserved
+  for future per-call options" and silently dropped everything, so a
+  `predict(spec, seed=7)` ran *unseeded* while looking reproducible. Only
+  `seed` is accepted per call now; anything else raises `TypeError` naming the
+  offending keyword. Code that passed keywords which never did anything will
+  now fail loudly — which was the point.
+
 ### Fixed
 - **A desalted molecule is usable again.** RDKit builds the fragment parent by
   deleting atoms and leaves the result's ring-info and valence caches

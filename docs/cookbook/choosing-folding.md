@@ -133,6 +133,43 @@ For multimer predictions, **iPTM** (Boltz) and **ipTM** (AF-
 multimer) are the interface-quality metrics; the headline pLDDT can
 be high even with badly-modelled interfaces.
 
+### Reproducible sampling (seeds)
+
+The AF3-class engines sample structures with a diffusion model, so two
+runs of the same input can differ. Both take a `seed`, on the
+constructor or per call:
+
+| Engine        | Seed control                                                                 |
+| ------------- | ---------------------------------------------------------------------------- |
+| Boltz         | `Boltz(seed=42)`, or per call `predict(seq, seed=42)`; passed to the CLI as `--seed`. |
+| Chai-1        | `Chai1(seed=42)`; seeds torch and Chai's own sampler.                        |
+| ESMFold       | Deterministic single forward pass — no sampling to seed.                     |
+| AlphaFold     | Seeded by the ColabFold backend, not exposed by the wrapper yet.              |
+| RoseTTAFold   | Not exposed by the wrapper yet.                                              |
+
+```python
+from molforge.wrappers.folding import Boltz
+
+engine = Boltz(model_version="boltz2", seed=42)
+first  = engine.predict(sequence)      # seeded, and cached under that seed
+again  = engine.predict(sequence)      # cache hit — same structure
+
+# A seeded ensemble: one engine, several seeds, distinct cache entries.
+ensemble = [engine.predict(sequence, seed=s) for s in range(5)]
+```
+
+The seed is recorded in the structure's
+[provenance](inspect-provenance.md), so it is part of the cache key —
+different seeds don't collide, and a
+[replayed](../guide/reproducibility.md) manifest re-runs with the seed it
+was folded with.
+
+Two caveats. A per-call keyword other than `seed` raises `TypeError`
+rather than being ignored, so a typo can't quietly cost you a seeded
+run. And a seed pins the *sampler*, not the hardware: GPU
+non-determinism means small numerical drift across machines is still
+expected, so treat seeding as reproducibility of intent, not of bits.
+
 ### Installation footprint
 
 | Engine        | Install                                                                                  |
