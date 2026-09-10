@@ -207,11 +207,11 @@ class MoleculeDataset:
             RDKitNotInstalledError: If RDKit isn't installed.
 
         Example:
-            >>> groups = MoleculeDataset(library).group_by_scaffold()
-            >>> len(groups)                       # distinct scaffolds
-            41
-            >>> [m.name for m in groups["c1ccccc1"]]
-            ['aspirin', 'paracetamol']
+            Size a library's chemical series, then inspect one of them::
+
+                groups = MoleculeDataset(library).group_by_scaffold()
+                len(groups)                             # 41 distinct scaffolds
+                [m.name for m in groups["c1ccccc1"]]    # ['aspirin', 'paracetamol']
         """
         groups: dict[str, list[Molecule]] = {}
         for molecule in self:
