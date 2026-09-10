@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A desalted molecule is usable again.** RDKit builds the fragment parent by
+  deleting atoms and leaves the result's ring-info and valence caches
+  uninitialized, so after `largest_fragment()` — or the default
+  `standardize()`, which desalts — every ring-aware question about a
+  multi-fragment input died on a bare RDKit `RingInfo not initialized`
+  precondition violation: `tpsa`, `n_rotatable_bonds`, `molecule_descriptors()`,
+  and the new scaffold extraction alike. The caches are now restored before the
+  fragment is handed back, so the documented
+  standardize → filter → scaffold pipeline composes on salts.
+
 ## [0.8.0] 2026-07-23
 
 This release rounds out molforge's reproducibility and scoring story. Pipeline

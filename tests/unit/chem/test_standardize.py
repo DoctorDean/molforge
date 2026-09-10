@@ -1,17 +1,25 @@
 """Tests for :mod:`molforge.chem` standardization.
 
-RDKit is absent here, so the MolStandardize ops are monkeypatched at the
-``molforge.core._rdkit`` shim boundary. Each fake op *tags* the mol, so the
-pipeline order is directly assertable; the genuine not-installed path is
-also checked.
+The default test environment has no RDKit, so the MolStandardize ops are
+monkeypatched at the ``molforge.core._rdkit`` shim boundary. Each fake op
+*tags* the mol, so the pipeline order is directly assertable; the genuine
+not-installed path is also checked.
+
+:class:`TestDesaltedMoleculeIsUsable` needs real RDKit (it is about what
+RDKit hands back from a fragment deletion) and skips without it, mirroring
+the chem-extra CI job.
 """
 
 from __future__ import annotations
+
+import importlib.util
 
 import pytest
 
 import molforge.chem as chem
 from molforge.core import Molecule, RDKitNotInstalledError, _rdkit
+
+_HAS_RDKIT = importlib.util.find_spec("rdkit") is not None
 
 
 class _FakeMol:
@@ -79,6 +87,7 @@ class TestGranularOps:
         assert chem.neutralize(_base()).metadata["standardized"] == ["neutralize"]
 
 
+@pytest.mark.skipif(_HAS_RDKIT, reason="asserts the RDKit-absent path")
 class TestRDKitAbsent:
     def test_standardize_raises(self) -> None:
         with pytest.raises(RDKitNotInstalledError):
@@ -87,3 +96,38 @@ class TestRDKitAbsent:
     def test_granular_raises(self) -> None:
         with pytest.raises(RDKitNotInstalledError):
             chem.largest_fragment(_base())
+
+
+@pytest.mark.skipif(not _HAS_RDKIT, reason="requires RDKit")
+class TestDesaltedMoleculeIsUsable:
+    """Regression, real RDKit: a desalted molecule must be *usable*.
+
+    ``FragmentParent`` builds the parent by deleting the other fragments'
+    atoms and leaves the ring-info / valence caches uninitialized, so every
+    ring-aware question about the result — descriptors, scaffolds — used to
+    die on a bare RDKit ``RingInfo not initialized`` precondition violation.
+    Only multi-fragment inputs hit it, which is exactly the input desalting
+    is for.
+    """
+
+    _SALT = "CC(=O)Oc1ccccc1C(=O)[O-].[Na+]"
+
+    def test_descriptors_after_largest_fragment(self) -> None:
+        parent = chem.largest_fragment(Molecule.from_smiles(self._SALT))
+        assert parent.smiles == "CC(=O)Oc1ccccc1C(=O)[O-]"
+        assert parent.n_rotatable_bonds == 2
+        assert parent.tpsa > 0
+
+    def test_full_descriptor_set_after_standardize(self) -> None:
+        cleaned = chem.standardize(Molecule.from_smiles(self._SALT))
+        descriptors = chem.molecule_descriptors(cleaned)
+        assert descriptors["n_heavy_atoms"] == 13  # aspirin, sodium gone
+        assert descriptors["tpsa"] > 0
+
+    def test_ring_info_available_on_the_result(self) -> None:
+        cleaned = chem.standardize(Molecule.from_smiles(self._SALT))
+        assert cleaned.to_rdkit().GetRingInfo().NumRings() == 1
+
+    def test_single_fragment_input_unaffected(self) -> None:
+        aspirin = Molecule.from_smiles("CC(=O)Oc1ccccc1C(=O)O")
+        assert chem.standardize(aspirin).smiles == aspirin.smiles

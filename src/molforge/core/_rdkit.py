@@ -149,8 +149,22 @@ def cleanup(mol: Any) -> Any:
 
 
 def largest_fragment(mol: Any) -> Any:
-    """Keep the largest organic fragment (strips salts/solvents)."""
-    return _standardize_mod().FragmentParent(mol)
+    """Keep the largest organic fragment (strips salts/solvents).
+
+    RDKit builds the parent by *deleting* the other fragments' atoms, which
+    leaves the result's ring info and implicit-valence caches uninitialized.
+    Anything that asks about rings then fails with a bare RDKit
+    ``RingInfo not initialized`` precondition violation — descriptors (TPSA,
+    rotatable bonds) and Murcko decomposition alike — so restore those caches
+    before handing the fragment back. Per-atom chemistry is already correct
+    (``FragmentParent`` cleans up internally); only the derived caches are
+    missing, so this recomputes them rather than re-perceiving the molecule.
+    """
+    chem = _chem()
+    parent = _standardize_mod().FragmentParent(mol)
+    parent.UpdatePropertyCache(strict=False)
+    chem.FastFindRings(parent)
+    return parent
 
 
 def uncharge(mol: Any) -> Any:
