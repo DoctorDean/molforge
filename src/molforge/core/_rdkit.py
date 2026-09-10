@@ -177,6 +177,35 @@ def canonical_tautomer(mol: Any) -> Any:
     return _standardize_mod().TautomerEnumerator().Canonicalize(mol)
 
 
+def _murcko_mod() -> Any:
+    """Return ``rdkit.Chem.Scaffolds.MurckoScaffold`` or raise."""
+    _chem()  # clean error first if RDKit is absent
+    from rdkit.Chem.Scaffolds import MurckoScaffold
+
+    return MurckoScaffold
+
+
+def murcko_scaffold(mol: Any, *, generic: bool = False) -> Any:
+    """The Bemis-Murcko scaffold of ``mol`` — rings plus linkers, side chains
+    stripped.
+
+    ``generic`` makes the framework element- and bond-order-agnostic (every
+    atom a carbon, every bond single), so scaffolds that differ only in their
+    heteroatoms compare equal. ``mol`` is not modified.
+
+    An acyclic molecule has no scaffold: the returned mol is empty (zero
+    atoms), which is Bemis-Murcko's own convention rather than an error.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+    """
+    murcko = _murcko_mod()
+    scaffold = murcko.GetScaffoldForMol(mol)
+    if generic:
+        scaffold = murcko.MakeScaffoldGeneric(scaffold)
+    return scaffold
+
+
 def sanitize_ok(mol: Any) -> bool:
     """Whether ``mol`` passes RDKit sanitization, checked on a copy.
 

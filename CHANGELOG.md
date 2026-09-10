@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Bemis-Murcko scaffolds — `molforge.chem.murcko_scaffold()`.** Reduces a
+  molecule to its scaffold (ring systems plus linkers, side chains stripped)
+  and returns it as a `Molecule`, so scaffold analysis stays inside molforge
+  instead of dropping out to raw RDKit. `generic=True` gives the element- and
+  bond-order-agnostic framework, which collapses scaffolds that differ only in
+  their heteroatoms. Scaffold-level grouping comes with it:
+  `Molecule.scaffold_smiles` (the identity key), `unique(..., key="scaffold")`
+  and `MoleculeDataset.dedup(key="scaffold")` to keep one representative per
+  chemical series, and the terminal `MoleculeDataset.group_by_scaffold()` for
+  the groups themselves. Acyclic molecules have no scaffold and share the empty
+  one, following Bemis-Murcko's own convention. New module `chem/scaffold.py`;
+  cookbook coverage under
+  [Group by scaffold](docs/cookbook/small-molecules.md#group-by-scaffold).
+  Closes [#21](https://github.com/DoctorDean/molforge/issues/21).
 ### Fixed
 - **A desalted molecule is usable again.** RDKit builds the fragment parent by
   deleting atoms and leaves the result's ring-info and valence caches

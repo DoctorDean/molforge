@@ -84,4 +84,5 @@ jobs:
         run: |
           pytest -v \
             tests/unit/chem/test_descriptors.py \
+            tests/unit/chem/test_scaffold.py \
             tests/unit/chem/test_standardize.py

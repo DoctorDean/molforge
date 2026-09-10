@@ -2,11 +2,12 @@
 
 :class:`MoleculeDataset` wraps any iterable of :class:`~molforge.core.Molecule`
 and offers a small set of combinators that each return a *new* dataset
-without touching the source until you iterate. It is the "work with a set of
-molecules" layer: ingest lazily (e.g. with :func:`molforge.io.iter_molecules`),
-transform with chained combinators, then :meth:`~MoleculeDataset.collect`
-only what you need. Deliberately a thin lazy pipeline — not a scheduler or
-DAG engine.
+without touching the source until you iterate — plus the terminal
+:meth:`~MoleculeDataset.collect` and :meth:`~MoleculeDataset.group_by_scaffold`,
+which consume it. It is the "work with a set of molecules" layer: ingest
+lazily (e.g. with :func:`molforge.io.iter_molecules`), transform with chained
+combinators, then :meth:`~MoleculeDataset.collect` only what you need.
+Deliberately a thin lazy pipeline — not a scheduler or DAG engine.
 
 Laziness has one contract worth stating plainly: a dataset is re-iterable
 exactly when its source is. Built over a list it can be traversed
@@ -31,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from molforge.chem.descriptors import DESCRIPTOR_NAMES, molecule_descriptors
 from molforge.chem.quality import _check_key, _iter_unique, is_valid
+from molforge.chem.scaffold import murcko_scaffold
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -164,19 +166,58 @@ class MoleculeDataset:
         (not the molecules) are held in memory.
 
         Args:
-            key: Identity to compare on — ``"inchikey"`` (default) or
-                ``"smiles"``.
+            key: Identity to compare on — ``"inchikey"`` (default),
+                ``"smiles"``, or ``"scaffold"`` (Bemis-Murcko scaffold
+                SMILES, which keeps one representative per chemical series
+                rather than per exact structure). See
+                :func:`molforge.chem.unique` for the full semantics.
 
         Returns:
             A new dataset yielding the first molecule of each identity, in
             order.
 
         Raises:
-            ValueError: If ``key`` is neither ``"inchikey"`` nor ``"smiles"``.
+            ValueError: If ``key`` isn't one of the supported identities.
         """
         _check_key(key)
         source = self._source
         return MoleculeDataset(_ReiterableSource(lambda: _iter_unique(source, key=key)))
+
+    def group_by_scaffold(self, *, generic: bool = False) -> dict[str, list[Molecule]]:
+        """Group the molecules by Bemis-Murcko scaffold.
+
+        A *terminal* operation, like :meth:`collect`: grouping can't know a
+        scaffold is complete until the stream ends, so this consumes the
+        dataset and materializes the groups. Use it to size a library's
+        chemical series, measure scaffold diversity, or pick representatives
+        — where :meth:`dedup` with ``key="scaffold"`` keeps only the first
+        molecule of each series and stays lazy.
+
+        Args:
+            generic: Group on the generic framework (every atom a carbon,
+                every bond single), so scaffolds differing only in their
+                heteroatoms — benzene and pyridine — land in one group.
+
+        Returns:
+            ``{scaffold_smiles: [molecules]}``, keys in first-seen order and
+            each list in dataset order. Acyclic molecules have no scaffold
+            and share the ``""`` group.
+
+        Raises:
+            RDKitNotInstalledError: If RDKit isn't installed.
+
+        Example:
+            >>> groups = MoleculeDataset(library).group_by_scaffold()
+            >>> len(groups)                       # distinct scaffolds
+            41
+            >>> [m.name for m in groups["c1ccccc1"]]
+            ['aspirin', 'paracetamol']
+        """
+        groups: dict[str, list[Molecule]] = {}
+        for molecule in self:
+            scaffold = murcko_scaffold(molecule, generic=generic).smiles
+            groups.setdefault(scaffold, []).append(molecule)
+        return groups
 
     def collect(self) -> list[Molecule]:
         """Materialize the dataset into a list, running the whole pipeline."""
