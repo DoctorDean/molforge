@@ -19,6 +19,8 @@ Integration on the engine side is a few lines per method::
 
 What gets cached:
     - :class:`molforge.core.Protein` from folding wrappers.
+    - ``list[Protein]`` from folding wrappers that return every sample
+      of a run (``Chai1.predict_samples``).
     - ``list[DesignedSequence]`` from generative wrappers.
     - :class:`molforge.docking.DockingResult` from docking wrappers
       (Vina, Gnina, DiffDock). Extra result types register via
@@ -603,6 +605,59 @@ def _deserialize_protein_member(
     return protein
 
 
+def _serialize_protein_list(proteins: list[Protein], entry: Path) -> None:
+    """Write a list of Proteins as per-member mmCIF + JSON + npz.
+
+    Layout inside ``entry``:
+
+    - ``sample_{i}.cif`` — each member's structure.
+    - ``payload.json`` — each member's name + metadata, with arrays and
+      Provenance replaced by markers.
+    - ``arrays.npz`` — every member's metadata arrays, namespaced by slot
+      (``sample{i}``) so they don't collide.
+
+    Order is preserved, which matters: the callers that produce these
+    return them ranked, so element 0 is the pick.
+    """
+    all_arrays: dict[str, Any] = {}
+    members = [
+        _serialize_protein_member(
+            protein,
+            entry,
+            cif_name=f"sample_{i}.cif",
+            array_slot=f"sample{i}",
+            arrays_out=all_arrays,
+        )
+        for i, protein in enumerate(proteins)
+    ]
+    (entry / "payload.json").write_text(json.dumps({"members": members}), encoding="utf-8")
+    if all_arrays:
+        np.savez(entry / "arrays.npz", **all_arrays)
+
+
+def _deserialize_protein_list(entry: Path) -> list[Protein]:
+    """Inverse of :func:`_serialize_protein_list`."""
+    payload = json.loads((entry / "payload.json").read_text(encoding="utf-8"))
+
+    arrays_by_slot: dict[str, dict[str, Any]] = {}
+    arrays_path = entry / "arrays.npz"
+    if arrays_path.is_file():
+        with np.load(arrays_path, allow_pickle=False) as npz:
+            for key in npz.files:
+                slot, _, real_key = key.partition("__")
+                arrays_by_slot.setdefault(slot, {})[real_key] = npz[key]
+
+    return [
+        _deserialize_protein_member(
+            entry,
+            member,
+            cif_name=f"sample_{i}.cif",
+            slot_arrays=arrays_by_slot.get(f"sample{i}", {}),
+        )
+        for i, member in enumerate(payload["members"])
+    ]
+
+
 def _serialize_docking_result(result: DockingResult, entry: Path) -> None:
     """Write a DockingResult as per-member mmCIF + JSON + npz.
 
@@ -848,6 +903,7 @@ def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
 # ---------------------------------------------------------------------
 
 register_serializer("protein", _serialize_protein, _deserialize_protein)
+register_serializer("protein_list", _serialize_protein_list, _deserialize_protein_list)
 register_serializer(
     "designed_sequences",
     _serialize_designed_sequences,

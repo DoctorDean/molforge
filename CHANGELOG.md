@@ -42,6 +42,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through. New module `io/ccd.py`; cookbook coverage under
   [Resolve a PDB ligand code](docs/cookbook/fetch-and-search.md#resolve-a-pdb-ligand-code).
   Closes [#37](https://github.com/DoctorDean/molforge/issues/37).
+- **Every Chai-1 diffusion sample — `Chai1.predict_samples()` and
+  `predict_complex_samples()`.** Chai-1 always computes five diffusion samples
+  per call; the wrapper picked the best and discarded the other four
+  structures, keeping only their scores. They cost nothing extra — the GPU time
+  is already spent — so for ensemble, occupancy, or pose-diversity work this is
+  five times the usable output per run. Both methods return the samples ranked
+  by `aggregate_score`, so element 0 is exactly what `predict()` /
+  `predict_complex()` return; each sample adds `sample_index` (Chai's own 0-4
+  index) and `sample_rank` to its metadata. The single-best and full-ensemble
+  results are cached under distinct keys *and* cross-populate each other, so
+  calling one after the other on the same input is a cache hit rather than a
+  second identical inference. The cache learned a `protein_list` type to hold
+  them. Cookbook coverage under
+  [Every sample, not just the best](docs/cookbook/choosing-folding.md#every-sample-not-just-the-best-chai-1).
+  Closes [#34](https://github.com/DoctorDean/molforge/issues/34).
 
 ### Changed
 - **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject
