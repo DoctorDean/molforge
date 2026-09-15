@@ -52,6 +52,7 @@ from molforge.core import metadata_keys as mk
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _reject_unknown_kwargs,
     _validate_sequence,
 )
 
@@ -120,7 +121,9 @@ class AlphaFold(FoldingEngine):
 
         Args:
             sequence: One-letter amino-acid sequence.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: None accepted. AlphaFold's options are set on
+                the constructor; any keyword passed here raises
+                :class:`TypeError` rather than being silently ignored.
 
         Returns:
             A :class:`Protein` with:
@@ -133,7 +136,16 @@ class AlphaFold(FoldingEngine):
                 (copy of B-factor column)
             - ``metadata["ptm"]`` (if ``model_type="AlphaFold2-ptm"``):
                 predicted TM score
+
+        Raises:
+            TypeError: If any keyword argument is passed.
         """
+        _reject_unknown_kwargs(
+            kwargs,
+            engine="AlphaFold",
+            method="predict",
+            constructor_example="AlphaFold(num_recycles=6)",
+        )
         sequence = _validate_sequence(sequence)
         return self._run_local(sequence)
 

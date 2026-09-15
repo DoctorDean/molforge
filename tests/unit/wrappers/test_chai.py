@@ -578,3 +578,43 @@ class TestRealChai1:
         assert protein.atom_array.n_atoms > 0
         # All 5 samples surface in metadata.
         assert len(protein.metadata["per_sample_scores"]) == 5
+
+
+class TestPerCallKwargs:
+    """``predict`` / ``predict_complex`` take no per-call options.
+
+    GAP-0009: these used to accept ``**kwargs`` "reserved for future
+    per-call options" and drop them, so ``predict_complex(spec, seed=7)``
+    ran unseeded with no warning. Rejection happens before ``chai_lab``
+    is imported, so these run without a GPU or the package.
+    """
+
+    def _spec(self) -> Any:
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKTVRQ", ligand_smiles="CCO")
+
+    def test_predict_rejects_unknown_kwarg(self) -> None:
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            Chai1().predict("MKTVRQ", seed=7)
+
+    def test_predict_complex_rejects_unknown_kwarg(self) -> None:
+        with pytest.raises(TypeError, match="'seed'"):
+            Chai1().predict_complex(self._spec(), seed=7)
+
+    def test_message_points_at_the_constructor(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Chai1().predict("MKTVRQ", seed=7)
+        message = str(excinfo.value)
+        assert "Chai1.predict()" in message
+        assert "'seed'" in message
+        assert "Chai1(seed=7)" in message
+
+    def test_predict_complex_names_its_own_method(self) -> None:
+        with pytest.raises(TypeError, match=r"Chai1\.predict_complex\(\)"):
+            Chai1().predict_complex(self._spec(), num_trunk_recycles=5)
+
+    def test_all_offenders_reported(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Chai1().predict("MKTVRQ", alpha=1, beta=2)
+        assert "'alpha', 'beta'" in str(excinfo.value)

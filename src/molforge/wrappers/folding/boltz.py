@@ -57,6 +57,7 @@ from molforge.wrappers._versions import engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _reject_unknown_kwargs,
     _validate_sequence,
 )
 
@@ -297,15 +298,13 @@ class Boltz(FoldingEngine):
         rather than being dropped — a swallowed ``seed=`` is how a run that
         looks reproducible quietly isn't.
         """
-        unknown = sorted(k for k in kwargs if k not in _PER_CALL_OPTIONS)
-        if unknown:
-            unknown_list = ", ".join(repr(k) for k in unknown)
-            supported = ", ".join(repr(k) for k in sorted(_PER_CALL_OPTIONS))
-            raise TypeError(
-                f"Boltz.{method}() got unexpected keyword argument(s) {unknown_list}. "
-                f"Supported per-call option(s): {supported}; everything else is set on "
-                f"the constructor, e.g. Boltz(diffusion_samples=3)."
-            )
+        _reject_unknown_kwargs(
+            kwargs,
+            engine="Boltz",
+            method=method,
+            supported=_PER_CALL_OPTIONS,
+            constructor_example="Boltz(diffusion_samples=3)",
+        )
         return self._seed_for(_validate_seed(kwargs.get("seed")))
 
     def _seed_for(self, seed: int | None) -> int | None:

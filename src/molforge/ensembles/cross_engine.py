@@ -213,7 +213,11 @@ def cross_engine_fold(
             warning) and forms the ensemble from the rest; ``"raise"``
             propagates the first failure. An ensemble needs at least two
             surviving members either way.
-        **predict_kwargs: Forwarded to every engine's ``predict``.
+        **predict_kwargs: Forwarded to every engine's ``predict``, so a
+            keyword only one engine understands (e.g. ``seed=`` for Boltz)
+            raises :class:`TypeError` from the others — the engines reject
+            keywords they don't consume rather than dropping them. Set
+            engine-specific options on that engine's constructor instead.
 
     Returns:
         A :class:`CrossEngineEnsemble`.
