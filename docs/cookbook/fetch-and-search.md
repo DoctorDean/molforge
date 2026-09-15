@@ -4,13 +4,14 @@ Not every structure or compound starts as a file on disk. molforge can pull
 them straight from the public databases — the RCSB Protein Data Bank, the
 AlphaFold Protein Structure Database, and ChEMBL — and hand the results to the
 rest of the library. The structure side is pure standard library (no extra
-dependency); the ChEMBL side builds `Molecule` objects and so needs RDKit.
+dependency); the compound side builds `Molecule` objects and so needs RDKit.
 
-This recipe covers fetching by ID, fetching in bulk, searching the PDB, and
-pulling compounds from ChEMBL.
+This recipe covers fetching by ID, fetching in bulk, searching the PDB, pulling
+compounds from ChEMBL, and resolving PDB ligand codes.
 
 The structure functions (`fetch`, `fetch_many`, `search_rcsb`) work out of the
-box. `fetch_chembl` builds molecules, so it needs the `chem` extra:
+box. `fetch_chembl` and `fetch_ccd` build molecules, so they need the `chem`
+extra:
 
 ```
 pip install "molforge[chem]"
@@ -98,10 +99,49 @@ from molforge.io import fetch_chembl_many
 actives = fetch_chembl_many(["CHEMBL25", "CHEMBL521", "CHEMBL1201585"], on_error="skip")
 ```
 
+# Resolve a PDB ligand code
+
+Every ligand in the PDB is identified by a short Chemical Component Dictionary
+code — `STI` for imatinib, `NAD`, `ATP`. That code is what experimental
+datasets record, so going from "this structure binds `STI`" to a molecule you
+can actually use is a common first step. `fetch_ccd` does it:
+
+```python
+from molforge.io import fetch_ccd
+
+imatinib = fetch_ccd("STI")
+print(imatinib.name)                  # 'STI'
+print(imatinib.smiles)
+print(imatinib.metadata["source"])    # 'rcsb-ccd'
+```
+
+Unlike the SMILES-based ChEMBL path, this comes from RCSB's per-component SDF,
+so the molecule arrives **with a 3D conformer** — ready to dock or co-fold
+without an embedding step. Those are the component's *idealized* coordinates,
+computed for it in isolation; for a ligand as actually bound, fetch the holo
+structure with `fetch` and slice it out.
+
+Components that coordinate a metal (`HEM`, `B12`) encode the coordination as
+ordinary bonds, which RDKit rejects on valence grounds. The error says so and
+names the way through:
+
+```python
+heme = fetch_ccd("HEM", sanitize=False)   # valences left un-normalized
+```
+
+`fetch_ccd_many` mirrors `fetch_chembl_many`, so a benchmark's ligand set
+survives one obsolete code:
+
+```python
+from molforge.io import fetch_ccd_many
+
+ligands = fetch_ccd_many(["STI", "NAD", "ATP"], on_error="skip")
+```
+
 # From a database straight into a pipeline
 
-Because `MoleculeDataset` accepts any iterable of `Molecule`, a ChEMBL pull
-drops straight into the ingest → clean → filter pipeline from
+Because `MoleculeDataset` accepts any iterable of `Molecule`, a ChEMBL or CCD
+pull drops straight into the ingest → clean → filter pipeline from
 [Work with small molecules](small-molecules.md):
 
 ```python

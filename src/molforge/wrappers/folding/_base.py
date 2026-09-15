@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
     from molforge.core import Protein
 
@@ -55,7 +55,9 @@ class FoldingEngine(ABC):
         Args:
             sequence: One-letter amino-acid sequence. Whitespace is
                 stripped; non-letter characters raise :class:`ValueError`.
-            **kwargs: Engine-specific options.
+            **kwargs: Per-call options, if the engine has any.
+                Engines reject keywords they don't consume rather than
+                silently dropping them — see :func:`_reject_unknown_kwargs`.
 
         Returns:
             A :class:`molforge.core.Protein` whose ``metadata`` includes
@@ -98,6 +100,52 @@ def _validate_sequence(sequence: str) -> str:
             "Folding engines expect a plain one-letter amino-acid sequence."
         )
     return cleaned.upper()
+
+
+def _reject_unknown_kwargs(
+    kwargs: Mapping[str, object],
+    *,
+    engine: str,
+    method: str,
+    supported: Collection[str] = (),
+    constructor_example: str = "",
+) -> None:
+    """Raise :class:`TypeError` for per-call keywords the engine doesn't consume.
+
+    Every ``predict``-family method takes ``**kwargs`` so the base-class
+    signature stays uniform and :meth:`FoldingEngine.predict_many` can
+    forward options. That used to mean unrecognized keywords were dropped
+    on the floor: ``predict(seq, seed=7)`` ran unseeded, with no warning,
+    and the recorded provenance claimed a setting that was never applied —
+    a run that looks reproducible and isn't. Rejecting at the call site
+    turns a silent wrong answer into an immediate, locatable error.
+
+    Args:
+        kwargs: The keywords the call received.
+        engine: Engine class name, for the message.
+        method: Method name, for the message.
+        supported: Keywords this method does consume. Empty (the default)
+            means the method takes no per-call options at all.
+        constructor_example: A sample constructor call to show the caller
+            where the options they want actually live.
+
+    Raises:
+        TypeError: If ``kwargs`` holds any key outside ``supported``.
+    """
+    unknown = sorted(k for k in kwargs if k not in supported)
+    if not unknown:
+        return
+    got = ", ".join(repr(k) for k in unknown)
+    if supported:
+        options = ", ".join(repr(k) for k in sorted(supported))
+        where = (
+            f"Supported per-call option(s): {options}; everything else is set on the constructor"
+        )
+    else:
+        where = "This method takes no per-call options; they are set on the constructor"
+    if constructor_example:
+        where += f", e.g. {constructor_example}"
+    raise TypeError(f"{engine}.{method}() got unexpected keyword argument(s) {got}. {where}.")
 
 
 class FoldingEngineNotInstalledError(ImportError):

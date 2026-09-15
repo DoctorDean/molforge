@@ -29,6 +29,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replayed manifest re-runs with the seed it was folded with. This brings Boltz
   in line with `Chai1`, which has taken a `seed` since it was wrapped.
   Closes [#23](https://github.com/DoctorDean/molforge/issues/23).
+- **PDB chemical-component lookup — `io.fetch_ccd()`.** Resolves a Chemical
+  Component Dictionary code (`STI`, `NAD`, `ATP`) — the identifier experimental
+  datasets actually record — to a `Molecule`, so "this structure binds STI" can
+  become a ligand you co-fold, describe, or match decoys against without
+  leaving molforge. Downloads RCSB's per-component SDF, so unlike the
+  SMILES-based `fetch_chembl` the molecule arrives with a 3D conformer, ready
+  to dock without an embedding step. `fetch_ccd_many` mirrors
+  `fetch_chembl_many`'s `on_error="skip"` policy for ligand sets. Components
+  that coordinate a metal (`HEM`, `B12`) encode coordination as ordinary bonds
+  and fail RDKit's valence model; the error names `sanitize=False` as the way
+  through. New module `io/ccd.py`; cookbook coverage under
+  [Resolve a PDB ligand code](docs/cookbook/fetch-and-search.md#resolve-a-pdb-ligand-code).
+  Closes [#37](https://github.com/DoctorDean/molforge/issues/37).
+- **Every Chai-1 diffusion sample — `Chai1.predict_samples()` and
+  `predict_complex_samples()`.** Chai-1 always computes five diffusion samples
+  per call; the wrapper picked the best and discarded the other four
+  structures, keeping only their scores. They cost nothing extra — the GPU time
+  is already spent — so for ensemble, occupancy, or pose-diversity work this is
+  five times the usable output per run. Both methods return the samples ranked
+  by `aggregate_score`, so element 0 is exactly what `predict()` /
+  `predict_complex()` return; each sample adds `sample_index` (Chai's own 0-4
+  index) and `sample_rank` to its metadata. The single-best and full-ensemble
+  results are cached under distinct keys *and* cross-populate each other, so
+  calling one after the other on the same input is a cache hit rather than a
+  second identical inference. The cache learned a `protein_list` type to hold
+  them. Cookbook coverage under
+  [Every sample, not just the best](docs/cookbook/choosing-folding.md#every-sample-not-just-the-best-chai-1).
+  Closes [#34](https://github.com/DoctorDean/molforge/issues/34).
 
 ### Changed
 - **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject
@@ -38,6 +66,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `seed` is accepted per call now; anything else raises `TypeError` naming the
   offending keyword. Code that passed keywords which never did anything will
   now fail loudly — which was the point.
+- **Every folding wrapper now rejects unknown keyword arguments**, not just
+  Boltz. `Chai1.predict()` / `predict_complex()`, `ESMFold.predict()`,
+  `AlphaFold.predict()` and `RoseTTAFold.predict()` all declared `**kwargs`
+  "reserved for future per-call options" and dropped whatever arrived, so
+  `Chai1().predict_complex(spec, seed=7)` folded unseeded, silently, while
+  provenance recorded a run that looked reproducible. None of these four takes
+  per-call options: any keyword now raises `TypeError` naming the offender and
+  pointing at the constructor where the option actually lives. The check is a
+  shared helper, so it applies before the engine's heavy dependency is even
+  imported. Note that this reaches `cross_engine_fold(**predict_kwargs)`, which
+  forwards one set of keywords to every engine — `seed=` there now raises from
+  the non-Boltz engines rather than being ignored by them.
+  Closes [#36](https://github.com/DoctorDean/molforge/issues/36).
 
 ### Fixed
 - **A desalted molecule is usable again.** RDKit builds the fragment parent by

@@ -55,6 +55,24 @@ def mol_from_smiles(smiles: str, *, sanitize: bool = True) -> Any:
     return mol
 
 
+def mol_from_molblock(molblock: str, *, sanitize: bool = True, remove_hs: bool = False) -> Any:
+    """Parse an MDL molblock (one SDF record) into an RDKit ``Mol``.
+
+    Keeps explicit hydrogens by default, unlike RDKit's own default: a
+    downloaded ligand's Hs are part of the deposited chemistry, and callers
+    who want them gone can say so.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+        ValueError: If RDKit can't parse ``molblock``.
+    """
+    chem = _chem()
+    mol = chem.MolFromMolBlock(molblock, sanitize=sanitize, removeHs=remove_hs)
+    if mol is None:
+        raise ValueError("RDKit could not parse the molblock")
+    return mol
+
+
 def to_smiles(mol: Any, *, canonical: bool = True, isomeric: bool = True) -> str:
     """Canonical SMILES for ``mol`` (isomeric by default)."""
     chem = _chem()

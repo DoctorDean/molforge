@@ -133,6 +133,38 @@ For multimer predictions, **iPTM** (Boltz) and **ipTM** (AF-
 multimer) are the interface-quality metrics; the headline pLDDT can
 be high even with badly-modelled interfaces.
 
+### Every sample, not just the best (Chai-1)
+
+Chai-1 always runs five diffusion samples per call. `predict()` returns
+the highest-scoring one, which is usually what you want — but the other
+four are fully computed structures, and the GPU time is already spent.
+`predict_samples()` returns all five instead:
+
+```python
+from molforge.wrappers.folding import Chai1
+
+samples = Chai1().predict_samples(sequence)   # 5 structures, one inference
+best = samples[0]                             # == Chai1().predict(sequence)
+
+spread = [s.metadata["aggregate_score"] for s in samples]
+```
+
+They come back ranked, so `samples[0]` is exactly what `predict()` would
+have returned; each carries its own scores plus `sample_index` (Chai's
+own 0–4 index) and `sample_rank` (its place in the ranking).
+`predict_complex_samples(spec)` is the complex counterpart — five ligand
+poses per call rather than one, which is the difference between a
+3-week and a 15-week campaign when the whole thing is GPU-bound.
+
+The two shapes share a cache, so asking for one after the other doesn't
+re-run the model:
+
+```python
+engine = Chai1()
+engine.predict(sequence)            # runs the model
+engine.predict_samples(sequence)    # cache hit — the other four were banked
+```
+
 ### Reproducible sampling (seeds)
 
 The AF3-class engines sample structures with a diffusion model, so two
@@ -164,9 +196,13 @@ different seeds don't collide, and a
 [replayed](../guide/reproducibility.md) manifest re-runs with the seed it
 was folded with.
 
-Two caveats. A per-call keyword other than `seed` raises `TypeError`
-rather than being ignored, so a typo can't quietly cost you a seeded
-run. And a seed pins the *sampler*, not the hardware: GPU
+Two caveats. Every engine rejects per-call keywords it doesn't consume,
+so a typo can't quietly cost you a seeded run — `seed` is a per-call
+option on Boltz alone, and the other four wrappers take no per-call
+options at all, raising `TypeError` and pointing at the constructor
+instead. (Which also means `cross_engine_fold(..., seed=42)` fails on
+every engine but Boltz: set engine-specific options on that engine's
+constructor.) And a seed pins the *sampler*, not the hardware: GPU
 non-determinism means small numerical drift across machines is still
 expected, so treat seeding as reproducibility of intent, not of bits.
 

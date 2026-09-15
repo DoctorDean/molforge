@@ -46,6 +46,9 @@ Convenience helpers:
   hand to :func:`fetch_many`.
 - :func:`fetch_chembl` / :func:`fetch_chembl_many` — pull one or many small
   molecules from ChEMBL by ID as :class:`~molforge.core.Molecule` objects.
+- :func:`fetch_ccd` / :func:`fetch_ccd_many` — resolve PDB Chemical Component
+  Dictionary codes (``STI``, ``NAD``, ``ATP``) to :class:`~molforge.core.Molecule`
+  objects with 3D coordinates, via RCSB.
 - :func:`load_alphafold` — load an AlphaFold prediction, exposing pLDDT
   as a first-class field rather than buried in B-factor.
 
@@ -57,6 +60,7 @@ Example:
 
 from __future__ import annotations
 
+from molforge.io.ccd import fetch_ccd, fetch_ccd_many
 from molforge.io.chembl import fetch_chembl, fetch_chembl_many
 from molforge.io.dispatch import fetch, fetch_many, load, save
 from molforge.io.fasta import (
@@ -132,4 +136,6 @@ __all__ = [  # noqa: RUF022 — grouped by format, not alphabetical
     "iter_smiles",
     "fetch_chembl",
     "fetch_chembl_many",
+    "fetch_ccd",
+    "fetch_ccd_many",
 ]
