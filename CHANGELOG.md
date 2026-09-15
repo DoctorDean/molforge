@@ -29,6 +29,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replayed manifest re-runs with the seed it was folded with. This brings Boltz
   in line with `Chai1`, which has taken a `seed` since it was wrapped.
   Closes [#23](https://github.com/DoctorDean/molforge/issues/23).
+- **PDB chemical-component lookup — `io.fetch_ccd()`.** Resolves a Chemical
+  Component Dictionary code (`STI`, `NAD`, `ATP`) — the identifier experimental
+  datasets actually record — to a `Molecule`, so "this structure binds STI" can
+  become a ligand you co-fold, describe, or match decoys against without
+  leaving molforge. Downloads RCSB's per-component SDF, so unlike the
+  SMILES-based `fetch_chembl` the molecule arrives with a 3D conformer, ready
+  to dock without an embedding step. `fetch_ccd_many` mirrors
+  `fetch_chembl_many`'s `on_error="skip"` policy for ligand sets. Components
+  that coordinate a metal (`HEM`, `B12`) encode coordination as ordinary bonds
+  and fail RDKit's valence model; the error names `sanitize=False` as the way
+  through. New module `io/ccd.py`; cookbook coverage under
+  [Resolve a PDB ligand code](docs/cookbook/fetch-and-search.md#resolve-a-pdb-ligand-code).
+  Closes [#37](https://github.com/DoctorDean/molforge/issues/37).
 
 ### Changed
 - **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject
