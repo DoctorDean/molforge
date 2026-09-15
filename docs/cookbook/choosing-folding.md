@@ -164,9 +164,13 @@ different seeds don't collide, and a
 [replayed](../guide/reproducibility.md) manifest re-runs with the seed it
 was folded with.
 
-Two caveats. A per-call keyword other than `seed` raises `TypeError`
-rather than being ignored, so a typo can't quietly cost you a seeded
-run. And a seed pins the *sampler*, not the hardware: GPU
+Two caveats. Every engine rejects per-call keywords it doesn't consume,
+so a typo can't quietly cost you a seeded run — `seed` is a per-call
+option on Boltz alone, and the other four wrappers take no per-call
+options at all, raising `TypeError` and pointing at the constructor
+instead. (Which also means `cross_engine_fold(..., seed=42)` fails on
+every engine but Boltz: set engine-specific options on that engine's
+constructor.) And a seed pins the *sampler*, not the hardware: GPU
 non-determinism means small numerical drift across machines is still
 expected, so treat seeding as reproducibility of intent, not of bits.
 

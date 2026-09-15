@@ -38,6 +38,7 @@ from molforge.wrappers._versions import check_engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _reject_unknown_kwargs,
     _validate_sequence,
 )
 
@@ -131,7 +132,9 @@ class ESMFold(FoldingEngine):
 
         Args:
             sequence: One-letter amino-acid sequence.
-            **kwargs: Reserved for future per-call options; currently unused.
+            **kwargs: None accepted. ESMFold's options are set on the
+                constructor; any keyword passed here raises
+                :class:`TypeError` rather than being silently ignored.
 
         Returns:
             A :class:`Protein` with one chain (``"A"``), the predicted
@@ -143,7 +146,16 @@ class ESMFold(FoldingEngine):
             - ``metadata["mean_confidence"]``: float mean pLDDT
             - ``metadata["confidence_per_atom"]``: ``(N_atoms,)`` float32 pLDDT
                 (copy of B-factor column for convenience)
+
+        Raises:
+            TypeError: If any keyword argument is passed.
         """
+        _reject_unknown_kwargs(
+            kwargs,
+            engine="ESMFold",
+            method="predict",
+            constructor_example="ESMFold(chunk_size=64)",
+        )
         sequence = _validate_sequence(sequence)
 
         # Cache lookup. Build the Provenance upfront from inputs +

@@ -38,6 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `seed` is accepted per call now; anything else raises `TypeError` naming the
   offending keyword. Code that passed keywords which never did anything will
   now fail loudly — which was the point.
+- **Every folding wrapper now rejects unknown keyword arguments**, not just
+  Boltz. `Chai1.predict()` / `predict_complex()`, `ESMFold.predict()`,
+  `AlphaFold.predict()` and `RoseTTAFold.predict()` all declared `**kwargs`
+  "reserved for future per-call options" and dropped whatever arrived, so
+  `Chai1().predict_complex(spec, seed=7)` folded unseeded, silently, while
+  provenance recorded a run that looked reproducible. None of these four takes
+  per-call options: any keyword now raises `TypeError` naming the offender and
+  pointing at the constructor where the option actually lives. The check is a
+  shared helper, so it applies before the engine's heavy dependency is even
+  imported. Note that this reaches `cross_engine_fold(**predict_kwargs)`, which
+  forwards one set of keywords to every engine — `seed=` there now raises from
+  the non-Boltz engines rather than being ignored by them.
+  Closes [#36](https://github.com/DoctorDean/molforge/issues/36).
 
 ### Fixed
 - **A desalted molecule is usable again.** RDKit builds the fragment parent by

@@ -76,6 +76,7 @@ from molforge.wrappers._versions import engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _reject_unknown_kwargs,
     _validate_sequence,
 )
 
@@ -165,7 +166,10 @@ class Chai1(FoldingEngine):
 
         Args:
             sequence: One-letter amino-acid sequence.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: None accepted. Chai-1's options — including
+                ``seed`` — are set on the constructor; any keyword
+                passed here raises :class:`TypeError` rather than
+                being silently ignored.
 
         Returns:
             The best of Chai-1's 5 diffusion samples (by
@@ -191,7 +195,14 @@ class Chai1(FoldingEngine):
             FoldingEngineNotInstalledError: If ``chai_lab`` isn't
                 installed or fails to import.
             RuntimeError: If Chai-1 produces no parseable output.
+            TypeError: If any keyword argument is passed.
         """
+        _reject_unknown_kwargs(
+            kwargs,
+            engine="Chai1",
+            method="predict",
+            constructor_example="Chai1(seed=7)",
+        )
         sequence = _validate_sequence(sequence)
         # Delegate to the spec-based code path. Multi-component
         # machinery is the canonical implementation; single-sequence
@@ -213,7 +224,10 @@ class Chai1(FoldingEngine):
                 its ``atom_array`` per polymer entity (or per copy,
                 for homo-oligomers). Ligand atoms appear as
                 hetero-atoms with chain IDs assigned by the spec.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: None accepted. Chai-1's options — including
+                ``seed`` — are set on the constructor; any keyword
+                passed here raises :class:`TypeError` rather than
+                being silently ignored.
 
         Returns:
             A :class:`Protein` with multi-chain ``atom_array`` and
@@ -230,6 +244,7 @@ class Chai1(FoldingEngine):
             FoldingEngineNotInstalledError: If ``chai_lab`` isn't
                 installed.
             RuntimeError: If Chai-1 produces no parseable output.
+            TypeError: If any keyword argument is passed.
 
         Examples:
             Protein-ligand complex::
@@ -243,6 +258,12 @@ class Chai1(FoldingEngine):
                 )
                 complex_struct = Chai1().predict_complex(spec)
         """
+        _reject_unknown_kwargs(
+            kwargs,
+            engine="Chai1",
+            method="predict_complex",
+            constructor_example="Chai1(seed=7)",
+        )
         return self._predict_spec(spec, single_sequence=None)
 
     # ------------------------------------------------------------------
