@@ -28,14 +28,17 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from molforge.cache import cache_key
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.folding import ComplexSpec
 from molforge.wrappers.folding import Chai1
 from molforge.wrappers.folding._base import FoldingEngineNotInstalledError
 from molforge.wrappers.folding.chai import (
     _CHAI_NUM_SAMPLES,
     _load_scores_npz,
     _per_residue_plddt_from_cif,
+    _rank_samples,
 )
 
 
@@ -578,3 +581,273 @@ class TestRealChai1:
         assert protein.atom_array.n_atoms > 0
         # All 5 samples surface in metadata.
         assert len(protein.metadata["per_sample_scores"]) == 5
+
+
+class TestPerCallKwargs:
+    """``predict`` / ``predict_complex`` take no per-call options.
+
+    GAP-0009: these used to accept ``**kwargs`` "reserved for future
+    per-call options" and drop them, so ``predict_complex(spec, seed=7)``
+    ran unseeded with no warning. Rejection happens before ``chai_lab``
+    is imported, so these run without a GPU or the package.
+    """
+
+    def _spec(self) -> Any:
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKTVRQ", ligand_smiles="CCO")
+
+    def test_predict_rejects_unknown_kwarg(self) -> None:
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            Chai1().predict("MKTVRQ", seed=7)
+
+    def test_predict_complex_rejects_unknown_kwarg(self) -> None:
+        with pytest.raises(TypeError, match="'seed'"):
+            Chai1().predict_complex(self._spec(), seed=7)
+
+    def test_message_points_at_the_constructor(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Chai1().predict("MKTVRQ", seed=7)
+        message = str(excinfo.value)
+        assert "Chai1.predict()" in message
+        assert "'seed'" in message
+        assert "Chai1(seed=7)" in message
+
+    def test_predict_complex_names_its_own_method(self) -> None:
+        with pytest.raises(TypeError, match=r"Chai1\.predict_complex\(\)"):
+            Chai1().predict_complex(self._spec(), num_trunk_recycles=5)
+
+    def test_all_offenders_reported(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Chai1().predict("MKTVRQ", alpha=1, beta=2)
+        assert "'alpha', 'beta'" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------
+# GAP-0007: every diffusion sample, not just the best one
+# ---------------------------------------------------------------------
+
+
+class TestRankSamples:
+    """The ranking shared by the single-best and all-samples paths."""
+
+    def _samples(self, scores: list[float | None]) -> list[dict[str, Any]]:
+        return [
+            {"index": i, "cif_text": "", "scores": {"aggregate_score": s}}
+            for i, s in enumerate(scores)
+        ]
+
+    def test_orders_best_first(self) -> None:
+        ranked = _rank_samples(self._samples([0.5, 0.7, 0.6, 0.9, 0.55]))
+        assert [s["index"] for s in ranked] == [3, 1, 2, 4, 0]
+
+    def test_ties_keep_chai_order(self) -> None:
+        """A stable sort means equal scores stay in Chai-1's own order."""
+        ranked = _rank_samples(self._samples([0.8, 0.8, 0.8]))
+        assert [s["index"] for s in ranked] == [0, 1, 2]
+
+    def test_missing_score_sorts_last(self) -> None:
+        ranked = _rank_samples(self._samples([None, 0.1, None, 0.2]))
+        assert [s["index"] for s in ranked][:2] == [3, 1]
+
+    def test_empty_raises(self) -> None:
+        with pytest.raises(RuntimeError, match="no samples"):
+            _rank_samples([])
+
+
+class TestParseAllOutputs:
+    """``_parse_all_outputs`` keeps the structures ``_parse_outputs`` drops."""
+
+    def test_returns_one_protein_per_sample(self, tmp_path: Path) -> None:
+        _write_synthetic_outputs(tmp_path)
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence="MKQ"
+        )
+        assert len(proteins) == _CHAI_NUM_SAMPLES
+
+    def test_ordered_best_first(self, tmp_path: Path) -> None:
+        _write_synthetic_outputs(tmp_path, aggregate_scores=[0.5, 0.7, 0.6, 0.9, 0.55])
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence="MKQ"
+        )
+        assert [p.metadata["sample_index"] for p in proteins] == [3, 1, 2, 4, 0]
+        assert [p.metadata["sample_rank"] for p in proteins] == [0, 1, 2, 3, 4]
+
+    def test_element_zero_matches_parse_outputs(self, tmp_path: Path) -> None:
+        """Existing callers taking the best get exactly today's structure."""
+        _write_synthetic_outputs(tmp_path, aggregate_scores=[0.5, 0.7, 0.6, 0.9, 0.55])
+        engine = Chai1()
+        samples = engine._collect_samples(tmp_path)
+        best = engine._parse_outputs(samples=samples, sequence="MKQ")
+        first = engine._parse_all_outputs(samples=samples, sequence="MKQ")[0]
+        assert first.metadata["sample_index"] == best.metadata["best_sample_index"]
+        assert first.metadata["aggregate_score"] == best.metadata["aggregate_score"]
+        np.testing.assert_array_equal(first.atom_array.coords, best.atom_array.coords)
+
+    def test_each_sample_carries_its_own_scores(self, tmp_path: Path) -> None:
+        _write_synthetic_outputs(tmp_path, aggregate_scores=[0.5, 0.7, 0.6, 0.9, 0.55])
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence="MKQ"
+        )
+        assert [p.metadata["aggregate_score"] for p in proteins] == pytest.approx(
+            [0.9, 0.7, 0.6, 0.55, 0.5]
+        )
+
+    def test_run_level_metadata_is_shared(self, tmp_path: Path) -> None:
+        """Every sample sees the same view of the run it came from."""
+        _write_synthetic_outputs(tmp_path, aggregate_scores=[0.5, 0.7, 0.6, 0.9, 0.55])
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence="MKQ"
+        )
+        assert {p.metadata["best_sample_index"] for p in proteins} == {3}
+        for protein in proteins:
+            scores = [s["aggregate_score"] for s in protein.metadata["per_sample_scores"]]
+            # Indexed by Chai's sample index, not by rank.
+            assert scores == pytest.approx([0.5, 0.7, 0.6, 0.9, 0.55])
+
+    def test_confidence_extracted_per_sample(self, tmp_path: Path) -> None:
+        _write_synthetic_outputs(tmp_path)
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence="MKQ"
+        )
+        for protein in proteins:
+            assert protein.metadata[mk.MEAN_CONFIDENCE] == pytest.approx((80.0 + 65.0 + 95.0) / 3)
+
+    def test_source_sequence_on_every_sample(self, tmp_path: Path) -> None:
+        _write_synthetic_outputs(tmp_path)
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence="MKQ"
+        )
+        assert all(p.metadata["source_sequence"] == "MKQ" for p in proteins)
+
+    def test_complex_spec_on_every_sample(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec.protein_ligand(protein_sequence="MKQ", ligand_smiles="CCO")
+        _write_synthetic_outputs(tmp_path)
+        engine = Chai1()
+        proteins = engine._parse_all_outputs(
+            samples=engine._collect_samples(tmp_path), sequence=None, spec=spec
+        )
+        assert all(p.metadata["complex_spec"] == spec for p in proteins)
+        assert all("source_sequence" not in p.metadata for p in proteins)
+
+
+class TestPredictSamplesPipeline:
+    """The public ensemble API, with _run_inference mocked."""
+
+    def _populate(self, scores: list[float] | None = None):
+        def _inner(fasta_path: Path, output_dir: Path) -> None:
+            _write_synthetic_outputs(output_dir, aggregate_scores=scores)
+
+        return _inner
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKQ", ligand_smiles="CCO")
+
+    @patch.object(Chai1, "_run_inference")
+    def test_predict_samples_returns_all_five(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = self._populate()
+        proteins = Chai1().predict_samples("MKQ")
+        assert len(proteins) == _CHAI_NUM_SAMPLES
+        assert mock_run.call_count == 1  # one inference, five structures
+        assert all(p.metadata["engine"] == "Chai-1" for p in proteins)
+
+    @patch.object(Chai1, "_run_inference")
+    def test_predict_samples_best_first(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = self._populate([0.5, 0.7, 0.6, 0.9, 0.55])
+        proteins = Chai1().predict_samples("MKQ")
+        assert [p.metadata["sample_rank"] for p in proteins] == [0, 1, 2, 3, 4]
+        assert proteins[0].metadata["sample_index"] == 3
+
+    @patch.object(Chai1, "_run_inference")
+    def test_predict_samples_validates_sequence(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = self._populate()
+        with pytest.raises(ValueError, match="non-letter"):
+            Chai1().predict_samples("MK*Q")
+        assert mock_run.call_count == 0
+
+    @patch.object(Chai1, "_run_inference")
+    def test_predict_complex_samples_returns_all_five(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = self._populate()
+        proteins = Chai1().predict_complex_samples(self._spec())
+        assert len(proteins) == _CHAI_NUM_SAMPLES
+        assert all("complex_spec" in p.metadata for p in proteins)
+
+    def test_sample_methods_take_no_keywords(self) -> None:
+        """No ``**kwargs`` to swallow a mistyped option (GAP-0009)."""
+        with pytest.raises(TypeError):
+            Chai1().predict_samples("MKQ", seed=7)  # type: ignore[call-arg]
+        with pytest.raises(TypeError):
+            Chai1().predict_complex_samples(self._spec(), seed=7)  # type: ignore[call-arg]
+
+
+class TestSampleCaching:
+    """One inference should answer both shapes of the question.
+
+    The GPU time is spent either way, so neither path should trigger a
+    second identical run just because the caller wanted the other one.
+    """
+
+    def _populate(self, fasta_path: Path, output_dir: Path) -> None:
+        _write_synthetic_outputs(output_dir)
+
+    @patch.object(Chai1, "_run_inference")
+    def test_repeat_predict_samples_is_cached(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = self._populate
+        engine = Chai1()
+        first = engine.predict_samples("MKQ")
+        second = engine.predict_samples("MKQ")
+        assert mock_run.call_count == 1
+        assert [p.metadata["sample_index"] for p in first] == [
+            p.metadata["sample_index"] for p in second
+        ]
+
+    @patch.object(Chai1, "_run_inference")
+    def test_predict_after_predict_samples_is_cached(self, mock_run: MagicMock) -> None:
+        """The ensemble run already produced the best structure."""
+        mock_run.side_effect = self._populate
+        engine = Chai1()
+        samples = engine.predict_samples("MKQ")
+        best = engine.predict("MKQ")
+        assert mock_run.call_count == 1
+        assert best.metadata["best_sample_index"] == samples[0].metadata["sample_index"]
+
+    @patch.object(Chai1, "_run_inference")
+    def test_predict_samples_after_predict_is_cached(self, mock_run: MagicMock) -> None:
+        """And the four structures a plain predict() computed aren't lost."""
+        mock_run.side_effect = self._populate
+        engine = Chai1()
+        engine.predict("MKQ")
+        proteins = engine.predict_samples("MKQ")
+        assert mock_run.call_count == 1
+        assert len(proteins) == _CHAI_NUM_SAMPLES
+
+    @patch.object(Chai1, "_run_inference")
+    def test_the_two_paths_do_not_share_a_cache_entry(self, mock_run: MagicMock) -> None:
+        """Distinct Provenance operations, so neither shadows the other."""
+        mock_run.side_effect = self._populate
+        engine = Chai1()
+        single = engine._build_provenance(ComplexSpec.from_protein("MKQ"), single_sequence="MKQ")
+        ensemble = engine._build_provenance(
+            ComplexSpec.from_protein("MKQ"), single_sequence="MKQ", all_samples=True
+        )
+        assert single.operation == "predict"
+        assert ensemble.operation == "predict_samples"
+        assert cache_key(single) != cache_key(ensemble)
+
+    @patch.object(Chai1, "_run_inference")
+    def test_different_sequences_still_re_run(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = self._populate
+        engine = Chai1()
+        engine.predict_samples("MKQ")
+        engine.predict_samples("MKQH")
+        assert mock_run.call_count == 2

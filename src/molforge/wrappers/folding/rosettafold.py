@@ -57,6 +57,7 @@ from molforge.core import metadata_keys as mk
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _reject_unknown_kwargs,
     _validate_sequence,
 )
 
@@ -123,7 +124,11 @@ class RoseTTAFold(FoldingEngine):
 
         Args:
             sequence: One-letter amino-acid sequence.
-            **kwargs: Reserved for future per-call options.
+            **kwargs: None accepted. RFAA's options are set on the
+                constructor (including ``extra_overrides`` for any
+                Hydra knob the wrapper doesn't expose); any keyword
+                passed here raises :class:`TypeError` rather than
+                being silently ignored.
 
         Returns:
             A :class:`Protein` with:
@@ -146,7 +151,14 @@ class RoseTTAFold(FoldingEngine):
             FoldingEngineNotInstalledError: If ``repo_dir`` isn't set
                 (via constructor or ``RFAA_HOME``) or doesn't exist.
             RuntimeError: If the CLI fails or produces no output.
+            TypeError: If any keyword argument is passed.
         """
+        _reject_unknown_kwargs(
+            kwargs,
+            engine="RoseTTAFold",
+            method="predict",
+            constructor_example="RoseTTAFold(max_cycle=10)",
+        )
         sequence = _validate_sequence(sequence)
         return self._run_local(sequence)
 
