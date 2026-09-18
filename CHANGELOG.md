@@ -71,6 +71,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coverage under
   [Downloads are cached](docs/cookbook/fetch-and-search.md#downloads-are-cached).
   Closes [#35](https://github.com/DoctorDean/molforge/issues/35).
+- **Engine and backend version registry — `molforge.engine_versions()`.** A run
+  manifest needs to say which engine versions produced a result, but a wrapper
+  that shells out to a native binary — fpocket, P2Rank, GROMACS, `sander`,
+  gnina — has no version to record, so manifests carried blanks exactly where a
+  reader wants a number, and there was no way to capture the environment
+  *before* a long run. `engine_versions()` reports every backend molforge can
+  drive, installed or not, as a `BackendVersion` carrying its category, how it
+  was found (`python` via `importlib.metadata`, `executable` via `$PATH` plus a
+  version probe, or `repo` for the checkout-based engines molforge cannot
+  detect), availability, resolved location, and a plain-language reason for any
+  empty version — three distinct facts that a single blank used to conflate.
+  Nothing raises, on any machine. `PipelineManifest` uses it to fill its own
+  blanks under a separate `engines_detected` key, kept apart from `engines`
+  because it describes what is installed now rather than what ran. New module
+  `molforge/versions.py`; guide coverage under
+  [Engine and backend versions](docs/guide/reproducibility.md#engine-and-backend-versions).
+  Closes [#33](https://github.com/DoctorDean/molforge/issues/33).
 
 ### Changed
 - **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject

@@ -67,6 +67,60 @@ m.to_dict()             # plain dict — for logging, comparison, a DataFrame
 carries provenance — a `Protein`, `DockingResult`, `Pose`,
 `DesignedSequence`, ... — or a `Provenance` instance directly.
 
+## Engine and backend versions
+
+A step records the version its wrapper could read at the time. For a
+pip-installed engine that is exact. For a wrapper that shells out to a native
+binary — fpocket, P2Rank, GROMACS, `sander`, gnina — there is nothing to read,
+so those steps carry no version and the manifest has a blank exactly where a
+reader wants a number.
+
+`engine_versions` is the registry that answers the question directly:
+
+```python
+from molforge import engine_versions
+
+for backend in engine_versions().values():
+    if backend.available:
+        print(f"{backend.name:14s} {backend.version or '(no version flag)'}")
+```
+
+Every backend molforge can drive is reported, installed or not — an absent
+engine is a fact about the environment worth recording. Each
+`BackendVersion` carries its `category` (`folding`, `docking`, `pockets`,
+`md`, `freeenergy`, `generative`, `runtime`), how it was found (`kind`:
+`python`, `executable`, or `repo`), whether it is `available`, the resolved
+`location` for a binary, and a `detail` explaining any empty version. Those
+are three different reasons a version can be missing and the registry keeps
+them apart:
+
+| `kind` | Found by | Version from |
+| --- | --- | --- |
+| `python` | `importlib.metadata` | the distribution — exact, free |
+| `executable` | `shutil.which` | running its version flag, where it has one |
+| `repo` | nothing — the caller passes `repo_dir` | undetectable; said so explicitly |
+
+Nothing here raises, on any machine, with none of it installed.
+
+The manifest uses the registry to fill its own blanks, under a separate
+`engines_detected` key:
+
+```yaml
+environment:
+  engines: {ESMFold: "1.0.3"}            # what ran, recorded at the time
+  engines_detected: {fpocket: "4.1"}     # what is installed now
+```
+
+They are kept apart because `engines_detected` is the weaker claim: it
+describes the machine when the manifest was written, which is not necessarily
+what produced the output. If the run is long and the record matters, capture
+`engine_versions()` up front rather than relying on the backfill.
+
+Probing a native binary means running it, so the sweep spawns subprocesses —
+for installed tools only, with a timeout, and memoized. Pass
+`probe_executables=False` to skip every subprocess and still get availability
+from `$PATH`.
+
 ## Formats and the `repro` extra
 
 The in-memory manifest and its `to_dict()` / `to_json()` forms need **no
