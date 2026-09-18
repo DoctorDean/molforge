@@ -19,6 +19,8 @@ pip install "molforge[chem]"
 
 Everything here does live network I/O: a missing ID or a dropped connection
 surfaces as `OSError`, and every call takes a `timeout` (seconds, default 30).
+Structure downloads are cached, so a given entry crosses the network once —
+see [Downloads are cached](#downloads-are-cached) below.
 
 # Fetch a structure by ID
 
@@ -54,6 +56,38 @@ back whatever resolved:
 ```python
 structures = fetch_many(ids, on_error="skip")   # failed IDs simply don't appear
 ```
+
+# Downloads are cached
+
+`fetch` and `fetch_many` go through [`molforge.cache`](caching-results.md), so
+an entry is downloaded once and read from disk thereafter:
+
+```python
+protein = fetch("1UBQ")     # over the network
+again = fetch("1UBQ")       # from ~/.cache/molforge, no request
+```
+
+This matters most in the shape of pipeline that resolves the same set at
+several stages — prepare, predict, score. Each stage used to pay the full
+download; now only the first does. It also makes a long loop cheap to
+restart: a `fetch_many` over a thousand IDs that dies at 700 picks up at 701
+on the next run, because the first 700 are already banked.
+
+What is stored is the downloaded file itself, not the parsed `Protein`, so a
+cached read parses exactly the bytes a fresh download would have. There is no
+behavioural difference between a hit and a miss.
+
+Two escape hatches:
+
+```python
+fresh = fetch("1UBQ", force_refresh=True)  # re-download, replace the entry
+once = fetch("1UBQ", cache=False)          # neither read nor write the cache
+```
+
+Use `force_refresh` when RCSB has revised an entry. Use `cache=False` for a
+one-off you don't want left on disk. The cache honours the usual environment
+variables — `MOLFORGE_CACHE_DIR` moves it, `MOLFORGE_CACHE=disabled` turns it
+off everywhere.
 
 # Search the PDB
 

@@ -57,6 +57,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   them. Cookbook coverage under
   [Every sample, not just the best](docs/cookbook/choosing-folding.md#every-sample-not-just-the-best-chai-1).
   Closes [#34](https://github.com/DoctorDean/molforge/issues/34).
+- **Structure downloads are cached — `io.fetch(..., cache=True)`.**
+  `fetch` performed a plain HTTP GET per call, so a pipeline that resolved the
+  same entries at several stages paid the full download every time, and a long
+  fetch loop that died partway through started over. Downloads now go through
+  `molforge.cache`, keyed on `(pdb_id, source, format)` and honouring the usual
+  `MOLFORGE_CACHE_DIR` / `MOLFORGE_CACHE=disabled` environment variables.
+  `force_refresh=True` re-downloads and replaces the entry (for a revised RCSB
+  release); `cache=False` bypasses the cache in both directions. `fetch_many`
+  forwards both. The entry holds the downloaded file byte-for-byte rather than
+  a serialized `Protein`, so a cache hit re-parses exactly what a miss would
+  have parsed — there is no behavioural difference between the two. Cookbook
+  coverage under
+  [Downloads are cached](docs/cookbook/fetch-and-search.md#downloads-are-cached).
+  Closes [#35](https://github.com/DoctorDean/molforge/issues/35).
 
 ### Changed
 - **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject
