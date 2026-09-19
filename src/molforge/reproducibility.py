@@ -25,6 +25,7 @@ versions and the engine versions that ran)::
       python_version: "3.12.13"
       platform: "macOS-14.3-arm64"
       engines: {ESMFold: "1.0.3", Vina: "1.2.5"}
+      engines_detected: {fpocket: "4.1"}   # only when a step recorded none
     steps:
       - step: 1
         engine: ESMFold
@@ -35,6 +36,15 @@ versions and the engine versions that ran)::
         engine: Vina
         ...
     output: {type: DockingResult}
+
+Engines that shell out to a native binary (fpocket, GROMACS, gnina) have no
+version to record when they run, so the environment block falls back to
+:func:`molforge.engine_versions` — the registry of every backend molforge
+can drive and what it finds installed. It is reported under its own
+``engines_detected`` key because it is the weaker claim: what is installed
+when the manifest is written, which is not necessarily what ran. Call
+:func:`engine_versions` directly to capture the whole environment up front,
+before a long run, which is the sturdier habit.
 
 The in-memory :class:`PipelineManifest` and its ``to_dict`` / ``to_json``
 forms need no third-party dependency. Reading and writing the ``.yaml``
@@ -81,16 +91,19 @@ from typing import TYPE_CHECKING, Any
 
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
+from molforge.versions import BackendVersion, engine_versions
 
 if TYPE_CHECKING:
     import os
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
 __all__ = [
+    "BackendVersion",
     "PipelineManifest",
     "PipelineStep",
     "ReplayError",
     "emit_pipeline",
+    "engine_versions",
     "load_pipeline",
     "pipeline_manifest",
     "register_replay_handler",
@@ -182,8 +195,10 @@ class PipelineManifest:
     """A citable description of the workflow that produced an output.
 
     Attributes:
-        environment: molforge / Python / platform versions plus an
-            ``engines`` map of the engine versions that ran.
+        environment: molforge / Python / platform versions, an
+            ``engines`` map of the engine versions that ran, and — when
+            a step's wrapper recorded none — an ``engines_detected`` map
+            of what :func:`molforge.engine_versions` finds installed now.
         steps: The pipeline steps, oldest-first.
         generated: ISO-8601 UTC time the manifest was emitted.
         output: A short descriptor of the terminal output
@@ -387,19 +402,56 @@ def _capture_environment(provenance: Provenance) -> dict[str, Any]:
     The per-engine versions are collected across the whole chain; the
     molforge version is taken from the terminal step (falling back to the
     live version) since that's the one that assembled the final output.
+
+    Steps whose wrapper recorded no version — every wrapper that shells
+    out to a native binary — get a second pass against
+    :func:`molforge.engine_versions`, reported under a separate
+    ``engines_detected`` key. Separate because it is a weaker claim:
+    ``engines`` is what ran, ``engines_detected`` is what is installed
+    *now*, and they disagree if the tool was upgraded since.
     """
     import platform as _platform
 
     engines: dict[str, str] = {}
+    unrecorded: list[str] = []
     for step in provenance.chain():
         if step.engine_version:
             engines[step.engine] = step.engine_version
-    return {
+        elif step.engine not in unrecorded:
+            unrecorded.append(step.engine)
+
+    environment: dict[str, Any] = {
         "molforge_version": provenance.molforge_version or _molforge_version(),
         "python_version": _platform.python_version(),
         "platform": _platform.platform(),
         "engines": engines,
     }
+    detected = _detect_versions(name for name in unrecorded if name not in engines)
+    if detected:
+        environment["engines_detected"] = detected
+    return environment
+
+
+def _detect_versions(engine_names: Iterable[str]) -> dict[str, str]:
+    """Ask the backend registry about engines the chain left blank.
+
+    Returns only the ones it can actually answer for, so the manifest
+    gains numbers where they exist and stays silent where they don't.
+    """
+    registry = engine_versions()
+    found: dict[str, str] = {}
+    for name in engine_names:
+        # Multi-step wrappers namespace their operations ("GROMACS.minimize").
+        backend = registry.get(name) or registry.get(name.split(".", 1)[0])
+        if backend is None or not backend.version:
+            continue
+        # "runtime" rows are shared libraries, not engines; molforge's own
+        # version is already reported as molforge_version, and matching
+        # "molforge.io.fetch" against it would just restate that.
+        if backend.category == "runtime":
+            continue
+        found[name] = backend.version
+    return found
 
 
 def _describe_output(obj: Provenance | object) -> dict[str, Any]:

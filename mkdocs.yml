@@ -118,6 +118,7 @@ nav:
       - molforge.plugins: reference/plugins.md
       - molforge.parallel: reference/parallel.md
       - molforge.cache: reference/cache.md
+      - molforge.versions: reference/versions.md
       - molforge.wrappers:
           - Overview: reference/wrappers.md
           - molforge.wrappers.folding: reference/wrappers/folding.md

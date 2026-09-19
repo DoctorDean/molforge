@@ -23,8 +23,12 @@ What gets cached:
       of a run (``Chai1.predict_samples``).
     - ``list[DesignedSequence]`` from generative wrappers.
     - :class:`molforge.docking.DockingResult` from docking wrappers
-      (Vina, Gnina, DiffDock). Extra result types register via
-      :func:`register_serializer`.
+      (Vina, Gnina, DiffDock).
+    - The raw text of a structure downloaded by
+      :func:`molforge.io.fetch` — the server's bytes, not the parsed
+      Protein, so a hit and a miss parse identically.
+
+    Extra result types register via :func:`register_serializer`.
 
 What deliberately doesn't get cached:
     - :class:`molforge.md.Trajectory`. Multi-GB per simulation; users
@@ -45,6 +49,8 @@ Cache layout:
       replaced by markers)
     - ``structure.cif`` (for Protein only): the AtomArray as mmCIF
     - ``payload.json`` (for DesignedSequence list): the design list
+    - ``download.txt`` (for a fetched structure): the downloaded
+      file, verbatim
     - ``receptor.cif`` + ``pose_{i}.cif`` (for DockingResult): the
       receptor and each pose ligand as mmCIF, with scalar pose fields
       and metadata in ``payload.json``
@@ -311,6 +317,27 @@ class Cache:
     def path_for(self, provenance: Provenance) -> Path:
         """On-disk path for an entry. May not exist (cache miss)."""
         return self.directory / cache_key(provenance)
+
+    def invalidate(self, provenance: Provenance) -> bool:
+        """Drop the entry for this Provenance, if there is one.
+
+        :meth:`put` refuses to overwrite an existing entry — first
+        writer wins, which is what keeps concurrent writers from
+        tearing a half-written directory. So a caller that genuinely
+        wants a *fresh* result (``force_refresh=``) has to clear the
+        slot first.
+
+        Returns:
+            ``True`` if an entry was removed, ``False`` if there was
+            nothing to remove (or the cache is disabled).
+        """
+        if not self.enabled:
+            return False
+        entry = self.directory / cache_key(provenance)
+        if not entry.is_dir():
+            return False
+        shutil.rmtree(entry, ignore_errors=True)
+        return not entry.exists()
 
     def clear(self) -> int:
         """Delete every entry. Only removes hex-named directories
@@ -899,6 +926,30 @@ def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
 
 
 # ---------------------------------------------------------------------
+# Downloaded-text serializer
+# ---------------------------------------------------------------------
+
+
+def _serialize_structure_text(text: str, entry: Path) -> None:
+    """Store a downloaded structure file byte-for-byte.
+
+    Deliberately *not* the parsed :class:`~molforge.core.Protein`: a
+    hit and a miss must return the same object. Round-tripping a
+    Protein through :func:`_serialize_protein` re-encodes it as
+    molforge's own mmCIF, so a cached PDB download would come back
+    subtly different from a fresh one. Keeping the server's bytes and
+    re-running the same reader makes the cache invisible, which is
+    the only honest behaviour for a download cache.
+    """
+    (entry / "download.txt").write_text(text, encoding="utf-8")
+
+
+def _deserialize_structure_text(entry: Path) -> str:
+    """Inverse of :func:`_serialize_structure_text`."""
+    return (entry / "download.txt").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------
 # Register built-ins
 # ---------------------------------------------------------------------
 
@@ -919,3 +970,4 @@ register_serializer(
     _serialize_free_energy_result,
     _deserialize_free_energy_result,
 )
+register_serializer("structure_text", _serialize_structure_text, _deserialize_structure_text)

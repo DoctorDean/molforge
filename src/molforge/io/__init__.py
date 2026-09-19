@@ -41,7 +41,9 @@ For MD trajectories:
 Convenience helpers:
 
 - :func:`fetch` / :func:`fetch_many` — pull one or many structures by PDB ID
-  from RCSB or AlphaFold.
+  from RCSB or AlphaFold. Downloads go through :mod:`molforge.cache`, so
+  re-fetching an entry costs nothing; pass ``force_refresh=True`` to
+  re-download or ``cache=False`` to bypass the cache entirely.
 - :func:`search_rcsb` — full-text search the RCSB PDB for entry IDs, ready to
   hand to :func:`fetch_many`.
 - :func:`fetch_chembl` / :func:`fetch_chembl_many` — pull one or many small
