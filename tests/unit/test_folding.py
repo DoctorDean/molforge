@@ -367,3 +367,139 @@ class TestSourceInspection:
         spec = ComplexSpec.from_protein("MKQ")
         with pytest.raises((AttributeError, Exception)):
             spec.entities = ()  # type: ignore[misc]
+
+
+class TestTemplatePolicy:
+    """The shared value type. Engines translate it; it validates itself."""
+
+    def test_none_mode(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        policy = TemplatePolicy.none()
+        assert policy.mode == "none"
+        assert policy.structures == ()
+        assert policy.hits_file is None
+
+    def test_from_structures_keeps_order(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        policy = TemplatePolicy.from_structures("b.cif", "a.cif")
+        assert policy.structures == ("b.cif", "a.cif")
+
+    def test_from_structures_accepts_path_objects(self) -> None:
+        from pathlib import Path
+
+        from molforge.folding import TemplatePolicy
+
+        policy = TemplatePolicy.from_structures(Path("a.cif"), "b.cif")
+        assert policy.structures == ("a.cif", "b.cif")
+        assert all(isinstance(p, str) for p in policy.structures)
+
+    def test_from_hits(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        assert TemplatePolicy.from_hits("hits.m8").hits_file == "hits.m8"
+
+    def test_from_server(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        assert TemplatePolicy.from_server().mode == "server"
+
+    def test_is_frozen(self) -> None:
+        """A policy recorded in provenance must not change afterwards."""
+        import dataclasses
+
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            TemplatePolicy.none().mode = "server"  # type: ignore[misc]
+
+    def test_unknown_mode_rejected(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="mode must be"):
+            TemplatePolicy(mode="apo")  # type: ignore[arg-type]
+
+    def test_structures_mode_needs_paths(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="at least one path"):
+            TemplatePolicy(mode="structures")
+
+    def test_hits_mode_needs_a_file(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="needs a hits_file"):
+            TemplatePolicy(mode="hits")
+
+    @pytest.mark.parametrize("mode", ["none", "hits", "server"])
+    def test_structures_rejected_outside_structures_mode(self, mode: str) -> None:
+        from molforge.folding import TemplatePolicy
+
+        kwargs = {"hits_file": "h.m8"} if mode == "hits" else {}
+        with pytest.raises(ValueError, match="only meaningful for mode='structures'"):
+            TemplatePolicy(mode=mode, structures=("a.cif",), **kwargs)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("mode", ["none", "server"])
+    def test_hits_file_rejected_outside_hits_mode(self, mode: str) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="only meaningful for mode='hits'"):
+            TemplatePolicy(mode=mode, hits_file="h.m8")  # type: ignore[arg-type]
+
+    def test_to_provenance_is_json_native(self) -> None:
+        import json
+
+        from molforge.folding import TemplatePolicy
+
+        for policy in (
+            TemplatePolicy.none(),
+            TemplatePolicy.from_structures("a.cif"),
+            TemplatePolicy.from_hits("h.m8"),
+            TemplatePolicy.from_server(),
+        ):
+            payload = policy.to_provenance()
+            assert json.loads(json.dumps(payload)) == payload
+
+    def test_to_provenance_omits_empty_fields(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        assert TemplatePolicy.none().to_provenance() == {"mode": "none"}
+
+    def test_distinct_policies_serialize_distinctly(self) -> None:
+        """Provenance is the cache key; collisions here would share
+        results between an ablation and its control."""
+        from molforge.folding import TemplatePolicy
+
+        payloads = [
+            TemplatePolicy.none().to_provenance(),
+            TemplatePolicy.from_structures("a.cif").to_provenance(),
+            TemplatePolicy.from_structures("a.cif", "b.cif").to_provenance(),
+            TemplatePolicy.from_hits("h.m8").to_provenance(),
+            TemplatePolicy.from_server().to_provenance(),
+        ]
+        assert len({repr(sorted(p.items())) for p in payloads}) == len(payloads)
+
+
+class TestCoerceTemplatePolicy:
+    def test_none_stays_none(self) -> None:
+        from molforge.folding import _coerce_template_policy
+
+        assert _coerce_template_policy(None) is None
+
+    def test_string_shorthand(self) -> None:
+        from molforge.folding import TemplatePolicy, _coerce_template_policy
+
+        assert _coerce_template_policy("none") == TemplatePolicy.none()
+
+    def test_policy_passes_through(self) -> None:
+        from molforge.folding import TemplatePolicy, _coerce_template_policy
+
+        policy = TemplatePolicy.from_server()
+        assert _coerce_template_policy(policy) is policy
+
+    def test_other_strings_rejected_with_a_pointer(self) -> None:
+        from molforge.folding import _coerce_template_policy
+
+        with pytest.raises(ValueError, match="from_structures"):
+            _coerce_template_policy("apo")

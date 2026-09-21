@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Mapping, Sequence
 
     from molforge.core import Protein
+    from molforge.folding import TemplatePolicy
 
 
 class FoldingEngine(ABC):
@@ -146,6 +147,77 @@ def _reject_unknown_kwargs(
     if constructor_example:
         where += f", e.g. {constructor_example}"
     raise TypeError(f"{engine}.{method}() got unexpected keyword argument(s) {got}. {where}.")
+
+
+def _validate_msa_depth(depth: object) -> int | None:
+    """Check an ``msa_depth`` argument and return it unchanged.
+
+    ``None`` means "leave the engine's own behaviour alone". Anything
+    else must be a positive count of MSA sequences.
+
+    Zero is rejected on purpose. "Show the model no alignment at all" is
+    a different operation from "show it a shallow one" — the engines
+    implement it through a different mechanism, and each already exposes
+    it (``use_msa_server=False`` for Boltz, the default for Chai-1).
+    Letting ``msa_depth=0`` mean that too would give two spellings for
+    one setting and invite the contradictory ``msa_depth=0,
+    use_msa_server=True``.
+
+    Raises:
+        TypeError: If ``depth`` is neither ``None`` nor an ``int``.
+        ValueError: If ``depth`` is below 1.
+    """
+    if depth is None:
+        return None
+    if isinstance(depth, bool) or not isinstance(depth, int):
+        raise TypeError(f"msa_depth must be an int or None, got {type(depth).__name__}")
+    if depth < 1:
+        raise ValueError(
+            f"msa_depth must be >= 1, got {depth}. To run without an MSA at all, "
+            "set use_msa_server=False rather than msa_depth=0."
+        )
+    return depth
+
+
+def _optional_sampling_parameters(
+    msa_depth: int | None, templates: TemplatePolicy | None
+) -> dict[str, object]:
+    """The provenance entries for ``msa_depth`` / ``templates``, if set.
+
+    Emitted only when non-``None`` so that adding these options left
+    every existing cache entry valid: an engine built without them
+    hashes to exactly the key it did before they existed. The cost is
+    that "unset" and "set to the engine default" are the same key, which
+    is correct — they are the same run.
+    """
+    parameters: dict[str, object] = {}
+    if msa_depth is not None:
+        parameters["msa_depth"] = msa_depth
+    if templates is not None:
+        parameters["templates"] = templates.to_provenance()
+    return parameters
+
+
+def _reject_unsupported_template_mode(
+    templates: TemplatePolicy | None, *, engine: str, supported: Collection[str], hint: str
+) -> TemplatePolicy | None:
+    """Reject a template mode this engine has no way to honour.
+
+    Folding without the templates the caller asked for would be the
+    quiet-wrong-answer failure again: the structure comes back looking
+    fine, and only the provenance would hint that the ablation never
+    happened.
+
+    Raises:
+        ValueError: If ``templates.mode`` isn't in ``supported``.
+    """
+    if templates is None or templates.mode in supported:
+        return templates
+    options = ", ".join(repr(m) for m in sorted(supported))
+    raise ValueError(
+        f"{engine} does not support TemplatePolicy(mode={templates.mode!r}). "
+        f"It supports: {options}. {hint}"
+    )
 
 
 class FoldingEngineNotInstalledError(ImportError):
