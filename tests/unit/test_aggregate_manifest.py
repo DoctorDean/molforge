@@ -263,6 +263,7 @@ class TestSerialisation:
         assert AggregateManifest.from_json(manifest.to_json()).to_dict() == manifest.to_dict()
 
     def test_yaml_round_trip(self) -> None:
+        pytest.importorskip("yaml")
         manifest = aggregate_manifest(_fan_out(4, shared_depth=2))
         assert AggregateManifest.from_yaml(manifest.to_yaml()).to_dict() == manifest.to_dict()
 
@@ -289,6 +290,7 @@ class TestSerialisation:
             AggregateStep.from_dict({"id": "abc"})
 
     def test_emit_and_load(self, tmp_path: Path) -> None:
+        pytest.importorskip("yaml")
         outputs = _fan_out(3, shared_depth=2)
         path = tmp_path / "aggregate.yaml"
         written = emit_aggregate(outputs, path)
@@ -302,6 +304,31 @@ class TestSerialisation:
     def test_emit_rejects_unknown_format(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="unknown fmt"):
             emit_aggregate(_fan_out(2), tmp_path / "x.toml", fmt="toml")
+
+    def test_json_path_needs_no_extra(self, tmp_path: Path) -> None:
+        """The whole aggregate shape has to work without PyYAML — it is
+        part of molforge's numpy-only core, like PipelineManifest."""
+        manifest = aggregate_manifest(_fan_out(3, shared_depth=2))
+        assert AggregateManifest.from_json(manifest.to_json()).to_dict() == manifest.to_dict()
+        path = tmp_path / "aggregate.json"
+        emit_aggregate(_fan_out(2), path, fmt="json")
+        assert load_aggregate(path).n_outputs == 2
+
+    def test_yaml_without_pyyaml_raises_the_install_hint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import builtins
+
+        real_import = builtins.__import__
+
+        def no_yaml(name: str, *args: object, **kwargs: object) -> object:
+            if name == "yaml":
+                raise ImportError("No module named 'yaml'")
+            return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(builtins, "__import__", no_yaml)
+        with pytest.raises(ImportError, match=r"molforge\[repro\]"):
+            aggregate_manifest(_fan_out(2)).to_yaml()
 
 
 class TestInputValidation:
