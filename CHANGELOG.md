@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Aggregate provenance manifests — `aggregate_manifest()` and
+  `AggregateManifest`.** `PipelineManifest` describes one output, but plenty of
+  results aren't one output: a consensus structure stands on several folds, a
+  ranking on a screen of thousands. Emitting one manifest per contributing
+  prediction answers the question in a form nobody can read, and restates the
+  shared upstream work — the target prep, the MSA — once per prediction.
+  `aggregate_manifest(outputs)` folds them into one manifest in which every
+  distinct computation appears once, carrying a `contributes_to` count of how
+  many outputs descend from it: a thousand predictions off one MSA give one MSA
+  step marked `contributes_to: 1000`. `PipelineManifest.aggregate(manifests)`
+  does the same from manifests rather than live objects, so a directory of
+  `pipeline.yaml` files off a cluster run folds together without the outputs
+  still being in memory — and produces *identical* step ids, so the two routes
+  are interchangeable. `emit_aggregate` / `load_aggregate` mirror
+  `emit_pipeline` / `load_pipeline`. Provenance itself stays linear: one parent
+  pointer, so `chain()` keeps meaning what it says and cache keys keep their
+  shape, with the many-to-one structure living in the aggregate instead. Guide
+  coverage under
+  [Many outputs at once](docs/guide/reproducibility.md#many-outputs-at-once).
+  Closes [#30](https://github.com/DoctorDean/molforge/issues/30).
+- **`Provenance.content_id()` — one definition of "the same computation".**
+  A digest of engine, version, operation, parameters, inputs and the whole
+  parent chain, with timestamps stripped. Equal ids mean the same work reached
+  the same way, which is what lets an aggregate manifest recognise a shared
+  ancestor; that the ancestry participates is the part that matters, since the
+  same docking run under two different folds is two steps, not one.
+  `molforge.cache` was already computing this shape privately and now shares
+  it, so the cache's idea of a redundant recomputation and a manifest's idea of
+  a shared ancestor can't drift apart. The cache passes
+  `include_operation=False`, because its key predates the field and folding it
+  in would orphan every entry already on disk; cache keys are unchanged, pinned
+  by tests.
 - **Bemis-Murcko scaffolds — `molforge.chem.murcko_scaffold()`.** Reduces a
   molecule to its scaffold (ring systems plus linkers, side chains stripped)
   and returns it as a `Molecule`, so scaffold analysis stays inside molforge

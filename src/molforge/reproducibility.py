@@ -77,8 +77,39 @@ supplied ``context``. An unresolvable input, an unknown engine, or an
 operation with no registered handler raises a clear :class:`ReplayError`.
 Register a handler for a custom operation with :func:`register_replay_handler`.
 
-A manifest is single-output and linear (provenance has one parent pointer);
-merging several outputs' chains is a future extension.
+Aggregates
+----------
+
+A :class:`PipelineManifest` describes one output. Plenty of results aren't
+one output: a consensus structure stands on several folds, a ranking on a
+screen of thousands. Emitting one manifest per contributing prediction
+answers the question in a form nobody can read, and restates the shared
+upstream work — the target preparation, the MSA — once per prediction.
+
+:func:`aggregate_manifest` folds them into one
+:class:`AggregateManifest`. Every distinct computation appears once, keyed
+by :meth:`~molforge.core.provenance.Provenance.content_id`, carrying a
+count of how many outputs descend from it::
+
+    from molforge.reproducibility import aggregate_manifest
+
+    manifest = aggregate_manifest(ensemble.members)
+    print(manifest.describe())
+    # aggregate (5 outputs, 6 unique steps from 10, 4 deduplicated) - molforge 0.8.0
+    #   shared:
+    #     MMseqs2 -> 5 outputs  [6623ea6703b3]
+
+Provenance itself stays linear — one parent pointer, so
+:meth:`~molforge.core.provenance.Provenance.chain` keeps meaning what it
+says and cache keys keep their shape. The many-to-one structure lives in
+the aggregate instead, which is where it belongs: it is a property of the
+*question being asked of a set of outputs*, not of any one of them.
+
+:meth:`PipelineManifest.aggregate` does the same from manifests rather
+than live objects, so a directory of ``pipeline.yaml`` files off a cluster
+run folds together without the outputs still being in memory — which is
+the usual situation by the time anyone asks how a screen was produced.
+Both paths produce identical step ids, so the two are interchangeable.
 """
 
 from __future__ import annotations
@@ -95,15 +126,20 @@ from molforge.versions import BackendVersion, engine_versions
 
 if TYPE_CHECKING:
     import os
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
 __all__ = [
+    "AggregateManifest",
+    "AggregateStep",
     "BackendVersion",
     "PipelineManifest",
     "PipelineStep",
     "ReplayError",
+    "aggregate_manifest",
+    "emit_aggregate",
     "emit_pipeline",
     "engine_versions",
+    "load_aggregate",
     "load_pipeline",
     "pipeline_manifest",
     "register_replay_handler",
@@ -279,6 +315,47 @@ class PipelineManifest:
         yaml = _load_yaml()
         return cls.from_dict(yaml.safe_load(text))
 
+    @classmethod
+    def aggregate(cls, manifests: Iterable[PipelineManifest]) -> AggregateManifest:
+        """Fold several single-output manifests into one aggregate.
+
+        The counterpart to building an aggregate from live objects with
+        :func:`aggregate_manifest`, for when the outputs are long gone and
+        all you have is the manifests — a directory of ``pipeline.yaml``
+        files off a cluster run, say, which is the usual situation by the
+        time someone asks how a screen was produced.
+
+        A manifest records no parent pointers, but its steps are ordered
+        oldest-first, which says the same thing; the chain is rebuilt from
+        that ordering, so a manifest read off disk deduplicates against a
+        live object on exactly the same terms.
+
+        Args:
+            manifests: The manifests to fold together.
+
+        Returns:
+            An :class:`AggregateManifest` in which every distinct step
+            appears once.
+
+        Raises:
+            ValueError: If ``manifests`` is empty, or any of them has no
+                steps.
+
+        Example:
+            >>> from pathlib import Path
+            >>> from molforge.reproducibility import PipelineManifest, load_pipeline
+            >>> runs = [load_pipeline(p) for p in Path("runs").glob("*.yaml")]  # doctest: +SKIP
+            >>> combined = PipelineManifest.aggregate(runs)                     # doctest: +SKIP
+        """
+        materialised = list(manifests)
+        if not materialised:
+            raise ValueError(
+                "PipelineManifest.aggregate() needs at least one manifest; an "
+                "aggregate of nothing has no provenance to describe."
+            )
+        chains = [_provenance_from_steps(m.steps).chain() for m in materialised]
+        return _assemble_aggregate(chains, [dict(m.output) for m in materialised])
+
 
 def pipeline_manifest(obj: Provenance | object) -> PipelineManifest:
     """Build a :class:`PipelineManifest` from an output or a provenance.
@@ -366,6 +443,479 @@ def load_pipeline(path: str | os.PathLike[str]) -> PipelineManifest:
     if p.suffix == ".json":
         return PipelineManifest.from_json(text)
     return PipelineManifest.from_yaml(text)
+
+
+# ======================================================================
+# Aggregate manifests
+# ======================================================================
+
+#: On-disk schema version for an aggregate manifest, emitted as the
+#: ``molforge_aggregate`` key. Independent of :data:`SCHEMA_VERSION`; the
+#: two shapes evolve separately.
+AGGREGATE_SCHEMA_VERSION = 1
+
+#: Step ids in an aggregate manifest are truncated content ids. Full
+#: 64-char digests are correct but make a manifest with a thousand steps
+#: unreadable, so the shortest of these lengths that keeps every id
+#: distinct is used.
+_ID_LENGTHS = (12, 16, 64)
+
+
+@dataclass(frozen=True)
+class AggregateStep:
+    """One *distinct* computation in an :class:`AggregateManifest`.
+
+    A step that a thousand predictions shared appears here once, with
+    :attr:`contributes_to` recording that it fed a thousand of them.
+
+    There is no single timestamp, because a deduplicated step may have
+    run many times; :attr:`first_run` keeps the earliest seen, which is
+    what dates the work.
+
+    Attributes:
+        id: Short, manifest-unique identifier — a truncated
+            :meth:`~molforge.core.provenance.Provenance.content_id`.
+        engine: Producer name.
+        operation: The method that produced the output; ``""`` when
+            unrecorded.
+        engine_version: Producer version; ``""`` when not exposed.
+        inputs: Input identifiers.
+        parameters: Arguments that drove the step.
+        parent: :attr:`id` of the step this one consumed, or ``None``
+            for an originating step.
+        contributes_to: How many of the manifest's outputs descend from
+            this step. ``1`` means it was unique to one output; higher
+            means it was shared, and is the whole reason to aggregate.
+        first_run: Earliest ISO-8601 timestamp seen for this step.
+    """
+
+    id: str
+    engine: str
+    operation: str = ""
+    engine_version: str = ""
+    inputs: dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
+    parent: str | None = None
+    contributes_to: int = 1
+    first_run: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a plain, ordered dict for serialization."""
+        return {
+            "id": self.id,
+            "engine": self.engine,
+            "operation": self.operation,
+            "engine_version": self.engine_version,
+            "parent": self.parent,
+            "contributes_to": self.contributes_to,
+            "first_run": self.first_run,
+            "inputs": dict(self.inputs),
+            "parameters": dict(self.parameters),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AggregateStep:
+        """Rebuild from :meth:`to_dict` output; tolerant of missing keys."""
+        if "id" not in data or "engine" not in data:
+            raise ValueError("aggregate step missing required 'id'/'engine' key")
+        parent = data.get("parent")
+        return cls(
+            id=str(data["id"]),
+            engine=str(data["engine"]),
+            operation=str(data.get("operation", "")),
+            engine_version=str(data.get("engine_version", "")),
+            inputs=dict(data.get("inputs") or {}),
+            parameters=dict(data.get("parameters") or {}),
+            parent=str(parent) if parent else None,
+            contributes_to=int(data.get("contributes_to", 1)),
+            first_run=str(data.get("first_run", "")),
+        )
+
+
+@dataclass(frozen=True)
+class AggregateManifest:
+    """A citable description of the work behind *many* outputs at once.
+
+    :class:`PipelineManifest` answers "how was this one thing made".
+    Plenty of results aren't one thing: a consensus structure stands on
+    five folds, a ranking on a screen of thousands. Emitting one manifest
+    per prediction answers the question in a form nobody can read, and
+    restates the shared upstream work — the target preparation, the MSA —
+    once per prediction.
+
+    This aggregates them. Every distinct computation appears once, keyed
+    by :meth:`~molforge.core.provenance.Provenance.content_id`, with a
+    count of how many outputs descend from it. A thousand predictions off
+    one MSA yield one MSA step marked ``contributes_to: 1000``, and the
+    manifest is a page rather than a directory.
+
+    Attributes:
+        environment: molforge / Python / platform versions and engine
+            versions, consolidated across every contributing output.
+        steps: The distinct steps, ordered so a step's :attr:`parent`
+            always precedes it.
+        outputs: One descriptor per aggregated output — its type, name
+            where it has one, and the ``step`` id it terminates at.
+        generated: ISO-8601 UTC time the manifest was emitted.
+        schema_version: The on-disk schema version.
+    """
+
+    environment: dict[str, Any]
+    steps: list[AggregateStep]
+    outputs: list[dict[str, Any]]
+    generated: str = ""
+    schema_version: int = AGGREGATE_SCHEMA_VERSION
+
+    def __len__(self) -> int:
+        """The number of distinct steps."""
+        return len(self.steps)
+
+    def __iter__(self) -> Iterator[AggregateStep]:
+        return iter(self.steps)
+
+    # ------------------------------------------------------------------
+    # Views
+    # ------------------------------------------------------------------
+
+    @property
+    def n_outputs(self) -> int:
+        """How many outputs this manifest describes."""
+        return len(self.outputs)
+
+    @property
+    def total_steps(self) -> int:
+        """Chain positions before deduplication.
+
+        The sum of every output's chain length — what a directory of
+        per-output manifests would have spelled out.
+        """
+        return sum(step.contributes_to for step in self.steps)
+
+    @property
+    def shared_steps(self) -> list[AggregateStep]:
+        """Steps more than one output descends from, most-shared first."""
+        shared = [s for s in self.steps if s.contributes_to > 1]
+        return sorted(shared, key=lambda s: (-s.contributes_to, s.id))
+
+    def roots(self) -> list[AggregateStep]:
+        """The originating steps — those consuming nothing in this manifest."""
+        return [s for s in self.steps if s.parent is None]
+
+    def step_by_id(self, step_id: str) -> AggregateStep:
+        """Look a step up by :attr:`AggregateStep.id`.
+
+        Raises:
+            KeyError: If no step has that id.
+        """
+        for step in self.steps:
+            if step.id == step_id:
+                return step
+        raise KeyError(f"no step with id {step_id!r} in this manifest")
+
+    def summary(self) -> dict[str, int]:
+        """The headline counts, as emitted under the ``summary`` key."""
+        return {
+            "outputs": self.n_outputs,
+            "unique_steps": len(self.steps),
+            "total_steps": self.total_steps,
+            "shared_steps": len(self.shared_steps),
+        }
+
+    def describe(self) -> str:
+        """A compact human-readable summary.
+
+        Leads with the counts, then the shared steps — the ones worth
+        looking at, since a step only many outputs depend on is the one
+        whose settings matter most.
+        """
+        counts = self.summary()
+        saved = counts["total_steps"] - counts["unique_steps"]
+        lines = [
+            f"aggregate ({counts['outputs']} output"
+            f"{'s' if counts['outputs'] != 1 else ''}, "
+            f"{counts['unique_steps']} unique step"
+            f"{'s' if counts['unique_steps'] != 1 else ''} "
+            f"from {counts['total_steps']}, {saved} deduplicated) — "
+            f"molforge {self.environment.get('molforge_version', '?')}"
+        ]
+        shared = self.shared_steps
+        if shared:
+            lines.append("  shared:")
+            for step in shared:
+                ver = f" v{step.engine_version}" if step.engine_version else ""
+                lines.append(
+                    f"    {step.engine}{ver} -> {step.contributes_to} outputs  [{step.id}]"
+                )
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Serialisation
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to the on-disk dict shape (ordered, JSON/YAML-native)."""
+        return {
+            "molforge_aggregate": self.schema_version,
+            "generated": self.generated,
+            "environment": dict(self.environment),
+            "summary": self.summary(),
+            "outputs": [dict(o) for o in self.outputs],
+            "steps": [s.to_dict() for s in self.steps],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AggregateManifest:
+        """Rebuild from :meth:`to_dict` output; tolerant of missing keys.
+
+        The ``summary`` block is not read back — it is derived from the
+        steps, so trusting a stored copy would let a hand-edited file
+        report counts its own steps contradict.
+        """
+        return cls(
+            environment=dict(data.get("environment") or {}),
+            steps=[AggregateStep.from_dict(s) for s in data.get("steps", [])],
+            outputs=[dict(o) for o in data.get("outputs", [])],
+            generated=str(data.get("generated", "")),
+            schema_version=int(data.get("molforge_aggregate", AGGREGATE_SCHEMA_VERSION)),
+        )
+
+    def to_json(self, *, indent: int | None = 2) -> str:
+        """Serialize to JSON text. No third-party dependency."""
+        return json.dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_json(cls, text: str) -> AggregateManifest:
+        """Deserialize from JSON text."""
+        return cls.from_dict(json.loads(text))
+
+    def to_yaml(self) -> str:
+        """Serialize to YAML text. Requires the ``repro`` extra (PyYAML)."""
+        yaml = _load_yaml()
+        return str(yaml.safe_dump(self.to_dict(), sort_keys=False, default_flow_style=False))
+
+    @classmethod
+    def from_yaml(cls, text: str) -> AggregateManifest:
+        """Deserialize from YAML text. Requires the ``repro`` extra."""
+        yaml = _load_yaml()
+        return cls.from_dict(yaml.safe_load(text))
+
+
+def aggregate_manifest(objs: Iterable[Provenance | object]) -> AggregateManifest:
+    """Build an :class:`AggregateManifest` from many outputs.
+
+    Args:
+        objs: Outputs carrying provenance (:class:`~molforge.core.Protein`,
+            ``DockingResult``, ``Pose``, ``DesignedSequence``, ...) or
+            :class:`~molforge.core.provenance.Provenance` instances. Any
+            mix is fine.
+
+    Returns:
+        A manifest in which every distinct computation appears once.
+
+    Raises:
+        ValueError: If ``objs`` is empty, or if any element carries no
+            provenance.
+
+    Example:
+        >>> from molforge.reproducibility import aggregate_manifest
+        >>> manifest = aggregate_manifest(ensemble.members)   # doctest: +SKIP
+        >>> print(manifest.describe())                        # doctest: +SKIP
+        aggregate (5 outputs, 6 unique steps from 10, 4 deduplicated) — molforge 0.8.0
+          shared:
+            ESMFold v1.0.3 -> 5 outputs  [a1b2c3d4e5f6]
+    """
+    materialised = list(objs)
+    if not materialised:
+        raise ValueError(
+            "aggregate_manifest() needs at least one output; an aggregate of "
+            "nothing has no provenance to describe."
+        )
+    chains = [_extract_provenance(obj).chain() for obj in materialised]
+    descriptors = [_describe_output(obj) for obj in materialised]
+    return _assemble_aggregate(chains, descriptors)
+
+
+def emit_aggregate(
+    objs: Iterable[Provenance | object],
+    path: str | os.PathLike[str],
+    *,
+    fmt: str = "yaml",
+) -> AggregateManifest:
+    """Write an ``aggregate.yaml`` (or ``.json``) spanning many outputs.
+
+    The many-output counterpart of :func:`emit_pipeline`.
+
+    Args:
+        objs: Outputs carrying provenance.
+        path: Destination file path.
+        fmt: ``"yaml"`` (default; needs the ``repro`` extra) or ``"json"``.
+
+    Returns:
+        The :class:`AggregateManifest` that was written.
+
+    Raises:
+        ValueError: If ``objs`` is empty, provenance is missing, or ``fmt``
+            is unrecognized.
+        ImportError: If ``fmt="yaml"`` and PyYAML isn't installed.
+    """
+    manifest = aggregate_manifest(objs)
+    if fmt == "yaml":
+        text = manifest.to_yaml()
+    elif fmt == "json":
+        text = manifest.to_json()
+    else:
+        raise ValueError(f"unknown fmt {fmt!r}; expected 'yaml' or 'json'.")
+    Path(path).write_text(text, encoding="utf-8")
+    return manifest
+
+
+def load_aggregate(path: str | os.PathLike[str]) -> AggregateManifest:
+    """Load an aggregate manifest from a ``.yaml`` / ``.json`` file.
+
+    Format is chosen by suffix, as in :func:`load_pipeline`.
+
+    Raises:
+        ImportError: If a YAML file is loaded without PyYAML installed.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    if p.suffix == ".json":
+        return AggregateManifest.from_json(text)
+    return AggregateManifest.from_yaml(text)
+
+
+# ---------- aggregate internals ----------
+
+
+def _assemble_aggregate(
+    chains: list[list[Provenance]], descriptors: list[dict[str, Any]]
+) -> AggregateManifest:
+    """Deduplicate a set of provenance chains into one manifest.
+
+    Each chain arrives oldest-first. A node's
+    :meth:`~molforge.core.provenance.Provenance.content_id` covers its
+    whole ancestry, so equal ids really are the same work reached the same
+    way — two chains that diverge at step 3 share ids for 1 and 2 and
+    differ from 3 on, which is exactly the merge we want.
+
+    Walking oldest-first and recording each id the first time it appears
+    also gives the ordering for free: a parent is always seen before its
+    child, so :attr:`AggregateManifest.steps` needs no topological sort.
+    """
+    full_ids = [[node.content_id() for node in chain] for chain in chains]
+    shorten = _id_shortener([i for ids in full_ids for i in ids])
+
+    accumulated: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    for chain, ids in zip(chains, full_ids, strict=True):
+        parent: str | None = None
+        for node, full_id in zip(chain, ids, strict=True):
+            step_id = shorten(full_id)
+            existing = accumulated.get(step_id)
+            if existing is None:
+                accumulated[step_id] = {
+                    "id": step_id,
+                    "engine": node.engine,
+                    "operation": node.operation,
+                    "engine_version": node.engine_version,
+                    "inputs": dict(node.inputs),
+                    "parameters": dict(node.parameters),
+                    "parent": parent,
+                    "contributes_to": 1,
+                    "first_run": node.timestamp,
+                }
+                order.append(step_id)
+            else:
+                existing["contributes_to"] += 1
+                # Earliest timestamp dates the work. An empty one sorts
+                # before any real timestamp, so guard against it.
+                if node.timestamp and (
+                    not existing["first_run"] or node.timestamp < existing["first_run"]
+                ):
+                    existing["first_run"] = node.timestamp
+            parent = step_id
+
+    steps = [AggregateStep(**accumulated[step_id]) for step_id in order]
+    return AggregateManifest(
+        environment=_merge_environments(chains),
+        steps=steps,
+        outputs=[
+            {**descriptor, "step": shorten(ids[-1]) if ids else None}
+            for descriptor, ids in zip(descriptors, full_ids, strict=True)
+        ],
+        generated=_generated_timestamp(),
+    )
+
+
+def _id_shortener(full_ids: Iterable[str]) -> Callable[[str], str]:
+    """Return a function truncating content ids to a manifest-wide length.
+
+    Full digests are unreadable in bulk, so the shortest length that keeps
+    every id in *this* manifest distinct is used. The check is what makes
+    truncation safe: a prefix collision would silently merge two unrelated
+    steps, which is a worse manifest than a verbose one.
+    """
+    distinct = set(full_ids)
+    for length in _ID_LENGTHS:
+        if len({i[:length] for i in distinct}) == len(distinct):
+            return lambda full_id, _length=length: str(full_id[:_length])  # type: ignore[misc]
+    # Unreachable: the last entry is the full digest length.
+    return lambda full_id: full_id
+
+
+def _merge_environments(chains: list[list[Provenance]]) -> dict[str, Any]:
+    """Consolidate one environment block across every contributing chain.
+
+    molforge / Python / platform come from the first chain's terminal
+    step; engine versions are unioned, because an aggregate legitimately
+    spans engines no single output touched. A version that two outputs
+    disagree about is recorded as the set of values seen rather than
+    silently resolved — disagreement is a real finding about the run, not
+    a formatting problem.
+    """
+    if not chains:  # pragma: no cover - callers guarantee non-empty
+        return {}
+    base = _capture_environment(chains[0][-1])
+    engines: dict[str, set[str]] = {}
+    for chain in chains:
+        for node in chain:
+            if node.engine_version:
+                engines.setdefault(node.engine, set()).add(node.engine_version)
+    base["engines"] = {
+        engine: (next(iter(versions)) if len(versions) == 1 else sorted(versions))
+        for engine, versions in sorted(engines.items())
+    }
+    return base
+
+
+def _provenance_from_steps(steps: Sequence[PipelineStep]) -> Provenance:
+    """Rebuild a provenance chain from a linearized manifest's steps.
+
+    A :class:`PipelineManifest` records no parent pointers, but it is
+    ordered oldest-first, which says the same thing: step *i* consumed
+    step *i-1*. Rebuilding the chain as :class:`Provenance` means
+    aggregation has exactly one code path, and manifests read back off
+    disk deduplicate against live objects on the same terms.
+
+    Raises:
+        ValueError: If ``steps`` is empty.
+    """
+    if not steps:
+        raise ValueError("cannot rebuild a provenance chain from a manifest with no steps")
+    node: Provenance | None = None
+    for step in steps:
+        node = Provenance(
+            engine=step.engine,
+            operation=step.operation,
+            engine_version=step.engine_version,
+            timestamp=step.timestamp,
+            parameters=dict(step.parameters),
+            inputs=dict(step.inputs),
+            parent=node,
+        )
+    assert node is not None  # non-empty steps guarantee this
+    return node
 
 
 # ---------- internals ----------

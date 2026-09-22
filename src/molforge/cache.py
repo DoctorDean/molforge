@@ -122,19 +122,20 @@ _logger = logging.getLogger(__name__)
 def _provenance_for_key(provenance: Provenance) -> dict[str, Any]:
     """Strip timestamps from Provenance for deterministic hashing.
 
-    Walks the parent chain so timestamps anywhere up the chain are
-    stripped. Everything else (engine, engine_version, parameters,
-    inputs, parent chain) participates in the key.
+    Delegates to :meth:`Provenance.content_dict`, which is molforge's one
+    definition of "the same computation" — shared with
+    :class:`molforge.reproducibility.AggregateManifest`, so the cache's
+    idea of a redundant recomputation and a manifest's idea of a shared
+    ancestor can't drift apart.
+
+    ``include_operation=False`` because this key predates the
+    ``operation`` field. Folding it in now would change every key and so
+    orphan every entry already on disk, for no behavioural gain: a
+    wrapper that needs two operations on identical inputs to occupy
+    different slots already distinguishes them with a parameter (see
+    ``Chai1``'s ``return_all_samples``).
     """
-    out: dict[str, Any] = {
-        "engine": provenance.engine,
-        "engine_version": provenance.engine_version,
-        "parameters": dict(provenance.parameters),
-        "inputs": dict(provenance.inputs),
-    }
-    if provenance.parent is not None:
-        out["parent"] = _provenance_for_key(provenance.parent)
-    return out
+    return provenance.content_dict(include_operation=False)
 
 
 def cache_key(provenance: Provenance) -> str:
