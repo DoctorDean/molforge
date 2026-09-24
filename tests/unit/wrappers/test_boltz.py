@@ -817,3 +817,173 @@ class TestEndToEnd:
         assert protein.n_residues == 20
         assert "confidence_per_residue" in protein.metadata
         assert protein.metadata["engine"] == "Boltz"
+
+
+class TestMsaDepth:
+    """Capping MSA depth is an ablation knob: it has to reach the CLI
+    and it has to reach the cache key, or a depth ladder silently
+    returns one structure five times."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def test_depth_sets_both_subsample_flags(self, tmp_path: Path) -> None:
+        """Boltz ignores the count without the switch, so both or neither."""
+        cmd = Boltz(msa_depth=16)._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--subsample_msa" in cmd
+        assert cmd[cmd.index("--num_subsampled_msa") + 1] == "16"
+
+    def test_absent_when_unset(self, tmp_path: Path) -> None:
+        cmd = Boltz()._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--subsample_msa" not in cmd
+        assert "--num_subsampled_msa" not in cmd
+
+    def test_recorded_in_provenance(self) -> None:
+        prov = Boltz(msa_depth=32)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["msa_depth"] == 32
+
+    def test_absent_from_provenance_when_unset(self) -> None:
+        """Omitted rather than recorded as None, so existing cache
+        entries stay valid — see test_default_cache_key_is_unchanged."""
+        prov = Boltz()._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert "msa_depth" not in prov.parameters
+
+    def test_each_rung_of_the_ladder_is_a_distinct_cache_entry(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        keys = {
+            cache_key(Boltz(msa_depth=d)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for d in (8, 16, 32, 64, None)
+        }
+        assert len(keys) == 5
+
+    @pytest.mark.parametrize("bad", [0, -1, -100])
+    def test_non_positive_depth_rejected(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="msa_depth must be >= 1"):
+            Boltz(msa_depth=bad)
+
+    def test_zero_points_at_the_right_switch(self) -> None:
+        """Depth 0 isn't a shallow MSA, it's no MSA — a different knob."""
+        with pytest.raises(ValueError, match="use_msa_server=False"):
+            Boltz(msa_depth=0)
+
+    @pytest.mark.parametrize("bad", [1.5, "8", True])
+    def test_non_int_depth_rejected(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="msa_depth must be an int"):
+            Boltz(msa_depth=bad)  # type: ignore[arg-type]
+
+
+class TestTemplatePolicyBoltz:
+    """Boltz takes template structures through its input YAML."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def test_structures_emit_a_templates_block(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        engine = Boltz(templates=TemplatePolicy.from_structures("4hhb.cif", "1ubq.cif"))
+        yaml = engine._build_input_yaml_from_spec(self._spec())
+        assert "templates:" in yaml
+        assert "  - cif: 4hhb.cif" in yaml
+        assert "  - cif: 1ubq.cif" in yaml
+
+    def test_pdb_suffix_uses_the_pdb_key(self) -> None:
+        """Boltz assigns template chain IDs differently per format, so
+        the key has to follow the file, not a default."""
+        from molforge.folding import TemplatePolicy
+
+        engine = Boltz(templates=TemplatePolicy.from_structures("x.pdb", "y.ent", "z.cif"))
+        yaml = engine._build_input_yaml_from_spec(self._spec())
+        assert "  - pdb: x.pdb" in yaml
+        assert "  - pdb: y.ent" in yaml
+        assert "  - cif: z.cif" in yaml
+
+    def test_none_emits_no_block(self) -> None:
+        yaml = Boltz(templates="none")._build_input_yaml_from_spec(self._spec())
+        assert "templates:" not in yaml
+
+    def test_unset_emits_no_block(self) -> None:
+        yaml = Boltz()._build_input_yaml_from_spec(self._spec())
+        assert "templates:" not in yaml
+
+    def test_templated_and_untemplated_do_not_share_a_cache_entry(self) -> None:
+        """The whole point of the ablation — these must not collide."""
+        from molforge.cache import cache_key
+        from molforge.folding import TemplatePolicy
+
+        spec = self._spec()
+        keys = {
+            cache_key(Boltz(templates=t)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for t in (None, "none", TemplatePolicy.from_structures("4hhb.cif"))
+        }
+        assert len(keys) == 3
+
+    def test_recorded_in_provenance(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        prov = Boltz(templates=TemplatePolicy.from_structures("4hhb.cif"))._build_provenance(
+            self._spec(), single_sequence="MKTVRQ"
+        )
+        assert prov.parameters["templates"] == {
+            "mode": "structures",
+            "structures": ["4hhb.cif"],
+        }
+
+    def test_chai_only_modes_are_refused(self) -> None:
+        """Folding without the templates you asked for is the silent
+        wrong answer this raises to avoid."""
+        from molforge.folding import TemplatePolicy
+
+        for policy in (TemplatePolicy.from_server(), TemplatePolicy.from_hits("h.m8")):
+            with pytest.raises(ValueError, match="Boltz does not support"):
+                Boltz(templates=policy)
+
+    def test_error_names_what_boltz_does_support(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="from_structures"):
+            Boltz(templates=TemplatePolicy.from_server())
+
+    def test_bad_string_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must be a TemplatePolicy"):
+            Boltz(templates="full")
+
+
+class TestSamplingControlsCacheCompatibility:
+    def test_default_cache_key_is_unchanged(self) -> None:
+        """Pinned against the key master produced before msa_depth and
+        templates existed. Adding a parameter must not orphan every
+        cached fold a user already has on disk.
+        """
+        from molforge.cache import cache_key
+        from molforge.folding import ComplexSpec
+
+        prov = Boltz()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert cache_key(prov) == (
+            "f65fa5e0b2a1f87727bfeec7ca8a955125c51af6c49e9da0beeaf8a2d6be7e11"
+        )
+
+    def test_default_parameter_set_is_unchanged(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        prov = Boltz()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert set(prov.parameters) == {
+            "model_version",
+            "use_msa_server",
+            "recycling_steps",
+            "diffusion_samples",
+            "sampling_steps",
+            "seed",
+            "device",
+            "affinity_binder",
+        }

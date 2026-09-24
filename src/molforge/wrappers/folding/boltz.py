@@ -52,12 +52,15 @@ import numpy as np
 from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
-from molforge.folding import ComplexSpec, Entity
+from molforge.folding import ComplexSpec, Entity, TemplatePolicy, _coerce_template_policy
 from molforge.wrappers._versions import engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _optional_sampling_parameters,
     _reject_unknown_kwargs,
+    _reject_unsupported_template_mode,
+    _validate_msa_depth,
     _validate_sequence,
 )
 
@@ -84,6 +87,25 @@ class Boltz(FoldingEngine):
             MSA server for protein chains. Set ``False`` for fast
             single-sequence inference (lower accuracy, no internet
             required after weight download).
+        msa_depth: Cap the number of MSA sequences the model may use, as
+            ``--subsample_msa --num_subsampled_msa <n>``. ``None``
+            (default) leaves Boltz's own behaviour alone — the full
+            alignment, up to its ``max_msa_seqs`` ceiling. A shallow
+            alignment makes the model lean less on coevolution, which
+            is how you sweep a depth ladder (8 / 16 / 32 / 64 / full)
+            and watch a prediction move. Recorded in provenance, so
+            each rung of the ladder gets its own cache slot instead of
+            colliding with the others. To drop the MSA entirely, set
+            ``use_msa_server=False`` rather than ``msa_depth``.
+        templates: A :class:`~molforge.folding.TemplatePolicy` (or the
+            string ``"none"``). ``None`` (default) leaves Boltz's own
+            behaviour alone, which is to run without templates. Boltz
+            supports ``TemplatePolicy.none()`` and
+            ``TemplatePolicy.from_structures(...)``, which it receives as
+            a ``templates:`` block in the input YAML; the ``"hits"`` and
+            ``"server"`` modes are Chai-1-only and raise here. Recorded
+            in provenance, so a templated and an untemplated run of the
+            same target never share a cached result.
         recycling_steps: How many trunk-recycling rounds Boltz runs.
             Default ``None`` lets Boltz choose its own (3 for boltz1,
             10 for boltz2 currently).
@@ -130,6 +152,8 @@ class Boltz(FoldingEngine):
         *,
         model_version: Literal["boltz1", "boltz2"] = "boltz2",
         use_msa_server: bool = True,
+        msa_depth: int | None = None,
+        templates: TemplatePolicy | str | None = None,
         recycling_steps: int | None = None,
         diffusion_samples: int | None = None,
         sampling_steps: int | None = None,
@@ -142,6 +166,8 @@ class Boltz(FoldingEngine):
             raise ValueError(f"model_version must be 'boltz1' or 'boltz2', got {model_version!r}")
         self.model_version = model_version
         self.use_msa_server = use_msa_server
+        self.msa_depth = _validate_msa_depth(msa_depth)
+        self.templates = _validate_boltz_templates(templates)
         self.recycling_steps = recycling_steps
         self.diffusion_samples = diffusion_samples
         self.sampling_steps = sampling_steps
@@ -403,6 +429,7 @@ class Boltz(FoldingEngine):
             parameters={
                 "model_version": self.model_version,
                 "use_msa_server": self.use_msa_server,
+                **_optional_sampling_parameters(self.msa_depth, self.templates),
                 "recycling_steps": self.recycling_steps,
                 "diffusion_samples": self.diffusion_samples,
                 "sampling_steps": self.sampling_steps,
@@ -472,6 +499,17 @@ class Boltz(FoldingEngine):
         for entity, chain_ids in zip(spec.entities, chain_ids_per_entity, strict=True):
             lines.extend(_boltz_yaml_entity(entity, chain_ids))
 
+        # Templates: a top-level `templates` list of structure files.
+        # Boltz matches each against the query chains itself unless a
+        # chain_id is given, which is a refinement molforge doesn't
+        # model yet. mode="none" emits nothing, which is already Boltz's
+        # behaviour — the point is that it is now stated rather than
+        # assumed, and recorded in provenance either way.
+        if self.templates is not None and self.templates.mode == "structures":
+            lines.append("templates:")
+            for path in self.templates.structures:
+                lines.append(f"  - {_boltz_template_key(path)}: {path}")
+
         # Affinity request: a top-level `properties` block naming the
         # binder chain. Boltz-2 computes affinity when this is present.
         if affinity_binder is not None:
@@ -531,6 +569,11 @@ class Boltz(FoldingEngine):
         ]
         if self.use_msa_server:
             cmd.append("--use_msa_server")
+        if self.msa_depth is not None:
+            # --subsample_msa is the switch; --num_subsampled_msa is the
+            # count. Boltz ignores the count without the flag, so both
+            # go together or neither does.
+            cmd.extend(["--subsample_msa", "--num_subsampled_msa", str(self.msa_depth)])
         if self.recycling_steps is not None:
             cmd.extend(["--recycling_steps", str(self.recycling_steps)])
         if self.diffusion_samples is not None:
@@ -755,6 +798,38 @@ def _affinity_value(affinity_json: dict[str, Any]) -> float | None:
 def _affinity_probability(affinity_json: dict[str, Any]) -> float | None:
     """Boltz-2's ``affinity_probability_binary`` (probability of being a binder)."""
     return _maybe_float(affinity_json.get("affinity_probability_binary"))
+
+
+def _validate_boltz_templates(templates: TemplatePolicy | str | None) -> TemplatePolicy | None:
+    """Coerce and check the ``templates`` argument for Boltz.
+
+    Boltz reads templates as structure files named in its input YAML, so
+    it can honour ``"none"`` and ``"structures"``. It has no template
+    search of its own and no notion of a hits file, so the two Chai-1
+    modes are refused here rather than silently ignored.
+    """
+    return _reject_unsupported_template_mode(
+        _coerce_template_policy(templates),
+        engine="Boltz",
+        supported={"none", "structures"},
+        hint=(
+            "Boltz takes template structures directly — "
+            "TemplatePolicy.from_structures('4hhb.cif'). The 'hits' and "
+            "'server' modes are Chai-1's."
+        ),
+    )
+
+
+def _boltz_template_key(path: str) -> str:
+    """Whether Boltz should read this template as ``cif:`` or ``pdb:``.
+
+    Boltz keys the YAML entry by format, and assigns template chain IDs
+    differently for the two, so the suffix has to pick the key rather
+    than defaulting to one. Anything that isn't recognisably a PDB file
+    is offered as mmCIF, which is the format Boltz documents first and
+    the one molforge writes.
+    """
+    return "pdb" if path.lower().endswith((".pdb", ".ent")) else "cif"
 
 
 def _validate_seed(seed: object) -> int | None:

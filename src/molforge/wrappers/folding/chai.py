@@ -73,12 +73,15 @@ import numpy as np
 from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
-from molforge.folding import ComplexSpec, Entity
+from molforge.folding import ComplexSpec, Entity, TemplatePolicy, _coerce_template_policy
 from molforge.wrappers._versions import engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
     FoldingEngineNotInstalledError,
+    _optional_sampling_parameters,
     _reject_unknown_kwargs,
+    _reject_unsupported_template_mode,
+    _validate_msa_depth,
     _validate_sequence,
 )
 
@@ -103,6 +106,27 @@ _HEADLINE_SCORE_KEYS = (
 )
 
 
+def _validate_chai_templates(templates: TemplatePolicy | str | None) -> TemplatePolicy | None:
+    """Coerce and check the ``templates`` argument for Chai-1.
+
+    Chai-1 consumes templates as *hits* — an ``.m8`` table of matches it
+    resolves itself — or by searching a server. It has no way to be
+    handed structure files directly, so Boltz's ``"structures"`` mode is
+    refused here rather than dropped, which would fold without the
+    templates the caller asked for.
+    """
+    return _reject_unsupported_template_mode(
+        _coerce_template_policy(templates),
+        engine="Chai1",
+        supported={"none", "hits", "server"},
+        hint=(
+            "Chai-1 takes an .m8 hits file — TemplatePolicy.from_hits('hits.m8') — "
+            "or searches for itself with TemplatePolicy.from_server(). Passing "
+            "structure files is Boltz's mode."
+        ),
+    )
+
+
 class Chai1(FoldingEngine):
     """Wrapper around the Chai-1 biomolecular prediction model.
 
@@ -120,6 +144,29 @@ class Chai1(FoldingEngine):
         msa_server_url: Override the MSA server URL. Only used when
             ``use_msa_server=True``. ``None`` uses Chai-lab's default
             (the ColabFold server).
+        msa_depth: Cap the number of MSA sequences the model may use,
+            passed to Chai-1 as ``recycle_msa_subsample``. ``None``
+            (default) leaves the full alignment in place. A shallow
+            alignment makes the model lean less on coevolution, which is
+            how you sweep a depth ladder (8 / 16 / 32 / 64 / full) and
+            watch a prediction move. Recorded in provenance, so each
+            rung gets its own cache slot.
+
+            Note the engines differ in *where* the cap bites: Chai-1
+            subsamples during trunk recycling, leaving the first trunk
+            pass with the full alignment, whereas Boltz's
+            ``--subsample_msa`` applies throughout. Both shrink what the
+            model sees, so a ladder is meaningful on either — but the
+            two are not numerically comparable at the same depth, and a
+            cross-engine comparison should say which engine it ran on.
+        templates: A :class:`~molforge.folding.TemplatePolicy` (or the
+            string ``"none"``). ``None`` (default) leaves Chai-1's own
+            behaviour alone, which is to run without templates. Chai-1
+            supports ``TemplatePolicy.none()``,
+            ``TemplatePolicy.from_hits(path)`` (an ``.m8`` hits file) and
+            ``TemplatePolicy.from_server()``; the ``"structures"`` mode
+            is Boltz-only and raises here, because Chai-1 takes hits
+            rather than structure files. Recorded in provenance.
         num_trunk_recycles: Trunk-recycling rounds. ``None`` uses
             Chai-lab's default (3). Higher = slower, marginally
             better accuracy.
@@ -144,6 +191,8 @@ class Chai1(FoldingEngine):
         device: str | None = None,
         use_msa_server: bool = False,
         msa_server_url: str | None = None,
+        msa_depth: int | None = None,
+        templates: TemplatePolicy | str | None = None,
         num_trunk_recycles: int | None = None,
         num_diffn_timesteps: int | None = None,
         seed: int | None = None,
@@ -156,6 +205,8 @@ class Chai1(FoldingEngine):
         self.device = device
         self.use_msa_server = use_msa_server
         self.msa_server_url = msa_server_url
+        self.msa_depth = _validate_msa_depth(msa_depth)
+        self.templates = _validate_chai_templates(templates)
         self.num_trunk_recycles = num_trunk_recycles
         self.num_diffn_timesteps = num_diffn_timesteps
         self.seed = seed
@@ -509,6 +560,7 @@ class Chai1(FoldingEngine):
             "seed": self.seed,
             "cache_dir": self.cache_dir,
         }
+        parameters.update(_optional_sampling_parameters(self.msa_depth, self.templates))
         if all_samples:
             parameters["return_all_samples"] = True
         return Provenance.from_engine(
@@ -616,6 +668,20 @@ class Chai1(FoldingEngine):
         }
         if self.msa_server_url is not None:
             kwargs["msa_server_url"] = self.msa_server_url
+        if self.msa_depth is not None:
+            # Chai-1 spells the MSA cap `recycle_msa_subsample`: 0 (its
+            # default) means no subsampling, a positive value is the
+            # number of rows kept during trunk recycling.
+            kwargs["recycle_msa_subsample"] = self.msa_depth
+        if self.templates is not None:
+            if self.templates.mode == "server":
+                kwargs["use_templates_server"] = True
+            elif self.templates.mode == "hits":
+                kwargs["template_hits_path"] = Path(self.templates.hits_file or "")
+            else:
+                # mode="none": state it rather than rely on the default.
+                kwargs["use_templates_server"] = False
+                kwargs["template_hits_path"] = None
         if self.num_trunk_recycles is not None:
             kwargs["num_trunk_recycles"] = self.num_trunk_recycles
         if self.num_diffn_timesteps is not None:

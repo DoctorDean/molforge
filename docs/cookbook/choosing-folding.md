@@ -206,6 +206,89 @@ constructor.) And a seed pins the *sampler*, not the hardware: GPU
 non-determinism means small numerical drift across machines is still
 expected, so treat seeding as reproducibility of intent, not of bits.
 
+### MSA depth
+
+An AF3-class model leans heavily on coevolution: the deeper the
+alignment, the more confidently it reproduces the fold the family
+already shows. Shrinking the alignment is how you find out what the
+model believes without that support — and, in practice, how you push it
+off a dominant conformation towards alternatives it would otherwise
+never sample.
+
+Both AF3-class engines take `msa_depth`, a cap on how many MSA
+sequences the model may use:
+
+```python
+from molforge.wrappers.folding import Boltz
+
+ladder = {
+    depth: Boltz(msa_depth=depth, use_msa_server=True).predict(sequence)
+    for depth in (8, 16, 32, 64, None)   # None = the full alignment
+}
+```
+
+Each rung is a separate cache entry, so the sweep re-runs only what it
+must, and a repeat of the whole ladder is free.
+
+| Engine  | `msa_depth=N` becomes                     | Where the cap bites            |
+| ------- | ----------------------------------------- | ------------------------------ |
+| Boltz   | `--subsample_msa --num_subsampled_msa N`   | Every trunk pass               |
+| Chai-1  | `recycle_msa_subsample=N`                  | Recycling passes only; the first trunk pass still sees the full alignment |
+
+That difference is worth knowing before you compare the two: both
+genuinely shrink what the model sees, so a ladder is meaningful on
+either engine, but the same `N` is not the same experiment on both.
+Report which engine a ladder ran on.
+
+`msa_depth` is a *shallow* alignment, not the absence of one. To run
+with no MSA at all, use `Boltz(use_msa_server=False)` — or Chai-1's
+default, which is already MSA-free. `msa_depth=0` raises and says so
+rather than quietly meaning one of the two.
+
+### Templates
+
+A template lets the model copy a known fold instead of deriving one.
+Usually helpful; occasionally the whole problem, because a model handed
+a structure of the thing you're asking about will hand it back. Taking
+templates away is how you check the prediction is a prediction.
+
+`TemplatePolicy` names the mechanism, because the engines genuinely
+differ:
+
+```python
+from molforge.folding import TemplatePolicy
+from molforge.wrappers.folding import Boltz, Chai1
+
+# Boltz reads template structures from its input YAML.
+Boltz(templates=TemplatePolicy.from_structures("4hhb.cif", "1ubq.cif"))
+
+# Chai-1 takes a precomputed hits table, or searches for itself.
+Chai1(templates=TemplatePolicy.from_hits("hits.m8"))
+Chai1(templates=TemplatePolicy.from_server())
+
+# Both understand "no templates" — the control arm of the ablation.
+Boltz(templates="none")
+Chai1(templates=TemplatePolicy.none())
+```
+
+| Mode                          | Boltz | Chai-1 |
+| ----------------------------- | :---: | :----: |
+| `none()`                      |   ✅   |   ✅    |
+| `from_structures(*paths)`     |   ✅   |   —    |
+| `from_hits(path)`             |   —   |   ✅    |
+| `from_server()`               |   —   |   ✅    |
+
+An engine given a mode it cannot honour raises, naming what it does
+support. That is deliberate: the alternative is folding *without* the
+templates you asked for and returning a structure that looks fine, with
+nothing but the provenance to suggest the ablation never happened.
+
+molforge does not decide which templates are appropriate. Restricting a
+run to, say, only unbound structures is a judgement about your targets;
+you make it by choosing what to pass. What molforge guarantees is that
+your choice is applied, recorded in provenance, and part of the cache
+key — so an ablation and its control never share a cached result.
+
 ### Installation footprint
 
 | Engine        | Install                                                                                  |

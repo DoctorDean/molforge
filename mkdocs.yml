@@ -113,6 +113,7 @@ nav:
       - molforge.md: reference/md.md
       - molforge.prep: reference/prep.md
       - molforge.docking: reference/docking.md
+      - molforge.folding: reference/folding.md
       - molforge.chem: reference/chem.md
       - molforge.freeenergy: reference/freeenergy.md
       - molforge.plugins: reference/plugins.md
