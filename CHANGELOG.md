@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **MSA-depth control — `Boltz(msa_depth=...)` and `Chai1(msa_depth=...)`.** An
+  AF3-class model leans on coevolution, so shrinking the alignment is how you
+  see what it predicts without that support — and how you push it off a
+  dominant conformation. Neither wrapper exposed a depth knob, so sweeping a
+  ladder (8 / 16 / 32 / 64 / full) meant reaching past molforge into each
+  engine's own interface. `msa_depth` caps the sequences the model may use:
+  Boltz receives `--subsample_msa --num_subsampled_msa <n>`, Chai-1 receives
+  `recycle_msa_subsample=<n>`. The two differ in where the cap bites — Chai-1
+  subsamples only during trunk recycling, Boltz throughout — which is
+  documented rather than smoothed over, since the same `N` is not the same
+  experiment on both. The depth is recorded in provenance, so every rung of a
+  ladder gets its own cache slot instead of colliding. `msa_depth=0` raises and
+  points at `use_msa_server=False`: no alignment at all is a different
+  mechanism, not depth zero. Cookbook coverage under
+  [MSA depth](docs/cookbook/choosing-folding.md#msa-depth).
+  Closes [#31](https://github.com/DoctorDean/molforge/issues/31).
+- **Template policy — `molforge.folding.TemplatePolicy`.** A model handed a
+  structure of the thing you are asking about will hand it back, so taking
+  templates away is how you check that a prediction is a prediction. Neither
+  folding wrapper exposed any template control. `TemplatePolicy` names the
+  mechanism rather than pretending the engines are interchangeable, because
+  they aren't: `from_structures(*paths)` is Boltz's (emitted as a `templates:`
+  block in its input YAML), `from_hits(path)` and `from_server()` are Chai-1's
+  (`template_hits_path` / `use_templates_server`), and `none()` — the control
+  arm — works on both. An engine given a mode it cannot honour raises and names
+  what it does support, rather than folding without the templates that were
+  asked for and returning a structure that looks fine. The policy is recorded
+  in provenance, so an ablation and its control never share a cached result.
+  molforge deliberately doesn't decide *which* templates are appropriate;
+  that's a judgement about your targets, made by choosing what to pass.
+  Cookbook coverage under
+  [Templates](docs/cookbook/choosing-folding.md#templates).
+  Closes [#32](https://github.com/DoctorDean/molforge/issues/32).
 - **Bemis-Murcko scaffolds — `molforge.chem.murcko_scaffold()`.** Reduces a
   molecule to its scaffold (ring systems plus linkers, side chains stripped)
   and returns it as a `Molecule`, so scaffold analysis stays inside molforge

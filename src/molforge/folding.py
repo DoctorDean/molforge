@@ -16,6 +16,9 @@ prediction:
   ligand, a DNA strand, etc.).
 - :class:`ComplexSpec` — an ordered list of entities defining the
   complete system to fold.
+- :class:`TemplatePolicy` — whether, and how, an engine may lean on
+  structural templates. Ablating templates is how you find out what a
+  model can predict without being shown the answer.
 
 Engines that support multi-component prediction expose a
 ``predict_complex(spec)`` method (see :class:`Boltz.predict_complex`
@@ -46,8 +49,11 @@ What this v1 deliberately doesn't model:
 - Modified residues (Boltz uses ``modifications`` lists; Chai
   needs a separate mechanism). Carry the unmodified sequence here;
   add engine-specific modification kwargs as a follow-up.
-- Custom MSAs per entity (use ``use_msa_server`` for v1).
-- Templates (use the engine's underlying API for v1).
+- Custom MSAs per entity (use ``use_msa_server`` for v1). MSA *depth*
+  is controllable — see the engines' ``msa_depth`` parameter.
+- Per-entity templates. :class:`TemplatePolicy` is set on the engine
+  and applies to the whole prediction; targeting one chain means
+  dropping down to the engine's own input format.
 - Restraints (covalent bonds, pocket constraints). Boltz supports
   these via top-level YAML keys; deferred.
 - Ions specified as a separate entity type — Boltz models them as
@@ -62,7 +68,10 @@ format using the engine instance's documented advanced API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from os import PathLike
 
 # The set of entity kinds supported across Boltz and Chai-1. Both
 # engines understand all four; downstream serializers map to engine-
@@ -421,6 +430,156 @@ class ComplexSpec:
 
 
 # ---------------------------------------------------------------------
+# Template policy
+# ---------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TemplatePolicy:
+    """Whether — and how — a folding engine may use structural templates.
+
+    A template lets the model copy a known fold rather than derive one.
+    That is usually what you want, and occasionally exactly what you
+    don't: to see whether a model can produce a conformation *on its
+    own*, you have to be able to take its templates away. Comparing runs
+    across template settings is an ablation, and an ablation needs the
+    setting to be a parameter rather than an engine default.
+
+    The engines disagree about what a template *is*, so the policy names
+    the mechanism rather than pretending they're interchangeable:
+
+    ================= ====================================== ===========
+    Mode              Means                                  Supported by
+    ================= ====================================== ===========
+    ``"none"``        No templates. Predict from sequence.    Boltz, Chai-1
+    ``"structures"``  These specific structure files.         Boltz
+    ``"hits"``        A precomputed template-hits file.       Chai-1
+    ``"server"``      Let the engine search for templates.    Chai-1
+    ================= ====================================== ===========
+
+    An engine raises :class:`ValueError` for a mode it cannot honour,
+    naming what it does support — rather than quietly folding without
+    the templates you asked for.
+
+    Note that molforge does not decide *which* templates are
+    appropriate. Restricting a run to, say, only unbound structures is a
+    judgement about your targets that molforge has no way to make; you
+    make it by choosing what to pass to :meth:`structures` or by
+    filtering the hits file. What molforge guarantees is that whatever
+    you chose is applied, recorded in provenance, and therefore part of
+    the cache key — so two policies never share a cached result.
+
+    Attributes:
+        mode: One of ``"none"``, ``"structures"``, ``"hits"``,
+            ``"server"``.
+        structures: Paths to template structure files, for
+            ``mode="structures"``. Empty otherwise.
+        hits_file: Path to a template-hits file, for ``mode="hits"``.
+            ``None`` otherwise.
+
+    Example:
+        >>> from molforge.folding import TemplatePolicy
+        >>> TemplatePolicy.none().mode
+        'none'
+        >>> TemplatePolicy.from_structures("4hhb.cif", "1ubq.cif").structures
+        ('4hhb.cif', '1ubq.cif')
+    """
+
+    mode: Literal["none", "structures", "hits", "server"]
+    structures: tuple[str, ...] = ()
+    hits_file: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.mode not in ("none", "structures", "hits", "server"):
+            raise ValueError(
+                f"TemplatePolicy.mode must be 'none', 'structures', 'hits' or "
+                f"'server', got {self.mode!r}"
+            )
+        if self.mode == "structures" and not self.structures:
+            raise ValueError(
+                "TemplatePolicy(mode='structures') needs at least one path; "
+                "use TemplatePolicy.none() to run without templates."
+            )
+        if self.mode != "structures" and self.structures:
+            raise ValueError(
+                f"structures= is only meaningful for mode='structures', not {self.mode!r}"
+            )
+        if self.mode == "hits" and not self.hits_file:
+            raise ValueError("TemplatePolicy(mode='hits') needs a hits_file path")
+        if self.mode != "hits" and self.hits_file is not None:
+            raise ValueError(f"hits_file= is only meaningful for mode='hits', not {self.mode!r}")
+
+    # ------------------------------------------------------------------
+    # Constructors
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def none(cls) -> TemplatePolicy:
+        """No templates: make the model predict from sequence alone."""
+        return cls(mode="none")
+
+    @classmethod
+    def from_structures(cls, *paths: str | PathLike[str]) -> TemplatePolicy:
+        """Use these structure files as templates.
+
+        Args:
+            *paths: Template structure files. Boltz reads ``.cif`` and
+                ``.pdb``.
+
+        Raises:
+            ValueError: If no paths are given.
+        """
+        return cls(mode="structures", structures=tuple(str(p) for p in paths))
+
+    @classmethod
+    def from_hits(cls, path: str | PathLike[str]) -> TemplatePolicy:
+        """Use a precomputed template-hits file (Chai-1's ``.m8``)."""
+        return cls(mode="hits", hits_file=str(path))
+
+    @classmethod
+    def from_server(cls) -> TemplatePolicy:
+        """Let the engine search a template server for itself."""
+        return cls(mode="server")
+
+    # ------------------------------------------------------------------
+    # Serialisation
+    # ------------------------------------------------------------------
+
+    def to_provenance(self) -> dict[str, object]:
+        """A JSON-safe summary for :class:`~molforge.core.Provenance`.
+
+        Only the keys that carry information are emitted, so a policy's
+        contribution to a cache key stays as small as what it actually
+        says.
+        """
+        payload: dict[str, object] = {"mode": self.mode}
+        if self.structures:
+            payload["structures"] = list(self.structures)
+        if self.hits_file is not None:
+            payload["hits_file"] = self.hits_file
+        return payload
+
+
+def _coerce_template_policy(value: TemplatePolicy | str | None) -> TemplatePolicy | None:
+    """Accept the ``"none"`` shorthand wherever a policy is taken.
+
+    ``None`` stays ``None`` — meaning "don't touch the engine's own
+    default" — which is deliberately distinct from an explicit
+    :meth:`TemplatePolicy.none`, even though today every engine defaults
+    to running without templates anyway.
+    """
+    if value is None or isinstance(value, TemplatePolicy):
+        return value
+    if value == "none":
+        return TemplatePolicy.none()
+    raise ValueError(
+        f"templates must be a TemplatePolicy or the string 'none', got {value!r}. "
+        "Build one with TemplatePolicy.from_structures(...), .from_hits(...) "
+        "or .from_server()."
+    )
+
+
+# ---------------------------------------------------------------------
 # Chain-ID allocator (module-internal, tested via ComplexSpec)
 # ---------------------------------------------------------------------
 
@@ -464,4 +623,5 @@ __all__ = [
     "ComplexSpec",
     "Entity",
     "EntityKind",
+    "TemplatePolicy",
 ]

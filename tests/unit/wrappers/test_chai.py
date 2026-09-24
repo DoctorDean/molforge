@@ -851,3 +851,167 @@ class TestSampleCaching:
         engine.predict_samples("MKQ")
         engine.predict_samples("MKQH")
         assert mock_run.call_count == 2
+
+
+class TestMsaDepth:
+    """Chai-1 spells the MSA cap `recycle_msa_subsample`."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def _kwargs(self, engine: Chai1, tmp_path: Path) -> dict:
+        """Capture what the wrapper would hand chai_lab's run_inference."""
+        captured: dict = {}
+        fake_torch = MagicMock()
+        fake_torch.cuda.is_available.return_value = True
+        fake_chai1 = MagicMock()
+        fake_chai1.run_inference.side_effect = lambda **kw: captured.update(kw)
+        with patch.dict(
+            "sys.modules",
+            {"torch": fake_torch, "chai_lab": MagicMock(), "chai_lab.chai1": fake_chai1},
+        ):
+            engine._run_inference(tmp_path / "in.fasta", tmp_path / "out")
+        return captured
+
+    def test_depth_reaches_run_inference(self, tmp_path: Path) -> None:
+        assert self._kwargs(Chai1(msa_depth=16), tmp_path)["recycle_msa_subsample"] == 16
+
+    def test_absent_when_unset(self, tmp_path: Path) -> None:
+        assert "recycle_msa_subsample" not in self._kwargs(Chai1(), tmp_path)
+
+    def test_recorded_in_provenance(self) -> None:
+        prov = Chai1(msa_depth=32)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["msa_depth"] == 32
+
+    def test_absent_from_provenance_when_unset(self) -> None:
+        prov = Chai1()._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert "msa_depth" not in prov.parameters
+
+    def test_each_rung_of_the_ladder_is_a_distinct_cache_entry(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        keys = {
+            cache_key(Chai1(msa_depth=d)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for d in (8, 16, 32, 64, None)
+        }
+        assert len(keys) == 5
+
+    def test_depth_distinguishes_the_sample_ensemble_too(self) -> None:
+        """predict_samples has its own cache slot; depth must split it."""
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        keys = {
+            cache_key(
+                Chai1(msa_depth=d)._build_provenance(
+                    spec, single_sequence="MKTVRQ", all_samples=True
+                )
+            )
+            for d in (8, 16, None)
+        }
+        assert len(keys) == 3
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_non_positive_depth_rejected(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="msa_depth must be >= 1"):
+            Chai1(msa_depth=bad)
+
+
+class TestTemplatePolicyChai:
+    """Chai-1 takes template *hits*, or searches a server itself."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def _kwargs(self, engine: Chai1, tmp_path: Path) -> dict:
+        captured: dict = {}
+        fake_torch = MagicMock()
+        fake_torch.cuda.is_available.return_value = True
+        fake_chai1 = MagicMock()
+        fake_chai1.run_inference.side_effect = lambda **kw: captured.update(kw)
+        with patch.dict(
+            "sys.modules",
+            {"torch": fake_torch, "chai_lab": MagicMock(), "chai_lab.chai1": fake_chai1},
+        ):
+            engine._run_inference(tmp_path / "in.fasta", tmp_path / "out")
+        return captured
+
+    def test_server_mode(self, tmp_path: Path) -> None:
+        from molforge.folding import TemplatePolicy
+
+        kwargs = self._kwargs(Chai1(templates=TemplatePolicy.from_server()), tmp_path)
+        assert kwargs["use_templates_server"] is True
+
+    def test_hits_mode_passes_the_path(self, tmp_path: Path) -> None:
+        from molforge.folding import TemplatePolicy
+
+        kwargs = self._kwargs(Chai1(templates=TemplatePolicy.from_hits("hits.m8")), tmp_path)
+        assert kwargs["template_hits_path"] == Path("hits.m8")
+
+    def test_none_states_it_explicitly(self, tmp_path: Path) -> None:
+        """Chai-1 defaults to no templates anyway; saying so is what
+        makes 'I ablated templates' checkable rather than assumed."""
+        kwargs = self._kwargs(Chai1(templates="none"), tmp_path)
+        assert kwargs["use_templates_server"] is False
+        assert kwargs["template_hits_path"] is None
+
+    def test_unset_touches_neither_key(self, tmp_path: Path) -> None:
+        kwargs = self._kwargs(Chai1(), tmp_path)
+        assert "use_templates_server" not in kwargs
+        assert "template_hits_path" not in kwargs
+
+    def test_recorded_in_provenance(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        prov = Chai1(templates=TemplatePolicy.from_hits("hits.m8"))._build_provenance(
+            self._spec(), single_sequence="MKTVRQ"
+        )
+        assert prov.parameters["templates"] == {"mode": "hits", "hits_file": "hits.m8"}
+
+    def test_policies_do_not_share_a_cache_entry(self) -> None:
+        from molforge.cache import cache_key
+        from molforge.folding import TemplatePolicy
+
+        spec = self._spec()
+        keys = {
+            cache_key(Chai1(templates=t)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for t in (
+                None,
+                "none",
+                TemplatePolicy.from_server(),
+                TemplatePolicy.from_hits("a.m8"),
+                TemplatePolicy.from_hits("b.m8"),
+            )
+        }
+        assert len(keys) == 5
+
+    def test_boltz_only_mode_is_refused(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="Chai1 does not support"):
+            Chai1(templates=TemplatePolicy.from_structures("4hhb.cif"))
+
+    def test_error_names_what_chai_does_support(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="from_hits"):
+            Chai1(templates=TemplatePolicy.from_structures("4hhb.cif"))
+
+
+class TestChaiSamplingControlsCacheCompatibility:
+    def test_default_cache_key_is_unchanged(self) -> None:
+        """Pinned against master's key from before these options existed."""
+        from molforge.cache import cache_key
+        from molforge.folding import ComplexSpec
+
+        prov = Chai1()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert cache_key(prov) == (
+            "bca831ceb5c146d421507320cb59f58d32ac30b8c273f49121456a3ae2dfff83"
+        )
