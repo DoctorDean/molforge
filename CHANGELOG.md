@@ -7,7 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] 2026-10-05
+
+> **Behaviour change:** every folding wrapper now raises `TypeError` for
+> keyword arguments it doesn't consume, where it used to drop them silently.
+> If you were passing a keyword that never did anything — `seed=` to a
+> non-Boltz engine, say, or via `cross_engine_fold(**predict_kwargs)` — that
+> call now fails instead of quietly ignoring you. See **Changed** below.
+
 ### Added
+- **Aggregate provenance manifests — `aggregate_manifest()` and
+  `AggregateManifest`.** `PipelineManifest` describes one output, but plenty of
+  results aren't one output: a consensus structure stands on several folds, a
+  ranking on a screen of thousands. Emitting one manifest per contributing
+  prediction answers the question in a form nobody can read, and restates the
+  shared upstream work — the target prep, the MSA — once per prediction.
+  `aggregate_manifest(outputs)` folds them into one manifest in which every
+  distinct computation appears once, carrying a `contributes_to` count of how
+  many outputs descend from it: a thousand predictions off one MSA give one MSA
+  step marked `contributes_to: 1000`. `PipelineManifest.aggregate(manifests)`
+  does the same from manifests rather than live objects, so a directory of
+  `pipeline.yaml` files off a cluster run folds together without the outputs
+  still being in memory — and produces *identical* step ids, so the two routes
+  are interchangeable. `emit_aggregate` / `load_aggregate` mirror
+  `emit_pipeline` / `load_pipeline`. Provenance itself stays linear: one parent
+  pointer, so `chain()` keeps meaning what it says and cache keys keep their
+  shape, with the many-to-one structure living in the aggregate instead. Guide
+  coverage under
+  [Many outputs at once](docs/guide/reproducibility.md#many-outputs-at-once).
+  Closes [#30](https://github.com/DoctorDean/molforge/issues/30).
+- **`Provenance.content_id()` — one definition of "the same computation".**
+  A digest of engine, version, operation, parameters, inputs and the whole
+  parent chain, with timestamps stripped. Equal ids mean the same work reached
+  the same way, which is what lets an aggregate manifest recognise a shared
+  ancestor; that the ancestry participates is the part that matters, since the
+  same docking run under two different folds is two steps, not one.
+  `molforge.cache` was already computing this shape privately and now shares
+  it, so the cache's idea of a redundant recomputation and a manifest's idea of
+  a shared ancestor can't drift apart. The cache passes
+  `include_operation=False`, because its key predates the field and folding it
+  in would orphan every entry already on disk; cache keys are unchanged, pinned
+  by tests.
 - **MSA-depth control — `Boltz(msa_depth=...)` and `Chai1(msa_depth=...)`.** An
   AF3-class model leans on coevolution, so shrinking the alignment is how you
   see what it predicts without that support — and how you push it off a
