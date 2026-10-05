@@ -1004,14 +1004,46 @@ class TestTemplatePolicyChai:
 
 
 class TestChaiSamplingControlsCacheCompatibility:
-    def test_default_cache_key_is_unchanged(self) -> None:
-        """Pinned against master's key from before these options existed."""
+    def test_default_cache_key_matches_the_pre_option_shape(self) -> None:
+        """As for Boltz: adding the options must not orphan cached folds,
+        and the check must survive a molforge version bump."""
         from molforge.cache import cache_key
+        from molforge.core.provenance import Provenance
+        from molforge.folding import ComplexSpec
+        from molforge.wrappers._versions import engine_version
+
+        before_the_options_existed = Provenance.from_engine(
+            engine="Chai-1",
+            operation="predict",
+            engine_version=engine_version("chai_lab"),
+            parameters={
+                "device": None,
+                "use_msa_server": False,
+                "msa_server_url": None,
+                "num_trunk_recycles": None,
+                "num_diffn_timesteps": None,
+                "seed": None,
+                "cache_dir": None,
+            },
+            inputs={"sequence": "MKTVRQ"},
+        )
+        now = Chai1()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert cache_key(now) == cache_key(before_the_options_existed)
+
+    def test_default_parameter_set_is_unchanged(self) -> None:
         from molforge.folding import ComplexSpec
 
         prov = Chai1()._build_provenance(
             ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
         )
-        assert cache_key(prov) == (
-            "bca831ceb5c146d421507320cb59f58d32ac30b8c273f49121456a3ae2dfff83"
-        )
+        assert set(prov.parameters) == {
+            "device",
+            "use_msa_server",
+            "msa_server_url",
+            "num_trunk_recycles",
+            "num_diffn_timesteps",
+            "seed",
+            "cache_dir",
+        }

@@ -956,20 +956,40 @@ class TestTemplatePolicyBoltz:
 
 
 class TestSamplingControlsCacheCompatibility:
-    def test_default_cache_key_is_unchanged(self) -> None:
-        """Pinned against the key master produced before msa_depth and
-        templates existed. Adding a parameter must not orphan every
-        cached fold a user already has on disk.
+    def test_default_cache_key_matches_the_pre_option_shape(self) -> None:
+        """Adding msa_depth and templates must not orphan cached folds.
+
+        Checked against a provenance built with the parameter set exactly
+        as it stood before those options existed, rather than a frozen
+        hex literal: the cache key mixes in molforge's major.minor, so a
+        literal would fail on every release for reasons that have nothing
+        to do with what this is guarding.
         """
         from molforge.cache import cache_key
+        from molforge.core.provenance import Provenance
         from molforge.folding import ComplexSpec
+        from molforge.wrappers._versions import engine_version
 
-        prov = Boltz()._build_provenance(
+        before_the_options_existed = Provenance.from_engine(
+            engine="Boltz",
+            operation="predict",
+            engine_version=engine_version("boltz"),
+            parameters={
+                "model_version": "boltz2",
+                "use_msa_server": True,
+                "recycling_steps": None,
+                "diffusion_samples": None,
+                "sampling_steps": None,
+                "seed": None,
+                "device": None,
+                "affinity_binder": None,
+            },
+            inputs={"sequence": "MKTVRQ"},
+        )
+        now = Boltz()._build_provenance(
             ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
         )
-        assert cache_key(prov) == (
-            "f65fa5e0b2a1f87727bfeec7ca8a955125c51af6c49e9da0beeaf8a2d6be7e11"
-        )
+        assert cache_key(now) == cache_key(before_the_options_existed)
 
     def test_default_parameter_set_is_unchanged(self) -> None:
         from molforge.folding import ComplexSpec

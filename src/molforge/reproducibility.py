@@ -95,7 +95,7 @@ count of how many outputs descend from it::
 
     manifest = aggregate_manifest(ensemble.members)
     print(manifest.describe())
-    # aggregate (5 outputs, 6 unique steps from 10, 4 deduplicated) - molforge 0.8.0
+    # aggregate (5 outputs, 6 unique steps from 10, 4 deduplicated) - molforge 0.9.0
     #   shared:
     #     MMseqs2 -> 5 outputs  [6623ea6703b3]
 
@@ -720,7 +720,7 @@ def aggregate_manifest(objs: Iterable[Provenance | object]) -> AggregateManifest
         >>> from molforge.reproducibility import aggregate_manifest
         >>> manifest = aggregate_manifest(ensemble.members)   # doctest: +SKIP
         >>> print(manifest.describe())                        # doctest: +SKIP
-        aggregate (5 outputs, 6 unique steps from 10, 4 deduplicated) — molforge 0.8.0
+        aggregate (5 outputs, 6 unique steps from 10, 4 deduplicated) — molforge 0.9.0
           shared:
             ESMFold v1.0.3 -> 5 outputs  [a1b2c3d4e5f6]
     """
