@@ -177,7 +177,27 @@ Replay is inherently partial: the engines must be installed, GPU steps need
 the hardware (replay orchestrates, it doesn't provide compute), and inputs
 that aren't literals must be supplied via `context`. A missing engine, an
 operation with no handler, or an unresolvable input raises a clear
-`ReplayError`. molforge ships `predict` and `dock` handlers in v1.
+`ReplayError`.
+
+### What can be replayed
+
+Every operation molforge's wrappers record has a handler:
+
+| Operation | Replays | Notes |
+| --- | --- | --- |
+| `predict` | `predict(sequence)` *or* `predict_complex(spec)` | the recorded `complex_spec` is rebuilt into a real `ComplexSpec` |
+| `predict_samples` | `predict_samples()` / `predict_complex_samples()` | the whole diffusion ensemble, not just the best |
+| `dock` | `dock(receptor, ligand)` | receptor threaded from the previous step |
+| `fetch` | `io.fetch(pdb_id, ...)` | served from the download cache, so it usually costs no network |
+
+A step whose engine lacks the needed method — only Chai-1 returns a sample
+ensemble — raises `ReplayError` naming the method, rather than an
+`AttributeError` from somewhere inside the machinery.
+
+A test walks the source for every `operation="..."` a wrapper records and
+asserts each one has a handler, so adding an operation without teaching
+`replay` about it fails CI rather than surfacing later as an unreplayable
+manifest.
 
 ## Many outputs at once
 
