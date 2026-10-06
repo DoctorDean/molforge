@@ -526,3 +526,122 @@ class TestFetchCache:
         with patch("urllib.request.urlopen", return_value=self._resp()) as m:
             fetch_many(["1ubq"], force_refresh=True)
         assert m.call_count == 1
+
+
+class TestFetchProvenance:
+    """A download is the first step of a pipeline, not a dead end.
+
+    Everything downstream — docking, pocket detection, MD — takes its
+    parent from the input structure's provenance, so a `fetch` that
+    recorded nothing left every such chain rooted in nothing.
+    """
+
+    _PDB = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n"
+
+    @classmethod
+    def _resp(cls) -> object:
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.read.return_value = cls._PDB.encode("utf-8")
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = False
+        return resp
+
+    def test_fetched_structure_carries_provenance(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.core import metadata_keys as mk
+        from molforge.core.provenance import Provenance
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("1ubq")
+
+        prov = protein.metadata[mk.PROVENANCE]
+        assert isinstance(prov, Provenance)
+        assert prov.engine == "molforge.io.fetch"
+        assert prov.operation == "fetch"
+        assert prov.inputs == {"pdb_id": "1UBQ"}
+        assert prov.parameters == {"source": "rcsb", "format": "pdb"}
+
+    def test_cache_hit_carries_provenance_too(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.core import metadata_keys as mk
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            miss = fetch("1ubq")
+        with patch("urllib.request.urlopen", side_effect=AssertionError("no request")):
+            hit = fetch("1ubq")
+
+        assert mk.PROVENANCE in hit.metadata
+        # The timestamps differ — each call really did happen at its own
+        # time — but they describe the same computation.
+        assert hit.metadata[mk.PROVENANCE].content_id() == miss.metadata[mk.PROVENANCE].content_id()
+
+    def test_uncached_fetch_still_records(self) -> None:
+        """cache=False bypasses the cache, not the provenance."""
+        from unittest.mock import patch
+
+        from molforge.core import metadata_keys as mk
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("1ubq", cache=False)
+        assert mk.PROVENANCE in protein.metadata
+
+    def test_source_and_format_are_recorded(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.core import metadata_keys as mk
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("P00520", source="alphafold")
+        prov = protein.metadata[mk.PROVENANCE]
+        assert prov.parameters["source"] == "alphafold"
+        assert prov.inputs["pdb_id"] == "P00520"
+
+    def test_provenance_is_a_usable_parent(self) -> None:
+        """The point of recording it: a downstream step can chain onto it."""
+        from unittest.mock import patch
+
+        from molforge.core import metadata_keys as mk
+        from molforge.core.provenance import Provenance
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("1ubq")
+
+        downstream = Provenance.from_engine(
+            "Vina", operation="dock", parent=protein.metadata[mk.PROVENANCE]
+        )
+        assert downstream.depth == 2
+        assert downstream.chain()[0].engine == "molforge.io.fetch"
+
+    def test_manifest_names_the_entry(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.io import fetch
+        from molforge.reproducibility import pipeline_manifest
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("1ubq", format="cif") if False else fetch("1ubq")
+
+        manifest = pipeline_manifest(protein)
+        assert len(manifest) == 1
+        assert manifest.steps[0].engine == "molforge.io.fetch"
+        assert manifest.steps[0].inputs["pdb_id"] == "1UBQ"
+
+    def test_different_entries_get_different_provenance(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.core import metadata_keys as mk
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            a = fetch("1ubq")
+            b = fetch("4hhb")
+        assert a.metadata[mk.PROVENANCE].content_id() != b.metadata[mk.PROVENANCE].content_id()

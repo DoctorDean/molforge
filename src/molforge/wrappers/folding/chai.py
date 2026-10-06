@@ -1059,27 +1059,11 @@ def _chai_fasta_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
 def _serialize_spec_for_provenance(spec: ComplexSpec | None) -> object:
     """Render a ComplexSpec to a JSON-safe shape for Provenance.inputs.
 
-    Identical contract to the helper in boltz.py: flattens the spec
-    into a list of dicts with engine-agnostic keys, so the same
-    structure shows up in Provenance regardless of which engine
-    produced the prediction. This is what lets users compare Boltz
-    and Chai-1 provenance side-by-side.
+    Thin shim over :meth:`ComplexSpec.to_provenance`, which is where the
+    shape is defined (alongside its inverse, so the two cannot drift).
+    Kept as a module-level name because that is how the provenance
+    builders in this module read.
     """
     if spec is None:
         return None
-    entities_payload: list[dict[str, object]] = []
-    for entity, chain_ids in zip(spec.entities, spec.assigned_chain_ids(), strict=True):
-        payload: dict[str, object] = {
-            "kind": entity.kind,
-            "chain_ids": chain_ids,
-        }
-        if entity.is_polymer:
-            payload["sequence"] = entity.normalized_sequence()
-        elif entity.smiles is not None:
-            payload["smiles"] = entity.smiles
-        else:
-            payload["ccd"] = entity.ccd
-        if entity.name is not None:
-            payload["name"] = entity.name
-        entities_payload.append(payload)
-    return {"entities": entities_payload}
+    return spec.to_provenance()

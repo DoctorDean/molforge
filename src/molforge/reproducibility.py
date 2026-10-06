@@ -1135,6 +1135,15 @@ def _register_builtin_engines() -> None:
             if isinstance(obj, type) and issubclass(obj, base) and obj not in (base,):
                 plugins.register_engine(obj.name, obj)
 
+    # `io.fetch` is not an engine class, but it is a recorded step: a
+    # structure pulled from RCSB is where plenty of chains begin, and a
+    # chain that can't replay its first step can't replay at all. The
+    # registry takes any callable, so the function registers under the
+    # name its provenance records.
+    from molforge.io import fetch
+
+    plugins.register_engine("molforge.io.fetch", fetch)
+
 
 def _construct(factory: Callable[..., Any], parameters: dict[str, Any]) -> Any:
     """Instantiate ``factory`` from recorded parameters.
@@ -1169,6 +1178,51 @@ def _resolve_input(step: PipelineStep, key: str, context: dict[str, Any], *, wha
 # ---------- built-in operation handlers ----------
 
 
+def _fold_target(step: PipelineStep, context: dict[str, Any]) -> tuple[str, Any]:
+    """Resolve what a folding step folded: a sequence or a complex.
+
+    A wrapper records one or the other — ``inputs["sequence"]`` for the
+    single-chain path, ``inputs["complex_spec"]`` for the multi-component
+    one. Only the sequence form used to be handled, so a recorded
+    ``predict_complex`` was describable but not replayable.
+
+    A live :class:`~molforge.folding.ComplexSpec` passed through
+    ``context`` wins over the recorded payload, for callers who would
+    rather hand over the real object than have it rebuilt.
+
+    Returns:
+        ``("sequence", str)`` or ``("complex", ComplexSpec)``.
+    """
+    from molforge.folding import ComplexSpec
+
+    payload = context.get("complex_spec", step.inputs.get("complex_spec"))
+    if payload is not None:
+        if isinstance(payload, ComplexSpec):
+            return "complex", payload
+        return "complex", ComplexSpec.from_provenance(payload)
+    return "sequence", _resolve_input(
+        step, "sequence", context, what="a sequence (or a complex_spec)"
+    )
+
+
+def _engine_method(engine: Any, name: str, step: PipelineStep) -> Callable[..., Any]:
+    """Look up a method the replayed step needs, or explain its absence.
+
+    Not every engine implements every operation — only Chai-1 returns a
+    full sample ensemble — and ``AttributeError`` from deep inside replay
+    is a poor way to learn that.
+    """
+    method = getattr(engine, name, None)
+    if method is None:
+        raise ReplayError(
+            f"step {step.step}: {step.engine} has no {name}() method, so this "
+            f"manifest's {step.operation!r} step can't be replayed with it. The "
+            "manifest was produced by an engine that supports it; replaying "
+            "needs that same engine."
+        )
+    return method  # type: ignore[no-any-return]
+
+
 @register_replay_handler("predict")
 def _replay_predict(
     factory: Callable[..., Any],
@@ -1176,11 +1230,55 @@ def _replay_predict(
     upstream: Any,
     context: dict[str, Any],
 ) -> Any:
-    """Replay a folding ``predict(sequence)`` step. (``upstream`` unused —
-    a fold is a chain root.)"""
+    """Replay a folding ``predict`` step, single-chain or multi-component.
+
+    ``upstream`` is unused: a fold is a chain root, unless the structure
+    it folded was itself fetched — and a fetch records its own step.
+    """
     engine = _construct(factory, step.parameters)
-    sequence = _resolve_input(step, "sequence", context, what="a sequence")
-    return engine.predict(sequence)
+    kind, target = _fold_target(step, context)
+    if kind == "sequence":
+        return engine.predict(target)
+    return _engine_method(engine, "predict_complex", step)(target)
+
+
+@register_replay_handler("predict_samples")
+def _replay_predict_samples(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a step that returned a whole sample ensemble.
+
+    The counterpart to :func:`_replay_predict` for ``predict_samples`` /
+    ``predict_complex_samples``, which return every diffusion sample
+    rather than the best one. Without it a manifest could record an
+    ensemble perfectly well and then refuse to re-run it.
+    """
+    engine = _construct(factory, step.parameters)
+    kind, target = _fold_target(step, context)
+    name = "predict_samples" if kind == "sequence" else "predict_complex_samples"
+    return _engine_method(engine, name, step)(target)
+
+
+@register_replay_handler("fetch")
+def _replay_fetch(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a structure download.
+
+    ``factory`` here is :func:`molforge.io.fetch` itself rather than an
+    engine class — a download has nothing to construct. Re-running it is
+    cheap: the fetch cache means a replay on the same machine costs no
+    network at all.
+    """
+    pdb_id = _resolve_input(step, "pdb_id", context, what="a PDB ID")
+    kwargs = {k: step.parameters[k] for k in ("source", "format") if k in step.parameters}
+    return factory(pdb_id, **kwargs)
 
 
 @register_replay_handler("dock")
