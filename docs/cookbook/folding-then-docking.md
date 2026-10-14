@@ -127,8 +127,22 @@ of lining residues.
 `fpocket` itself isn't pip-installable; install via your system
 package manager (`brew install fpocket` on macOS,
 `apt install fpocket` on Linux) or build from
-`https://github.com/Discngine/fpocket`. P2Rank (an ML-based
-alternative) isn't wrapped yet.
+`https://github.com/Discngine/fpocket`.
+
+For an ML-based alternative, `detect_pockets_p2rank` wraps **P2Rank**
+(a random-forest detector, stronger benchmark recall) and returns the
+same `Pocket` objects — a drop-in swap, with P2Rank's calibrated
+probability mapped to `druggability`:
+
+```python
+from molforge.wrappers.pockets import detect_pockets_p2rank
+
+pockets = detect_pockets_p2rank(receptor)  # ranked best-first
+```
+
+P2Rank is a Java application; install it from
+`https://github.com/rdk/p2rank/releases` (or `conda install -c bioconda
+p2rank`) and put the `prank` launcher on `$PATH`.
 
 ## Higher-confidence results
 

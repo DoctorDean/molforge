@@ -337,3 +337,138 @@ class TestMetadataIntegration:
         meta: ProteinMetadata = {"provenance": prov}
         # Just exercise the type — mypy would catch a real mismatch.
         assert meta["provenance"] is prov
+
+
+class TestContentIdentity:
+    """`content_id` is molforge's one answer to "is this the same work?"
+    — shared by the result cache and by aggregate manifests, so it has to
+    ignore exactly the incidental things and nothing more."""
+
+    def test_same_work_same_id(self) -> None:
+        a = Provenance.from_engine("ESMFold", operation="predict", inputs={"sequence": "MK"})
+        b = Provenance.from_engine("ESMFold", operation="predict", inputs={"sequence": "MK"})
+        assert a.content_id() == b.content_id()
+
+    def test_timestamp_is_ignored(self) -> None:
+        a = Provenance(engine="ESMFold", timestamp="2026-01-01T00:00:00+00:00")
+        b = Provenance(engine="ESMFold", timestamp="2026-09-09T00:00:00+00:00")
+        assert a.content_id() == b.content_id()
+
+    def test_timestamp_ignored_up_the_whole_chain(self) -> None:
+        early = Provenance(engine="prep", timestamp="2026-01-01T00:00:00+00:00")
+        late = Provenance(engine="prep", timestamp="2026-09-09T00:00:00+00:00")
+        assert (
+            Provenance(engine="Vina", parent=early).content_id()
+            == Provenance(engine="Vina", parent=late).content_id()
+        )
+
+    def test_molforge_version_is_ignored(self) -> None:
+        """Unlike the cache key: an aggregate spanning two molforge
+        releases should still see that they shared an upstream step."""
+        a = Provenance(engine="ESMFold", molforge_version="0.8.0")
+        b = Provenance(engine="ESMFold", molforge_version="0.9.0")
+        assert a.content_id() == b.content_id()
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"engine": "Boltz"},
+            {"operation": "dock"},
+            {"engine_version": "9.9.9"},
+            {"parameters": {"seed": 1}},
+            {"inputs": {"sequence": "MKT"}},
+        ],
+    )
+    def test_meaningful_differences_change_the_id(self, kwargs: dict) -> None:
+        base = Provenance(
+            engine="ESMFold",
+            operation="predict",
+            engine_version="1.0.3",
+            parameters={"seed": 0},
+            inputs={"sequence": "MK"},
+        )
+        assert base.replace(**kwargs).content_id() != base.content_id()
+
+    def test_ancestry_participates(self) -> None:
+        """Same work from different history is different work."""
+        via_esm = Provenance(engine="Vina", parent=Provenance(engine="ESMFold"))
+        via_boltz = Provenance(engine="Vina", parent=Provenance(engine="Boltz"))
+        assert via_esm.content_id() != via_boltz.content_id()
+
+    def test_parentless_differs_from_parented(self) -> None:
+        alone = Provenance(engine="Vina")
+        parented = Provenance(engine="Vina", parent=Provenance(engine="ESMFold"))
+        assert alone.content_id() != parented.content_id()
+
+    def test_id_is_a_sha256_hex_digest(self) -> None:
+        digest = Provenance(engine="ESMFold").content_id()
+        assert len(digest) == 64
+        assert all(c in "0123456789abcdef" for c in digest)
+
+    def test_parameter_order_does_not_matter(self) -> None:
+        a = Provenance(engine="Vina", parameters={"a": 1, "b": 2})
+        b = Provenance(engine="Vina", parameters={"b": 2, "a": 1})
+        assert a.content_id() == b.content_id()
+
+
+class TestContentDict:
+    def test_is_json_serialisable(self) -> None:
+        import json
+
+        prov = Provenance.from_engine(
+            "Vina", operation="dock", parameters={"exhaustiveness": 8}, inputs={"receptor": "r.pdb"}
+        )
+        payload = prov.content_dict()
+        assert json.loads(json.dumps(payload)) == payload
+
+    def test_carries_no_timestamp_at_any_depth(self) -> None:
+        prov = Provenance.from_engine(
+            "Vina", parent=Provenance.from_engine("ESMFold", parent=Provenance.from_engine("prep"))
+        )
+        node = prov.content_dict()
+        while node is not None:
+            assert "timestamp" not in node
+            assert "molforge_version" not in node
+            node = node.get("parent")
+
+    def test_operation_included_by_default(self) -> None:
+        assert "operation" in Provenance(engine="Vina", operation="dock").content_dict()
+
+    def test_operation_excluded_on_request(self) -> None:
+        """The cache passes False: its key predates the field, and folding
+        it in would orphan every entry already on disk."""
+        payload = Provenance(engine="Vina", operation="dock").content_dict(include_operation=False)
+        assert "operation" not in payload
+
+    def test_exclusion_applies_up_the_chain(self) -> None:
+        prov = Provenance(
+            engine="Vina", operation="dock", parent=Provenance(engine="X", operation="y")
+        )
+        node = prov.content_dict(include_operation=False)
+        while node is not None:
+            assert "operation" not in node
+            node = node.get("parent")
+
+    def test_mutating_the_result_cannot_corrupt_the_provenance(self) -> None:
+        prov = Provenance(engine="Vina", parameters={"exhaustiveness": 8})
+        prov.content_dict()["parameters"]["exhaustiveness"] = 999
+        assert prov.parameters["exhaustiveness"] == 8
+
+
+class TestCacheKeyAgreement:
+    def test_cache_key_uses_the_shared_canonical_form(self) -> None:
+        """One definition of "the same computation", so the cache's idea of
+        a redundant recomputation and a manifest's idea of a shared
+        ancestor cannot drift apart."""
+        from molforge.cache import _provenance_for_key
+
+        prov = Provenance.from_engine("Vina", operation="dock", parameters={"exhaustiveness": 8})
+        assert _provenance_for_key(prov) == prov.content_dict(include_operation=False)
+
+    def test_operation_does_not_move_the_cache_key(self) -> None:
+        from molforge.cache import cache_key
+
+        a = Provenance(engine="Vina", operation="dock")
+        b = Provenance(engine="Vina", operation="score")
+        assert cache_key(a) == cache_key(b)
+        assert a.content_id() != b.content_id()

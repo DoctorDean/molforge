@@ -27,6 +27,14 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 - **Add a parser** for an additional file format.
 - **Add a plugin** that demonstrates the registry API.
 
+## Getting help
+
+- **Questions about using molforge** — open a [GitHub Discussion](https://github.com/DoctorDean/molforge/discussions), or a [question issue](.github/ISSUE_TEMPLATE/question.yml) if Discussions aren't enabled.
+- **Something looks like a bug** — file a [bug report](.github/ISSUE_TEMPLATE/bug_report.yml) with a minimal reproducer.
+- **Documentation** — the full docs are at [doctordean.github.io/molforge](https://doctordean.github.io/molforge/); the [cookbook](https://doctordean.github.io/molforge/cookbook/) has task-oriented recipes.
+
+Maintainers aim to respond to issues and discussions within a week. This is a community project — please be patient and kind.
+
 ## Development setup
 
 Requires Python 3.10+.

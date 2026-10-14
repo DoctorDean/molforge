@@ -112,3 +112,28 @@ class TestEndToEnd:
         assert protein.n_residues == 20
         assert protein.sequence == "MKTVRQERLKSIVRILERSK"
         assert "confidence_per_residue" in protein.metadata
+
+
+class TestPerCallKwargs:
+    """``predict`` takes no per-call options; keywords raise, not vanish.
+
+    Rejection happens before the model is touched, so these run without
+    ``torch`` or ``transformers`` installed.
+    """
+
+    def test_unknown_kwarg_rejected(self) -> None:
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            ESMFold().predict("MKTVRQ", seed=7)
+
+    def test_message_points_at_the_constructor(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            ESMFold().predict("MKTVRQ", chunk_size=64)
+        message = str(excinfo.value)
+        assert "ESMFold.predict()" in message
+        assert "'chunk_size'" in message
+        assert "ESMFold(chunk_size=64)" in message
+
+    def test_rejected_before_the_sequence_is_validated(self) -> None:
+        """The keyword is the error, not the (also invalid) sequence."""
+        with pytest.raises(TypeError, match="'seed'"):
+            ESMFold().predict("", seed=7)

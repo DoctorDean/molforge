@@ -14,6 +14,8 @@ they hit the folding engine (where errors are opaque):
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from molforge.folding import ComplexSpec, Entity, _index_to_chain_id
@@ -367,3 +369,236 @@ class TestSourceInspection:
         spec = ComplexSpec.from_protein("MKQ")
         with pytest.raises((AttributeError, Exception)):
             spec.entities = ()  # type: ignore[misc]
+
+
+class TestTemplatePolicy:
+    """The shared value type. Engines translate it; it validates itself."""
+
+    def test_none_mode(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        policy = TemplatePolicy.none()
+        assert policy.mode == "none"
+        assert policy.structures == ()
+        assert policy.hits_file is None
+
+    def test_from_structures_keeps_order(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        policy = TemplatePolicy.from_structures("b.cif", "a.cif")
+        assert policy.structures == ("b.cif", "a.cif")
+
+    def test_from_structures_accepts_path_objects(self) -> None:
+        from pathlib import Path
+
+        from molforge.folding import TemplatePolicy
+
+        policy = TemplatePolicy.from_structures(Path("a.cif"), "b.cif")
+        assert policy.structures == ("a.cif", "b.cif")
+        assert all(isinstance(p, str) for p in policy.structures)
+
+    def test_from_hits(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        assert TemplatePolicy.from_hits("hits.m8").hits_file == "hits.m8"
+
+    def test_from_server(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        assert TemplatePolicy.from_server().mode == "server"
+
+    def test_is_frozen(self) -> None:
+        """A policy recorded in provenance must not change afterwards."""
+        import dataclasses
+
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            TemplatePolicy.none().mode = "server"  # type: ignore[misc]
+
+    def test_unknown_mode_rejected(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="mode must be"):
+            TemplatePolicy(mode="apo")  # type: ignore[arg-type]
+
+    def test_structures_mode_needs_paths(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="at least one path"):
+            TemplatePolicy(mode="structures")
+
+    def test_hits_mode_needs_a_file(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="needs a hits_file"):
+            TemplatePolicy(mode="hits")
+
+    @pytest.mark.parametrize("mode", ["none", "hits", "server"])
+    def test_structures_rejected_outside_structures_mode(self, mode: str) -> None:
+        from molforge.folding import TemplatePolicy
+
+        kwargs = {"hits_file": "h.m8"} if mode == "hits" else {}
+        with pytest.raises(ValueError, match="only meaningful for mode='structures'"):
+            TemplatePolicy(mode=mode, structures=("a.cif",), **kwargs)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("mode", ["none", "server"])
+    def test_hits_file_rejected_outside_hits_mode(self, mode: str) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="only meaningful for mode='hits'"):
+            TemplatePolicy(mode=mode, hits_file="h.m8")  # type: ignore[arg-type]
+
+    def test_to_provenance_is_json_native(self) -> None:
+        import json
+
+        from molforge.folding import TemplatePolicy
+
+        for policy in (
+            TemplatePolicy.none(),
+            TemplatePolicy.from_structures("a.cif"),
+            TemplatePolicy.from_hits("h.m8"),
+            TemplatePolicy.from_server(),
+        ):
+            payload = policy.to_provenance()
+            assert json.loads(json.dumps(payload)) == payload
+
+    def test_to_provenance_omits_empty_fields(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        assert TemplatePolicy.none().to_provenance() == {"mode": "none"}
+
+    def test_distinct_policies_serialize_distinctly(self) -> None:
+        """Provenance is the cache key; collisions here would share
+        results between an ablation and its control."""
+        from molforge.folding import TemplatePolicy
+
+        payloads = [
+            TemplatePolicy.none().to_provenance(),
+            TemplatePolicy.from_structures("a.cif").to_provenance(),
+            TemplatePolicy.from_structures("a.cif", "b.cif").to_provenance(),
+            TemplatePolicy.from_hits("h.m8").to_provenance(),
+            TemplatePolicy.from_server().to_provenance(),
+        ]
+        assert len({repr(sorted(p.items())) for p in payloads}) == len(payloads)
+
+
+class TestCoerceTemplatePolicy:
+    def test_none_stays_none(self) -> None:
+        from molforge.folding import _coerce_template_policy
+
+        assert _coerce_template_policy(None) is None
+
+    def test_string_shorthand(self) -> None:
+        from molforge.folding import TemplatePolicy, _coerce_template_policy
+
+        assert _coerce_template_policy("none") == TemplatePolicy.none()
+
+    def test_policy_passes_through(self) -> None:
+        from molforge.folding import TemplatePolicy, _coerce_template_policy
+
+        policy = TemplatePolicy.from_server()
+        assert _coerce_template_policy(policy) is policy
+
+    def test_other_strings_rejected_with_a_pointer(self) -> None:
+        from molforge.folding import _coerce_template_policy
+
+        with pytest.raises(ValueError, match="from_structures"):
+            _coerce_template_policy("apo")
+
+
+class TestComplexSpecProvenanceRoundTrip:
+    """`to_provenance` / `from_provenance` are inverses — which is what
+    makes a recorded multi-component fold replayable rather than merely
+    describable."""
+
+    CASES: ClassVar[dict[str, tuple[Entity, ...]]] = {
+        "single protein": (Entity(kind="protein", sequence="MKQ"),),
+        "homodimer": (Entity(kind="protein", sequence="MKQ", copies=2),),
+        "protein + smiles ligand": (
+            Entity(kind="protein", sequence="MKQ"),
+            Entity(kind="ligand", smiles="CCO"),
+        ),
+        "protein + ccd ligand": (
+            Entity(kind="protein", sequence="MKQ"),
+            Entity(kind="ligand", ccd="ATP"),
+        ),
+        "explicit id in the middle": (
+            Entity(kind="protein", sequence="MKQ", copies=2),
+            Entity(kind="protein", sequence="HIS", chain_id="X"),
+            Entity(kind="ligand", smiles="O"),
+        ),
+        "explicit id first": (
+            Entity(kind="protein", sequence="MKQ", chain_id="X"),
+            Entity(kind="protein", sequence="HIS", copies=2),
+        ),
+        "dna duplex": (
+            Entity(kind="dna", sequence="ATCG", chain_id="A"),
+            Entity(kind="dna", sequence="CGAT", chain_id="B"),
+        ),
+        "named entity": (Entity(kind="protein", sequence="MKQ", name="target"),),
+        "multi-copy of both kinds": (
+            Entity(kind="protein", sequence="MKQ", copies=3),
+            Entity(kind="ligand", smiles="O", copies=2),
+        ),
+    }
+
+    @pytest.mark.parametrize("label", sorted(CASES))
+    def test_payload_round_trips(self, label: str) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES[label])
+        payload = spec.to_provenance()
+        assert ComplexSpec.from_provenance(payload).to_provenance() == payload
+
+    @pytest.mark.parametrize("label", sorted(CASES))
+    def test_chain_assignment_is_reproduced(self, label: str) -> None:
+        """The chain IDs matter most: a rebuilt spec that lays chains out
+        differently would replay into a structure that doesn't match."""
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES[label])
+        rebuilt = ComplexSpec.from_provenance(spec.to_provenance())
+        assert rebuilt.assigned_chain_ids() == spec.assigned_chain_ids()
+
+    def test_payload_is_json_native(self) -> None:
+        import json
+
+        from molforge.folding import ComplexSpec
+
+        payload = ComplexSpec(entities=self.CASES["explicit id in the middle"]).to_provenance()
+        assert json.loads(json.dumps(payload)) == payload
+
+    def test_chain_ids_are_recorded_as_assigned(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQ", copies=2),))
+        assert spec.to_provenance()["entities"][0]["chain_ids"] == ["A", "B"]
+
+    def test_entity_kinds_survive(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES["dna duplex"])
+        rebuilt = ComplexSpec.from_provenance(spec.to_provenance())
+        assert [e.kind for e in rebuilt.entities] == ["dna", "dna"]
+
+    def test_ligand_identity_survives(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES["protein + ccd ligand"])
+        rebuilt = ComplexSpec.from_provenance(spec.to_provenance())
+        assert rebuilt.entities[1].ccd == "ATP"
+        assert rebuilt.entities[1].smiles is None
+
+    def test_payload_without_entities_rejected(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        for bad in ({}, {"entities": []}, {"entities": None}):
+            with pytest.raises(ValueError, match="no 'entities' list"):
+                ComplexSpec.from_provenance(bad)
+
+    def test_entity_without_kind_rejected(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        with pytest.raises(ValueError, match="no 'kind'"):
+            ComplexSpec.from_provenance({"entities": [{"sequence": "MKQ"}]})

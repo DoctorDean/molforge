@@ -71,15 +71,51 @@ incompatible Python environments and a graveyard of conversion scripts.
 
     ---
 
-    MM-PB(GB)SA via AmberTools and gmx_MMPBSA, plus FEP/TI ingestion through
-    alchemlyb and cinnabar.
+    MM-PB(GB)SA via AmberTools and gmx_MMPBSA, FEP/TI ingestion through
+    alchemlyb and cinnabar, plus Boltz-2 binding-affinity prediction.
 
 -   :material-magnify-scan:{ .lg .middle } &nbsp; **Pocket detection**
 
     ---
 
-    fpocket surface-pocket detection, feeding straight into the docking
-    workflow.
+    fpocket (geometric) and P2Rank (ML) surface-pocket detection, feeding
+    straight into the docking workflow.
+
+</div>
+
+## The glue — an engine-agnostic layer
+
+<div class="grid cards" markdown>
+
+-   :material-layers-triple:{ .lg .middle } &nbsp; **Cross-engine ensembles**
+
+    ---
+
+    `cross_engine_fold` folds one sequence with several engines and returns
+    the pairwise TM/RMSD spread, a consensus, and a per-residue map of where
+    they disagree — trust the regions your methods agree on.
+
+-   :material-sync:{ .lg .middle } &nbsp; **Design loop**
+
+    ---
+
+    `DesignLoop` runs generate → fold → dock → score → iterate with a ranked
+    design table — the protein-engineering loop in one object.
+
+-   :material-medal:{ .lg .middle } &nbsp; **Unified scoring**
+
+    ---
+
+    `molforge.scoring` gives every score an explicit direction, so docking
+    affinity, folding confidence, and learned scores rank and compare
+    uniformly — and plug into the design loop.
+
+-   :material-file-document-check:{ .lg .middle } &nbsp; **Reproducibility**
+
+    ---
+
+    Every output carries a `Provenance` chain; emit it as a citable
+    `pipeline.yaml`, then `replay()` re-runs the whole workflow.
 
 </div>
 

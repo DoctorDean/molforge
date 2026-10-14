@@ -22,6 +22,40 @@ from molforge.structure import (
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "pdb"
 
 
+class TestSignConvention:
+    """Dihedrals follow the IUPAC sign convention (matching Biopython's
+    ``calc_dihedral``): a right-handed α-helix is φ ≈ −60°, ψ ≈ −45°.
+
+    Guards the sign fix — the pre-fix code returned the negation, so a
+    right-handed helix read as a Ramachandran outlier. Golden values were
+    computed offline and verified to equal Biopython's ``calc_dihedral``
+    (exact, over 200 random quartets). Biopython is not a test-time
+    dependency.
+    """
+
+    def test_golden_quartet_sign(self) -> None:
+        # p1→p2→p3→p4 with b1 ⟂ b3 about the p2-p3 axis; IUPAC dihedral = +90°.
+        p1 = np.array([1.0, 0.0, 0.0])
+        p2 = np.array([0.0, 0.0, 0.0])
+        p3 = np.array([0.0, 0.0, 1.0])
+        p4 = np.array([0.0, 1.0, 1.0])
+        assert dihedral(p1, p2, p3, p4) == pytest.approx(90.0, abs=1e-6)
+
+    def test_right_handed_helix_is_negative_and_favored(self) -> None:
+        from molforge.structure import classify_ramachandran, ramachandran_favored_fraction
+
+        # Ubiquitin's α-helix (res 24-31) is right-handed: φ and ψ are both
+        # negative and classify as Favored. Favored fraction of the whole
+        # (well-resolved) structure is high.
+        p = read_pdb(FIXTURES / "real_ubiquitin.pdb")
+        by_id = {r.residue[1]: r for r in classify_ramachandran(p)}
+        for rid in range(24, 32):
+            r = by_id[rid]
+            assert r.phi < 0.0 and r.psi < 0.0, f"res {rid}: phi={r.phi}, psi={r.psi}"
+            assert r.classification == "Favored", f"res {rid}"
+        assert ramachandran_favored_fraction(p) > 0.85
+
+
 class TestDihedralScalar:
     def test_180_degrees(self) -> None:
         """Four coplanar points in a planar zigzag → ±180°."""

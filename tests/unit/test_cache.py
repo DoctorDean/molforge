@@ -285,6 +285,99 @@ class TestProteinRoundTrip:
 
 
 # ---------------------------------------------------------------------
+# Round-trip: Protein list
+# ---------------------------------------------------------------------
+
+
+class TestProteinListRoundTrip:
+    """``protein_list`` caches every sample of a run (Chai1.predict_samples)."""
+
+    def test_basic_list(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1")
+        proteins = [_make_protein(name=f"sample{i}") for i in range(5)]
+
+        assert cache.get(prov, "protein_list") is None  # miss
+        cache.put(prov, proteins, "protein_list")
+        restored = cache.get(prov, "protein_list")
+
+        assert restored is not None
+        assert [p.name for p in restored] == ["sample0", "sample1", "sample2", "sample3", "sample4"]
+        assert all(p.atom_array.n_atoms == 3 for p in restored)
+
+    def test_order_is_preserved(self, tmp_path: Path) -> None:
+        """Callers read element 0 as the pick, so order is load-bearing."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1")
+        proteins = [_make_protein(name=n) for n in ("best", "second", "third")]
+
+        cache.put(prov, proteins, "protein_list")
+        assert [p.name for p in cache.get(prov, "protein_list")] == ["best", "second", "third"]
+
+    def test_per_member_arrays_dont_collide(self, tmp_path: Path) -> None:
+        """Each member's metadata arrays come back attached to that member."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1")
+        proteins = []
+        for i in range(3):
+            protein = _make_protein(name=f"s{i}")
+            protein.metadata[mk.CONFIDENCE_PER_RESIDUE] = np.array(
+                [80.0 + i, 75.0 + i, 90.0 + i], dtype=np.float32
+            )
+            proteins.append(protein)
+
+        cache.put(prov, proteins, "protein_list")
+        restored = cache.get(prov, "protein_list")
+        for i, protein in enumerate(restored):
+            np.testing.assert_array_equal(
+                protein.metadata[mk.CONFIDENCE_PER_RESIDUE], [80.0 + i, 75.0 + i, 90.0 + i]
+            )
+
+    def test_per_member_scalars_survive(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1")
+        proteins = []
+        for i in range(3):
+            protein = _make_protein(name=f"s{i}")
+            protein.metadata["sample_index"] = i
+            protein.metadata["sample_rank"] = 2 - i
+            proteins.append(protein)
+
+        cache.put(prov, proteins, "protein_list")
+        restored = cache.get(prov, "protein_list")
+        assert [p.metadata["sample_index"] for p in restored] == [0, 1, 2]
+        assert [p.metadata["sample_rank"] for p in restored] == [2, 1, 0]
+
+    def test_provenance_rebuilt_on_each_member(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1", parameters={"seed": 7})
+        proteins = []
+        for i in range(2):
+            protein = _make_protein(name=f"s{i}")
+            protein.metadata[mk.PROVENANCE] = prov
+            proteins.append(protein)
+
+        cache.put(prov, proteins, "protein_list")
+        for protein in cache.get(prov, "protein_list"):
+            restored_prov = protein.metadata[mk.PROVENANCE]
+            assert isinstance(restored_prov, Provenance)
+            assert restored_prov.parameters == {"seed": 7}
+
+    def test_empty_list(self, tmp_path: Path) -> None:
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1")
+        cache.put(prov, [], "protein_list")
+        assert cache.get(prov, "protein_list") == []
+
+    def test_type_tag_is_checked(self, tmp_path: Path) -> None:
+        """A list entry must not be readable as a single protein."""
+        cache = Cache(directory=tmp_path)
+        prov = _make_provenance(engine="Chai-1")
+        cache.put(prov, [_make_protein()], "protein_list")
+        assert cache.get(prov, "protein") is None
+
+
+# ---------------------------------------------------------------------
 # Round-trip: DesignedSequence list
 # ---------------------------------------------------------------------
 

@@ -190,9 +190,12 @@ geometry wrong).
   restraint files). Drop down to the engine's raw API for now.
 - **Custom MSAs per entity** — use `use_msa_server=True` for v1.
 - **Templates** — use the engine's underlying API for v1.
-- **Affinity prediction** (Boltz-2's `properties: affinity:` shape).
-  Predicting binding affinity in addition to structure deserves its
-  own input field and output keys.
+
+**Binding affinity (Boltz-2)** is supported: `Boltz(model_version="boltz2").predict_affinity(spec)`
+folds a protein + single-ligand complex *and* predicts its affinity,
+surfacing `metadata["affinity_value"]` (log-scale, lower = stronger) and
+`metadata["affinity_probability"]` (0–1 binder probability) on the returned
+structure.
 
 For these advanced features, the underlying engine APIs remain
 accessible — you can construct YAML / FASTA / restraints files

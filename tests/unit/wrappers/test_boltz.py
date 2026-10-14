@@ -2,8 +2,8 @@
 
 These don't require the ``boltz`` CLI to be installed. They exercise
 construction, lazy CLI detection, sequence validation, YAML input
-construction, command-line assembly, output collection, and CIF →
-Protein post-processing in isolation.
+construction, command-line assembly, seed handling, output collection,
+and CIF → Protein post-processing in isolation.
 
 End-to-end folding against the real engine is gated on the ``boltz``
 CLI being on $PATH and is marked ``@pytest.mark.slow``.
@@ -39,6 +39,7 @@ class TestConstruction:
         assert engine.recycling_steps is None
         assert engine.diffusion_samples is None
         assert engine.sampling_steps is None
+        assert engine.seed is None
         assert engine.device is None
         assert engine.executable is None
         assert engine.cache_dir is None
@@ -50,6 +51,7 @@ class TestConstruction:
             recycling_steps=5,
             diffusion_samples=3,
             sampling_steps=50,
+            seed=42,
             device="cpu",
             executable="/opt/boltz/bin/boltz",
             cache_dir="/tmp/my-boltz",
@@ -59,6 +61,7 @@ class TestConstruction:
         assert engine.recycling_steps == 5
         assert engine.diffusion_samples == 3
         assert engine.sampling_steps == 50
+        assert engine.seed == 42
         assert engine.device == "cpu"
         assert engine.executable == "/opt/boltz/bin/boltz"
         assert engine.cache_dir == "/tmp/my-boltz"
@@ -66,6 +69,15 @@ class TestConstruction:
     def test_invalid_model_version_raises(self) -> None:
         with pytest.raises(ValueError, match="model_version must be"):
             Boltz(model_version="boltz3")
+
+    def test_seed_zero_is_kept(self) -> None:
+        """0 is a legitimate seed, not a stand-in for "unseeded"."""
+        assert Boltz(seed=0).seed == 0
+
+    @pytest.mark.parametrize("bad", ["42", 4.2, True, [1]])
+    def test_non_int_seed_rejected(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="seed must be an int or None"):
+            Boltz(seed=bad)
 
     def test_construction_does_not_invoke_cli(self) -> None:
         """Construction must not shell out to the boltz binary."""
@@ -242,11 +254,185 @@ class TestCommandConstruction:
         cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--accelerator" not in cmd
 
+    def test_seed_passed_when_set(self, tmp_path: Path) -> None:
+        engine = Boltz(seed=42)
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--seed" in cmd
+        assert cmd[cmd.index("--seed") + 1] == "42"
+
+    def test_seed_absent_when_unset(self, tmp_path: Path) -> None:
+        """An unseeded engine leaves --seed off so boltz keeps its own default."""
+        cmd = Boltz()._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--seed" not in cmd
+
+    def test_seed_zero_passed(self, tmp_path: Path) -> None:
+        cmd = Boltz(seed=0)._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert cmd[cmd.index("--seed") + 1] == "0"
+
+    def test_per_call_seed_overrides_constructor(self, tmp_path: Path) -> None:
+        engine = Boltz(seed=1)
+        cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o", seed=7)
+        assert cmd[cmd.index("--seed") + 1] == "7"
+        assert engine.seed == 1  # the engine itself is unchanged
+
+    def test_per_call_seed_on_unseeded_engine(self, tmp_path: Path) -> None:
+        cmd = Boltz()._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o", seed=7)
+        assert cmd[cmd.index("--seed") + 1] == "7"
+
     def test_override_flag_present(self, tmp_path: Path) -> None:
         """We always pass --override since we're working in a tempdir."""
         engine = Boltz()
         cmd = engine._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
         assert "--override" in cmd
+
+
+# ----------------------------------------------------------------------
+# Per-call options (seed) and unknown-keyword rejection
+# ----------------------------------------------------------------------
+
+
+class TestPerCallOptions:
+    """``seed`` is honoured per call; anything else raises.
+
+    The methods take ``**kwargs``, which used to swallow everything — so a
+    ``predict(seq, seed=7)`` ran unseeded while looking reproducible. These
+    all run without the boltz CLI: rejection happens before the binary is
+    looked up.
+    """
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKTVRQ", ligand_smiles="CCO")
+
+    def test_resolve_returns_constructor_seed_by_default(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({}, method="predict") == 3
+
+    def test_resolve_returns_none_when_unseeded(self) -> None:
+        assert Boltz()._resolve_call_seed({}, method="predict") is None
+
+    def test_per_call_seed_wins(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({"seed": 9}, method="predict") == 9
+
+    def test_per_call_none_inherits_constructor_seed(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({"seed": None}, method="predict") == 3
+
+    def test_per_call_seed_zero_wins(self) -> None:
+        assert Boltz(seed=3)._resolve_call_seed({"seed": 0}, method="predict") == 0
+
+    def test_per_call_non_int_seed_rejected(self) -> None:
+        with pytest.raises(TypeError, match="seed must be an int or None"):
+            Boltz()._resolve_call_seed({"seed": "7"}, method="predict")
+
+    def test_unknown_kwarg_rejected(self) -> None:
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            Boltz()._resolve_call_seed({"temperature": 0.5}, method="predict")
+
+    def test_rejection_names_the_offender_and_the_supported_option(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Boltz()._resolve_call_seed({"sed": 1}, method="predict")
+        message = str(excinfo.value)
+        assert "Boltz.predict()" in message
+        assert "'sed'" in message
+        assert "'seed'" in message  # points at what the caller probably meant
+
+    def test_all_unknown_kwargs_reported(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            Boltz()._resolve_call_seed({"a": 1, "b": 2}, method="predict")
+        assert "'a', 'b'" in str(excinfo.value)
+
+    def test_predict_rejects_unknown_kwarg_without_cli(self) -> None:
+        """Fails on the keyword, not on the missing boltz binary."""
+        with patch("shutil.which", return_value=None), pytest.raises(TypeError, match="'nsamples'"):
+            Boltz().predict("MKTVRQ", nsamples=3)
+
+    def test_predict_complex_rejects_unknown_kwarg(self) -> None:
+        with patch("shutil.which", return_value=None), pytest.raises(TypeError, match="'device'"):
+            Boltz().predict_complex(self._spec(), device="cpu")
+
+    def test_predict_affinity_rejects_unknown_kwarg(self) -> None:
+        with patch("shutil.which", return_value=None), pytest.raises(TypeError, match="'binder'"):
+            Boltz(model_version="boltz2").predict_affinity(self._spec(), binder="B")
+
+    def test_predict_many_forwards_seed(self) -> None:
+        """The inherited batch loop passes per-call options through."""
+        engine = Boltz()
+        seen: list[object] = []
+        with patch.object(
+            Boltz, "predict", side_effect=lambda _seq, **kw: seen.append(kw.get("seed"))
+        ):
+            engine.predict_many(["MK", "AG"], seed=5)
+        assert seen == [5, 5]
+
+    def test_per_call_seed_reaches_the_invoked_command(self) -> None:
+        """The whole path, not just the seams: predict(seq, seed=...) must
+        end up as ``--seed`` on the command line boltz is actually run with."""
+        engine = Boltz(seed=1, use_msa_server=False)
+        commands: list[list[str]] = []
+        with (
+            patch.object(Boltz, "_require_boltz", return_value="/bin/boltz"),
+            patch.object(Boltz, "_invoke", side_effect=lambda cmd, **_: commands.append(cmd)),
+            patch.object(Boltz, "_collect_outputs", return_value=(_TINY_CIF, {})),
+        ):
+            engine.predict("AG", seed=7)
+            engine.predict("AG")  # falls back to the constructor's seed
+
+        assert commands[0][commands[0].index("--seed") + 1] == "7"
+        assert commands[1][commands[1].index("--seed") + 1] == "1"
+
+
+# ----------------------------------------------------------------------
+# Provenance / caching of the seed
+# ----------------------------------------------------------------------
+
+
+class TestSeedProvenance:
+    """The seed must reach provenance: it is part of "how was this made",
+    and therefore part of the cache key and of a replayed manifest."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def test_constructor_seed_recorded(self) -> None:
+        prov = Boltz(seed=42)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["seed"] == 42
+
+    def test_unseeded_records_none(self) -> None:
+        prov = Boltz()._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["seed"] is None
+
+    def test_per_call_seed_recorded(self) -> None:
+        prov = Boltz(seed=1)._build_provenance(self._spec(), single_sequence="MKTVRQ", seed=9)
+        assert prov.parameters["seed"] == 9
+
+    def test_different_seeds_do_not_share_a_cache_entry(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        keys = {
+            cache_key(Boltz(seed=s)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for s in (1, 2, None)
+        }
+        assert len(keys) == 3
+
+    def test_same_seed_gives_the_same_cache_key(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        first = cache_key(Boltz(seed=7)._build_provenance(spec, single_sequence="MKTVRQ"))
+        second = cache_key(Boltz(seed=7)._build_provenance(spec, single_sequence="MKTVRQ"))
+        assert first == second
+
+    def test_replay_can_reconstruct_a_seeded_engine(self) -> None:
+        """``seed`` is a constructor argument, so replay rebuilds the engine
+        with it — the point of recording it in the first place."""
+        from molforge.reproducibility import _construct
+
+        prov = Boltz(seed=42)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        engine = _construct(Boltz, dict(prov.parameters))
+        assert engine.seed == 42
 
 
 # ----------------------------------------------------------------------
@@ -513,6 +699,106 @@ class TestUniformConfidenceConvention:
 
 
 # ----------------------------------------------------------------------
+# Boltz-2 affinity prediction
+# ----------------------------------------------------------------------
+
+
+class TestAffinity:
+    """predict_affinity — YAML properties block, JSON parsing, validation.
+
+    Boltz is GPU-only, so we target the seams: the input YAML, the affinity
+    sidecar parser, and the validation gates.
+    """
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.protein_ligand(protein_sequence="MKTVRQ", ligand_smiles="CCO")
+
+    def test_single_ligand_chain_id(self) -> None:
+        from molforge.wrappers.folding.boltz import _single_ligand_chain_id
+
+        assert _single_ligand_chain_id(self._spec()) == "B"
+
+    def test_no_ligand_raises(self) -> None:
+        from molforge.folding import ComplexSpec
+        from molforge.wrappers.folding.boltz import _single_ligand_chain_id
+
+        with pytest.raises(ValueError, match="exactly one ligand"):
+            _single_ligand_chain_id(ComplexSpec.from_protein("MKTVRQ"))
+
+    def test_two_ligands_raises(self) -> None:
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.wrappers.folding.boltz import _single_ligand_chain_id
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKTVRQ"),
+                Entity(kind="ligand", smiles="CCO"),
+                Entity(kind="ligand", smiles="CCC"),
+            )
+        )
+        with pytest.raises(ValueError, match="exactly one ligand"):
+            _single_ligand_chain_id(spec)
+
+    def test_yaml_has_affinity_properties_block(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        y = engine._build_input_yaml_from_spec(self._spec(), affinity_binder="B")
+        assert "properties:" in y
+        assert "- affinity:" in y
+        assert "binder: B" in y
+
+    def test_yaml_without_affinity_has_no_properties(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        assert "properties:" not in engine._build_input_yaml_from_spec(self._spec())
+
+    def test_affinity_json_helpers(self) -> None:
+        from molforge.wrappers.folding.boltz import _affinity_probability, _affinity_value
+
+        aj = {"affinity_pred_value": -1.23, "affinity_probability_binary": 0.87}
+        assert _affinity_value(aj) == pytest.approx(-1.23)
+        assert _affinity_probability(aj) == pytest.approx(0.87)
+        assert _affinity_value({}) is None
+        assert _affinity_probability({}) is None
+
+    def test_parse_outputs_surfaces_affinity_metadata(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        protein = engine._parse_outputs(
+            cif_text=_TINY_CIF,
+            confidence_json={"ptm": 0.8, "iptm": 0.5},
+            sequence=None,
+            spec=self._spec(),
+            affinity_json={"affinity_pred_value": -2.5, "affinity_probability_binary": 0.91},
+        )
+        assert protein.metadata["affinity_value"] == pytest.approx(-2.5)
+        assert protein.metadata["affinity_probability"] == pytest.approx(0.91)
+        assert protein.metadata["affinity"]["affinity_pred_value"] == -2.5
+
+    def test_parse_outputs_without_affinity_omits_keys(self) -> None:
+        engine = Boltz(model_version="boltz2")
+        protein = engine._parse_outputs(cif_text=_TINY_CIF, confidence_json={}, sequence="AG")
+        assert "affinity_value" not in protein.metadata
+
+    def test_boltz1_rejects_affinity(self) -> None:
+        with pytest.raises(ValueError, match="requires Boltz-2"):
+            Boltz(model_version="boltz1").predict_affinity(self._spec())
+
+    def test_collect_affinity_globs_json(self, tmp_path: Path) -> None:
+        import json
+
+        engine = Boltz(model_version="boltz2")
+        (tmp_path / "sub").mkdir()
+        (tmp_path / "sub" / "affinity_query.json").write_text(
+            json.dumps({"affinity_pred_value": -1.0, "affinity_probability_binary": 0.7})
+        )
+        data = engine._collect_affinity(tmp_path)
+        assert data["affinity_pred_value"] == -1.0
+
+    def test_collect_affinity_missing_returns_empty(self, tmp_path: Path) -> None:
+        assert Boltz(model_version="boltz2")._collect_affinity(tmp_path) == {}
+
+
+# ----------------------------------------------------------------------
 # End-to-end (skipped unless boltz is on PATH)
 # ----------------------------------------------------------------------
 
@@ -531,3 +817,193 @@ class TestEndToEnd:
         assert protein.n_residues == 20
         assert "confidence_per_residue" in protein.metadata
         assert protein.metadata["engine"] == "Boltz"
+
+
+class TestMsaDepth:
+    """Capping MSA depth is an ablation knob: it has to reach the CLI
+    and it has to reach the cache key, or a depth ladder silently
+    returns one structure five times."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def test_depth_sets_both_subsample_flags(self, tmp_path: Path) -> None:
+        """Boltz ignores the count without the switch, so both or neither."""
+        cmd = Boltz(msa_depth=16)._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--subsample_msa" in cmd
+        assert cmd[cmd.index("--num_subsampled_msa") + 1] == "16"
+
+    def test_absent_when_unset(self, tmp_path: Path) -> None:
+        cmd = Boltz()._build_command("/bin/boltz", tmp_path / "i.yaml", tmp_path / "o")
+        assert "--subsample_msa" not in cmd
+        assert "--num_subsampled_msa" not in cmd
+
+    def test_recorded_in_provenance(self) -> None:
+        prov = Boltz(msa_depth=32)._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert prov.parameters["msa_depth"] == 32
+
+    def test_absent_from_provenance_when_unset(self) -> None:
+        """Omitted rather than recorded as None, so existing cache
+        entries stay valid — see test_default_cache_key_is_unchanged."""
+        prov = Boltz()._build_provenance(self._spec(), single_sequence="MKTVRQ")
+        assert "msa_depth" not in prov.parameters
+
+    def test_each_rung_of_the_ladder_is_a_distinct_cache_entry(self) -> None:
+        from molforge.cache import cache_key
+
+        spec = self._spec()
+        keys = {
+            cache_key(Boltz(msa_depth=d)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for d in (8, 16, 32, 64, None)
+        }
+        assert len(keys) == 5
+
+    @pytest.mark.parametrize("bad", [0, -1, -100])
+    def test_non_positive_depth_rejected(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="msa_depth must be >= 1"):
+            Boltz(msa_depth=bad)
+
+    def test_zero_points_at_the_right_switch(self) -> None:
+        """Depth 0 isn't a shallow MSA, it's no MSA — a different knob."""
+        with pytest.raises(ValueError, match="use_msa_server=False"):
+            Boltz(msa_depth=0)
+
+    @pytest.mark.parametrize("bad", [1.5, "8", True])
+    def test_non_int_depth_rejected(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="msa_depth must be an int"):
+            Boltz(msa_depth=bad)  # type: ignore[arg-type]
+
+
+class TestTemplatePolicyBoltz:
+    """Boltz takes template structures through its input YAML."""
+
+    def _spec(self):
+        from molforge.folding import ComplexSpec
+
+        return ComplexSpec.from_protein("MKTVRQ")
+
+    def test_structures_emit_a_templates_block(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        engine = Boltz(templates=TemplatePolicy.from_structures("4hhb.cif", "1ubq.cif"))
+        yaml = engine._build_input_yaml_from_spec(self._spec())
+        assert "templates:" in yaml
+        assert "  - cif: 4hhb.cif" in yaml
+        assert "  - cif: 1ubq.cif" in yaml
+
+    def test_pdb_suffix_uses_the_pdb_key(self) -> None:
+        """Boltz assigns template chain IDs differently per format, so
+        the key has to follow the file, not a default."""
+        from molforge.folding import TemplatePolicy
+
+        engine = Boltz(templates=TemplatePolicy.from_structures("x.pdb", "y.ent", "z.cif"))
+        yaml = engine._build_input_yaml_from_spec(self._spec())
+        assert "  - pdb: x.pdb" in yaml
+        assert "  - pdb: y.ent" in yaml
+        assert "  - cif: z.cif" in yaml
+
+    def test_none_emits_no_block(self) -> None:
+        yaml = Boltz(templates="none")._build_input_yaml_from_spec(self._spec())
+        assert "templates:" not in yaml
+
+    def test_unset_emits_no_block(self) -> None:
+        yaml = Boltz()._build_input_yaml_from_spec(self._spec())
+        assert "templates:" not in yaml
+
+    def test_templated_and_untemplated_do_not_share_a_cache_entry(self) -> None:
+        """The whole point of the ablation — these must not collide."""
+        from molforge.cache import cache_key
+        from molforge.folding import TemplatePolicy
+
+        spec = self._spec()
+        keys = {
+            cache_key(Boltz(templates=t)._build_provenance(spec, single_sequence="MKTVRQ"))
+            for t in (None, "none", TemplatePolicy.from_structures("4hhb.cif"))
+        }
+        assert len(keys) == 3
+
+    def test_recorded_in_provenance(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        prov = Boltz(templates=TemplatePolicy.from_structures("4hhb.cif"))._build_provenance(
+            self._spec(), single_sequence="MKTVRQ"
+        )
+        assert prov.parameters["templates"] == {
+            "mode": "structures",
+            "structures": ["4hhb.cif"],
+        }
+
+    def test_chai_only_modes_are_refused(self) -> None:
+        """Folding without the templates you asked for is the silent
+        wrong answer this raises to avoid."""
+        from molforge.folding import TemplatePolicy
+
+        for policy in (TemplatePolicy.from_server(), TemplatePolicy.from_hits("h.m8")):
+            with pytest.raises(ValueError, match="Boltz does not support"):
+                Boltz(templates=policy)
+
+    def test_error_names_what_boltz_does_support(self) -> None:
+        from molforge.folding import TemplatePolicy
+
+        with pytest.raises(ValueError, match="from_structures"):
+            Boltz(templates=TemplatePolicy.from_server())
+
+    def test_bad_string_rejected(self) -> None:
+        with pytest.raises(ValueError, match="must be a TemplatePolicy"):
+            Boltz(templates="full")
+
+
+class TestSamplingControlsCacheCompatibility:
+    def test_default_cache_key_matches_the_pre_option_shape(self) -> None:
+        """Adding msa_depth and templates must not orphan cached folds.
+
+        Checked against a provenance built with the parameter set exactly
+        as it stood before those options existed, rather than a frozen
+        hex literal: the cache key mixes in molforge's major.minor, so a
+        literal would fail on every release for reasons that have nothing
+        to do with what this is guarding.
+        """
+        from molforge.cache import cache_key
+        from molforge.core.provenance import Provenance
+        from molforge.folding import ComplexSpec
+        from molforge.wrappers._versions import engine_version
+
+        before_the_options_existed = Provenance.from_engine(
+            engine="Boltz",
+            operation="predict",
+            engine_version=engine_version("boltz"),
+            parameters={
+                "model_version": "boltz2",
+                "use_msa_server": True,
+                "recycling_steps": None,
+                "diffusion_samples": None,
+                "sampling_steps": None,
+                "seed": None,
+                "device": None,
+                "affinity_binder": None,
+            },
+            inputs={"sequence": "MKTVRQ"},
+        )
+        now = Boltz()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert cache_key(now) == cache_key(before_the_options_existed)
+
+    def test_default_parameter_set_is_unchanged(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        prov = Boltz()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert set(prov.parameters) == {
+            "model_version",
+            "use_msa_server",
+            "recycling_steps",
+            "diffusion_samples",
+            "sampling_steps",
+            "seed",
+            "device",
+            "affinity_binder",
+        }

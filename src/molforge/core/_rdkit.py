@@ -55,6 +55,24 @@ def mol_from_smiles(smiles: str, *, sanitize: bool = True) -> Any:
     return mol
 
 
+def mol_from_molblock(molblock: str, *, sanitize: bool = True, remove_hs: bool = False) -> Any:
+    """Parse an MDL molblock (one SDF record) into an RDKit ``Mol``.
+
+    Keeps explicit hydrogens by default, unlike RDKit's own default: a
+    downloaded ligand's Hs are part of the deposited chemistry, and callers
+    who want them gone can say so.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+        ValueError: If RDKit can't parse ``molblock``.
+    """
+    chem = _chem()
+    mol = chem.MolFromMolBlock(molblock, sanitize=sanitize, removeHs=remove_hs)
+    if mol is None:
+        raise ValueError("RDKit could not parse the molblock")
+    return mol
+
+
 def to_smiles(mol: Any, *, canonical: bool = True, isomeric: bool = True) -> str:
     """Canonical SMILES for ``mol`` (isomeric by default)."""
     chem = _chem()
@@ -149,8 +167,22 @@ def cleanup(mol: Any) -> Any:
 
 
 def largest_fragment(mol: Any) -> Any:
-    """Keep the largest organic fragment (strips salts/solvents)."""
-    return _standardize_mod().FragmentParent(mol)
+    """Keep the largest organic fragment (strips salts/solvents).
+
+    RDKit builds the parent by *deleting* the other fragments' atoms, which
+    leaves the result's ring info and implicit-valence caches uninitialized.
+    Anything that asks about rings then fails with a bare RDKit
+    ``RingInfo not initialized`` precondition violation — descriptors (TPSA,
+    rotatable bonds) and Murcko decomposition alike — so restore those caches
+    before handing the fragment back. Per-atom chemistry is already correct
+    (``FragmentParent`` cleans up internally); only the derived caches are
+    missing, so this recomputes them rather than re-perceiving the molecule.
+    """
+    chem = _chem()
+    parent = _standardize_mod().FragmentParent(mol)
+    parent.UpdatePropertyCache(strict=False)
+    chem.FastFindRings(parent)
+    return parent
 
 
 def uncharge(mol: Any) -> Any:
@@ -161,6 +193,35 @@ def uncharge(mol: Any) -> Any:
 def canonical_tautomer(mol: Any) -> Any:
     """Pick RDKit's canonical tautomer."""
     return _standardize_mod().TautomerEnumerator().Canonicalize(mol)
+
+
+def _murcko_mod() -> Any:
+    """Return ``rdkit.Chem.Scaffolds.MurckoScaffold`` or raise."""
+    _chem()  # clean error first if RDKit is absent
+    from rdkit.Chem.Scaffolds import MurckoScaffold
+
+    return MurckoScaffold
+
+
+def murcko_scaffold(mol: Any, *, generic: bool = False) -> Any:
+    """The Bemis-Murcko scaffold of ``mol`` — rings plus linkers, side chains
+    stripped.
+
+    ``generic`` makes the framework element- and bond-order-agnostic (every
+    atom a carbon, every bond single), so scaffolds that differ only in their
+    heteroatoms compare equal. ``mol`` is not modified.
+
+    An acyclic molecule has no scaffold: the returned mol is empty (zero
+    atoms), which is Bemis-Murcko's own convention rather than an error.
+
+    Raises:
+        RDKitNotInstalledError: If RDKit isn't installed.
+    """
+    murcko = _murcko_mod()
+    scaffold = murcko.GetScaffoldForMol(mol)
+    if generic:
+        scaffold = murcko.MakeScaffoldGeneric(scaffold)
+    return scaffold
 
 
 def sanitize_ok(mol: Any) -> bool:

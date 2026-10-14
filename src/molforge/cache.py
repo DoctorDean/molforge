@@ -19,10 +19,16 @@ Integration on the engine side is a few lines per method::
 
 What gets cached:
     - :class:`molforge.core.Protein` from folding wrappers.
+    - ``list[Protein]`` from folding wrappers that return every sample
+      of a run (``Chai1.predict_samples``).
     - ``list[DesignedSequence]`` from generative wrappers.
     - :class:`molforge.docking.DockingResult` from docking wrappers
-      (Vina, Gnina, DiffDock). Extra result types register via
-      :func:`register_serializer`.
+      (Vina, Gnina, DiffDock).
+    - The raw text of a structure downloaded by
+      :func:`molforge.io.fetch` — the server's bytes, not the parsed
+      Protein, so a hit and a miss parse identically.
+
+    Extra result types register via :func:`register_serializer`.
 
 What deliberately doesn't get cached:
     - :class:`molforge.md.Trajectory`. Multi-GB per simulation; users
@@ -43,6 +49,8 @@ Cache layout:
       replaced by markers)
     - ``structure.cif`` (for Protein only): the AtomArray as mmCIF
     - ``payload.json`` (for DesignedSequence list): the design list
+    - ``download.txt`` (for a fetched structure): the downloaded
+      file, verbatim
     - ``receptor.cif`` + ``pose_{i}.cif`` (for DockingResult): the
       receptor and each pose ligand as mmCIF, with scalar pose fields
       and metadata in ``payload.json``
@@ -114,19 +122,20 @@ _logger = logging.getLogger(__name__)
 def _provenance_for_key(provenance: Provenance) -> dict[str, Any]:
     """Strip timestamps from Provenance for deterministic hashing.
 
-    Walks the parent chain so timestamps anywhere up the chain are
-    stripped. Everything else (engine, engine_version, parameters,
-    inputs, parent chain) participates in the key.
+    Delegates to :meth:`Provenance.content_dict`, which is molforge's one
+    definition of "the same computation" — shared with
+    :class:`molforge.reproducibility.AggregateManifest`, so the cache's
+    idea of a redundant recomputation and a manifest's idea of a shared
+    ancestor can't drift apart.
+
+    ``include_operation=False`` because this key predates the
+    ``operation`` field. Folding it in now would change every key and so
+    orphan every entry already on disk, for no behavioural gain: a
+    wrapper that needs two operations on identical inputs to occupy
+    different slots already distinguishes them with a parameter (see
+    ``Chai1``'s ``return_all_samples``).
     """
-    out: dict[str, Any] = {
-        "engine": provenance.engine,
-        "engine_version": provenance.engine_version,
-        "parameters": dict(provenance.parameters),
-        "inputs": dict(provenance.inputs),
-    }
-    if provenance.parent is not None:
-        out["parent"] = _provenance_for_key(provenance.parent)
-    return out
+    return provenance.content_dict(include_operation=False)
 
 
 def cache_key(provenance: Provenance) -> str:
@@ -309,6 +318,27 @@ class Cache:
     def path_for(self, provenance: Provenance) -> Path:
         """On-disk path for an entry. May not exist (cache miss)."""
         return self.directory / cache_key(provenance)
+
+    def invalidate(self, provenance: Provenance) -> bool:
+        """Drop the entry for this Provenance, if there is one.
+
+        :meth:`put` refuses to overwrite an existing entry — first
+        writer wins, which is what keeps concurrent writers from
+        tearing a half-written directory. So a caller that genuinely
+        wants a *fresh* result (``force_refresh=``) has to clear the
+        slot first.
+
+        Returns:
+            ``True`` if an entry was removed, ``False`` if there was
+            nothing to remove (or the cache is disabled).
+        """
+        if not self.enabled:
+            return False
+        entry = self.directory / cache_key(provenance)
+        if not entry.is_dir():
+            return False
+        shutil.rmtree(entry, ignore_errors=True)
+        return not entry.exists()
 
     def clear(self) -> int:
         """Delete every entry. Only removes hex-named directories
@@ -603,6 +633,59 @@ def _deserialize_protein_member(
     return protein
 
 
+def _serialize_protein_list(proteins: list[Protein], entry: Path) -> None:
+    """Write a list of Proteins as per-member mmCIF + JSON + npz.
+
+    Layout inside ``entry``:
+
+    - ``sample_{i}.cif`` — each member's structure.
+    - ``payload.json`` — each member's name + metadata, with arrays and
+      Provenance replaced by markers.
+    - ``arrays.npz`` — every member's metadata arrays, namespaced by slot
+      (``sample{i}``) so they don't collide.
+
+    Order is preserved, which matters: the callers that produce these
+    return them ranked, so element 0 is the pick.
+    """
+    all_arrays: dict[str, Any] = {}
+    members = [
+        _serialize_protein_member(
+            protein,
+            entry,
+            cif_name=f"sample_{i}.cif",
+            array_slot=f"sample{i}",
+            arrays_out=all_arrays,
+        )
+        for i, protein in enumerate(proteins)
+    ]
+    (entry / "payload.json").write_text(json.dumps({"members": members}), encoding="utf-8")
+    if all_arrays:
+        np.savez(entry / "arrays.npz", **all_arrays)
+
+
+def _deserialize_protein_list(entry: Path) -> list[Protein]:
+    """Inverse of :func:`_serialize_protein_list`."""
+    payload = json.loads((entry / "payload.json").read_text(encoding="utf-8"))
+
+    arrays_by_slot: dict[str, dict[str, Any]] = {}
+    arrays_path = entry / "arrays.npz"
+    if arrays_path.is_file():
+        with np.load(arrays_path, allow_pickle=False) as npz:
+            for key in npz.files:
+                slot, _, real_key = key.partition("__")
+                arrays_by_slot.setdefault(slot, {})[real_key] = npz[key]
+
+    return [
+        _deserialize_protein_member(
+            entry,
+            member,
+            cif_name=f"sample_{i}.cif",
+            slot_arrays=arrays_by_slot.get(f"sample{i}", {}),
+        )
+        for i, member in enumerate(payload["members"])
+    ]
+
+
 def _serialize_docking_result(result: DockingResult, entry: Path) -> None:
     """Write a DockingResult as per-member mmCIF + JSON + npz.
 
@@ -844,10 +927,35 @@ def _deserialize_free_energy_result(entry: Path) -> FreeEnergyResult:
 
 
 # ---------------------------------------------------------------------
+# Downloaded-text serializer
+# ---------------------------------------------------------------------
+
+
+def _serialize_structure_text(text: str, entry: Path) -> None:
+    """Store a downloaded structure file byte-for-byte.
+
+    Deliberately *not* the parsed :class:`~molforge.core.Protein`: a
+    hit and a miss must return the same object. Round-tripping a
+    Protein through :func:`_serialize_protein` re-encodes it as
+    molforge's own mmCIF, so a cached PDB download would come back
+    subtly different from a fresh one. Keeping the server's bytes and
+    re-running the same reader makes the cache invisible, which is
+    the only honest behaviour for a download cache.
+    """
+    (entry / "download.txt").write_text(text, encoding="utf-8")
+
+
+def _deserialize_structure_text(entry: Path) -> str:
+    """Inverse of :func:`_serialize_structure_text`."""
+    return (entry / "download.txt").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------
 # Register built-ins
 # ---------------------------------------------------------------------
 
 register_serializer("protein", _serialize_protein, _deserialize_protein)
+register_serializer("protein_list", _serialize_protein_list, _deserialize_protein_list)
 register_serializer(
     "designed_sequences",
     _serialize_designed_sequences,
@@ -863,3 +971,4 @@ register_serializer(
     _serialize_free_energy_result,
     _deserialize_free_energy_result,
 )
+register_serializer("structure_text", _serialize_structure_text, _deserialize_structure_text)

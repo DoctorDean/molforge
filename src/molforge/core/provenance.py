@@ -82,6 +82,7 @@ canonical key alongside it without removing the existing one.
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
@@ -127,6 +128,10 @@ class Provenance:
         engine: Name of the producer — typically an engine name
             (``"ESMFold"``, ``"Vina"``) or a molforge function path
             (``"molforge.prep.prepare_for_md"``).
+        operation: The engine method that produced the output
+            (``"predict"``, ``"dock"``, ``"generate"``, ...). ``""`` when
+            unrecorded. Consumed by :func:`molforge.reproducibility.replay`
+            to know which method to re-invoke.
         engine_version: Version string of the engine itself. ``""``
             when the engine doesn't expose one. Distinct from
             :attr:`molforge_version`.
@@ -151,6 +156,7 @@ class Provenance:
     """
 
     engine: str
+    operation: str = ""
     engine_version: str = ""
     molforge_version: str = ""
     timestamp: str = ""
@@ -167,6 +173,7 @@ class Provenance:
         cls,
         engine: str,
         *,
+        operation: str = "",
         engine_version: str = "",
         parameters: dict[str, Any] | None = None,
         inputs: dict[str, Any] | None = None,
@@ -181,6 +188,8 @@ class Provenance:
 
         Args:
             engine: Producer name (engine name or function path).
+            operation: The engine method that produced the output
+                (``"predict"`` / ``"dock"`` / ...). Enables replay.
             engine_version: Producer version. Pass ``""`` if the engine
                 doesn't expose one.
             parameters: Engine-specific arguments. Must be
@@ -212,6 +221,7 @@ class Provenance:
 
         return cls(
             engine=engine,
+            operation=operation,
             engine_version=engine_version,
             molforge_version=_molforge_version(),
             timestamp=_utc_timestamp(),
@@ -274,6 +284,72 @@ class Provenance:
         return sum(1 for _ in self.walk())
 
     # ------------------------------------------------------------------
+    # Content identity
+    # ------------------------------------------------------------------
+
+    def content_dict(self, *, include_operation: bool = True) -> dict[str, Any]:
+        """Canonical description of *the computation*, timestamps removed.
+
+        Two provenance nodes that produce this same dict describe the same
+        work: the same engine at the same version, the same parameters and
+        inputs, consuming the same ancestry. What they don't share is
+        *when* they ran, which is why the timestamp is stripped here and
+        at every level of the parent chain.
+
+        This is the notion of identity behind two separate features.
+        :mod:`molforge.cache` uses it to decide that a recomputation is
+        redundant, and :class:`molforge.reproducibility.AggregateManifest`
+        uses it to recognise that a thousand predictions shared one MSA
+        step and record that step once.
+
+        Args:
+            include_operation: Whether :attr:`operation` participates.
+                Default ``True``, because the method that produced an
+                output is part of what produced it. The cache passes
+                ``False``: its key predates the field, and folding it in
+                now would orphan every entry already on disk for no
+                behavioural gain — the wrappers that need to distinguish
+                two operations on identical inputs already do it with a
+                parameter.
+
+        Returns:
+            A JSON-serialisable dict, nested through ``parent``.
+        """
+        out: dict[str, Any] = {
+            "engine": self.engine,
+            "engine_version": self.engine_version,
+            "parameters": dict(self.parameters),
+            "inputs": dict(self.inputs),
+        }
+        if include_operation:
+            out["operation"] = self.operation
+        if self.parent is not None:
+            out["parent"] = self.parent.content_dict(include_operation=include_operation)
+        return out
+
+    def content_id(self) -> str:
+        """A stable 64-char hex digest of :meth:`content_dict`.
+
+        Equal ids mean the same computation; different ids mean a
+        different one. Unlike :func:`molforge.cache.cache_key` this
+        deliberately does *not* mix in the molforge version — a manifest
+        aggregating runs from several molforge releases should still see
+        that they shared an upstream step, whereas the cache must treat a
+        version bump as invalidating.
+
+        Example:
+            >>> from molforge.core.provenance import Provenance
+            >>> a = Provenance.from_engine("ESMFold", operation="predict")
+            >>> b = Provenance.from_engine("ESMFold", operation="predict")
+            >>> a.timestamp == b.timestamp  # may differ
+            True
+            >>> a.content_id() == b.content_id()
+            True
+        """
+        text = json.dumps(self.content_dict(), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    # ------------------------------------------------------------------
     # Serialisation
     # ------------------------------------------------------------------
 
@@ -284,6 +360,7 @@ class Provenance:
 
             {
                 "engine": str,
+                "operation": str,
                 "engine_version": str,
                 "molforge_version": str,
                 "timestamp": str,        # ISO-8601 UTC
@@ -298,6 +375,7 @@ class Provenance:
         """
         return {
             "engine": self.engine,
+            "operation": self.operation,
             "engine_version": self.engine_version,
             "molforge_version": self.molforge_version,
             "timestamp": self.timestamp,
@@ -329,6 +407,7 @@ class Provenance:
         parent = cls.from_dict(parent_data) if parent_data else None
         return cls(
             engine=str(data["engine"]),
+            operation=str(data.get("operation", "")),
             engine_version=str(data.get("engine_version", "")),
             molforge_version=str(data.get("molforge_version", "")),
             timestamp=str(data.get("timestamp", "")),

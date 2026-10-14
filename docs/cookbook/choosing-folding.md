@@ -133,6 +133,162 @@ For multimer predictions, **iPTM** (Boltz) and **ipTM** (AF-
 multimer) are the interface-quality metrics; the headline pLDDT can
 be high even with badly-modelled interfaces.
 
+### Every sample, not just the best (Chai-1)
+
+Chai-1 always runs five diffusion samples per call. `predict()` returns
+the highest-scoring one, which is usually what you want — but the other
+four are fully computed structures, and the GPU time is already spent.
+`predict_samples()` returns all five instead:
+
+```python
+from molforge.wrappers.folding import Chai1
+
+samples = Chai1().predict_samples(sequence)   # 5 structures, one inference
+best = samples[0]                             # == Chai1().predict(sequence)
+
+spread = [s.metadata["aggregate_score"] for s in samples]
+```
+
+They come back ranked, so `samples[0]` is exactly what `predict()` would
+have returned; each carries its own scores plus `sample_index` (Chai's
+own 0–4 index) and `sample_rank` (its place in the ranking).
+`predict_complex_samples(spec)` is the complex counterpart — five ligand
+poses per call rather than one, which is the difference between a
+3-week and a 15-week campaign when the whole thing is GPU-bound.
+
+The two shapes share a cache, so asking for one after the other doesn't
+re-run the model:
+
+```python
+engine = Chai1()
+engine.predict(sequence)            # runs the model
+engine.predict_samples(sequence)    # cache hit — the other four were banked
+```
+
+### Reproducible sampling (seeds)
+
+The AF3-class engines sample structures with a diffusion model, so two
+runs of the same input can differ. Both take a `seed`, on the
+constructor or per call:
+
+| Engine        | Seed control                                                                 |
+| ------------- | ---------------------------------------------------------------------------- |
+| Boltz         | `Boltz(seed=42)`, or per call `predict(seq, seed=42)`; passed to the CLI as `--seed`. |
+| Chai-1        | `Chai1(seed=42)`; seeds torch and Chai's own sampler.                        |
+| ESMFold       | Deterministic single forward pass — no sampling to seed.                     |
+| AlphaFold     | Seeded by the ColabFold backend, not exposed by the wrapper yet.              |
+| RoseTTAFold   | Not exposed by the wrapper yet.                                              |
+
+```python
+from molforge.wrappers.folding import Boltz
+
+engine = Boltz(model_version="boltz2", seed=42)
+first  = engine.predict(sequence)      # seeded, and cached under that seed
+again  = engine.predict(sequence)      # cache hit — same structure
+
+# A seeded ensemble: one engine, several seeds, distinct cache entries.
+ensemble = [engine.predict(sequence, seed=s) for s in range(5)]
+```
+
+The seed is recorded in the structure's
+[provenance](inspect-provenance.md), so it is part of the cache key —
+different seeds don't collide, and a
+[replayed](../guide/reproducibility.md) manifest re-runs with the seed it
+was folded with.
+
+Two caveats. Every engine rejects per-call keywords it doesn't consume,
+so a typo can't quietly cost you a seeded run — `seed` is a per-call
+option on Boltz alone, and the other four wrappers take no per-call
+options at all, raising `TypeError` and pointing at the constructor
+instead. (Which also means `cross_engine_fold(..., seed=42)` fails on
+every engine but Boltz: set engine-specific options on that engine's
+constructor.) And a seed pins the *sampler*, not the hardware: GPU
+non-determinism means small numerical drift across machines is still
+expected, so treat seeding as reproducibility of intent, not of bits.
+
+### MSA depth
+
+An AF3-class model leans heavily on coevolution: the deeper the
+alignment, the more confidently it reproduces the fold the family
+already shows. Shrinking the alignment is how you find out what the
+model believes without that support — and, in practice, how you push it
+off a dominant conformation towards alternatives it would otherwise
+never sample.
+
+Both AF3-class engines take `msa_depth`, a cap on how many MSA
+sequences the model may use:
+
+```python
+from molforge.wrappers.folding import Boltz
+
+ladder = {
+    depth: Boltz(msa_depth=depth, use_msa_server=True).predict(sequence)
+    for depth in (8, 16, 32, 64, None)   # None = the full alignment
+}
+```
+
+Each rung is a separate cache entry, so the sweep re-runs only what it
+must, and a repeat of the whole ladder is free.
+
+| Engine  | `msa_depth=N` becomes                     | Where the cap bites            |
+| ------- | ----------------------------------------- | ------------------------------ |
+| Boltz   | `--subsample_msa --num_subsampled_msa N`   | Every trunk pass               |
+| Chai-1  | `recycle_msa_subsample=N`                  | Recycling passes only; the first trunk pass still sees the full alignment |
+
+That difference is worth knowing before you compare the two: both
+genuinely shrink what the model sees, so a ladder is meaningful on
+either engine, but the same `N` is not the same experiment on both.
+Report which engine a ladder ran on.
+
+`msa_depth` is a *shallow* alignment, not the absence of one. To run
+with no MSA at all, use `Boltz(use_msa_server=False)` — or Chai-1's
+default, which is already MSA-free. `msa_depth=0` raises and says so
+rather than quietly meaning one of the two.
+
+### Templates
+
+A template lets the model copy a known fold instead of deriving one.
+Usually helpful; occasionally the whole problem, because a model handed
+a structure of the thing you're asking about will hand it back. Taking
+templates away is how you check the prediction is a prediction.
+
+`TemplatePolicy` names the mechanism, because the engines genuinely
+differ:
+
+```python
+from molforge.folding import TemplatePolicy
+from molforge.wrappers.folding import Boltz, Chai1
+
+# Boltz reads template structures from its input YAML.
+Boltz(templates=TemplatePolicy.from_structures("4hhb.cif", "1ubq.cif"))
+
+# Chai-1 takes a precomputed hits table, or searches for itself.
+Chai1(templates=TemplatePolicy.from_hits("hits.m8"))
+Chai1(templates=TemplatePolicy.from_server())
+
+# Both understand "no templates" — the control arm of the ablation.
+Boltz(templates="none")
+Chai1(templates=TemplatePolicy.none())
+```
+
+| Mode                          | Boltz | Chai-1 |
+| ----------------------------- | :---: | :----: |
+| `none()`                      |   ✅   |   ✅    |
+| `from_structures(*paths)`     |   ✅   |   —    |
+| `from_hits(path)`             |   —   |   ✅    |
+| `from_server()`               |   —   |   ✅    |
+
+An engine given a mode it cannot honour raises, naming what it does
+support. That is deliberate: the alternative is folding *without* the
+templates you asked for and returning a structure that looks fine, with
+nothing but the provenance to suggest the ablation never happened.
+
+molforge does not decide which templates are appropriate. Restricting a
+run to, say, only unbound structures is a judgement about your targets;
+you make it by choosing what to pass. What molforge guarantees is that
+your choice is applied, recorded in provenance, and part of the cache
+key — so an ablation and its control never share a cached result.
+
 ### Installation footprint
 
 | Engine        | Install                                                                                  |

@@ -490,3 +490,28 @@ class TestEndToEnd:
         assert protein.n_residues == 20
         assert "confidence_per_residue" in protein.metadata
         assert protein.metadata["engine"] == "RoseTTAFold"
+
+
+class TestPerCallKwargs:
+    """``predict`` takes no per-call options; keywords raise, not vanish.
+
+    Rejection happens before the RFAA repo is looked up, so these run
+    without ``$RFAA_HOME`` set.
+    """
+
+    def test_unknown_kwarg_rejected(self) -> None:
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            RoseTTAFold().predict("MKTVRQ", seed=7)
+
+    def test_message_points_at_the_constructor(self) -> None:
+        with pytest.raises(TypeError) as excinfo:
+            RoseTTAFold().predict("MKTVRQ", max_cycle=10)
+        message = str(excinfo.value)
+        assert "RoseTTAFold.predict()" in message
+        assert "'max_cycle'" in message
+        assert "RoseTTAFold(max_cycle=10)" in message
+
+    def test_rejected_before_the_missing_repo_is_reported(self) -> None:
+        """Fails on the keyword, not on RFAA being absent."""
+        with patch.dict(os.environ, {}, clear=True), pytest.raises(TypeError, match="'seed'"):
+            RoseTTAFold().predict("MKTVRQ", seed=7)

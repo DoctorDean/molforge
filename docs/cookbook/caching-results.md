@@ -2,8 +2,9 @@
 
 molforge caches results from expensive engine calls automatically.
 Folding (ESMFold, Boltz, Chai-1), sequence design (ProteinMPNN,
-ESM-IF1), and docking (Vina, Gnina, DiffDock) all participate. When
-you re-run a computation with identical inputs and parameters, the
+ESM-IF1), and docking (Vina, Gnina, DiffDock) all participate, as do
+structure downloads via [`fetch`](fetch-and-search.md#downloads-are-cached).
+When you re-run a computation with identical inputs and parameters, the
 cached result returns in milliseconds instead of the engine running
 again.
 
@@ -118,7 +119,7 @@ MD trajectories remain the one deliberately-uncached engine output
 ```
 ~/.cache/molforge/
 ├── 49d8f89cd25af146.../   # one dir per entry, named by SHA-256 of the key
-│   ├── type               # "protein", "designed_sequences", or "docking_result"
+│   ├── type               # "protein", "designed_sequences", "docking_result", ...
 │   ├── meta.json          # name + metadata (provenance, scalars, ...)
 │   ├── structure.cif      # the AtomArray as mmCIF (for Protein)
 │   └── arrays.npz         # numpy arrays from metadata
@@ -133,6 +134,9 @@ MD trajectories remain the one deliberately-uncached engine output
 │   ├── pose_0.cif         # one cif per pose ligand
 │   ├── pose_1.cif
 │   └── arrays.npz
+├── f0e1d2c3b4a59687.../   # a structure_text entry — one io.fetch download
+│   ├── type
+│   └── download.txt       # the server's file, byte-for-byte
 └── ...
 ```
 

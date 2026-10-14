@@ -7,6 +7,296 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`replay` handles every operation molforge records.** Two shipped in 0.9.0
+  with no replay handler, so a manifest containing them described a run it
+  could not re-run: `predict_samples` (Chai-1's full diffusion ensemble) and
+  `fetch`. A third gap predated them — the `predict` handler only ever looked
+  for a `sequence` input, so a recorded `predict_complex` raised
+  `ReplayError` too. All three now replay. A test walks the source for every
+  `operation="..."` a wrapper records and asserts it has a handler, so the
+  next operation added without one fails CI instead of surfacing later as an
+  unreplayable manifest.
+- **`ComplexSpec.to_provenance()` / `from_provenance()`.** The serialized
+  shape recorded in provenance now has a documented inverse, which is what
+  makes a multi-component fold replayable rather than merely describable.
+  Each entity's first assigned chain ID is pinned and its copies counted, so
+  a rebuilt spec reproduces the original chain layout exactly — including
+  when some entities had explicit IDs and others were auto-assigned around
+  them. The serializer moved here from the two folding wrappers, which held
+  byte-identical copies of it and now delegate; the recorded shape, and so
+  the cache key, is unchanged.
+
+### Changed
+- **`io.fetch` records where a structure came from.** It built a `Provenance`
+  describing the download, used it as the cache key, and then threw it away —
+  so the returned `Protein` arrived with empty metadata and every chain that
+  began with a fetch was rooted in nothing. The provenance is now attached at
+  `metadata["provenance"]` on every path (cache hit, cache miss, and
+  `cache=False`), which also makes the download replayable.
+
+  > **Behaviour change:** docking, pocket detection and MD take their
+  > provenance parent from the input structure, so a step whose receptor came
+  > from `fetch()` now has a different cache key and will recompute once. That
+  > is the correct result — those outputs really do depend on which entry was
+  > downloaded, and nothing recorded it before — but it is a one-time
+  > invalidation. Folds from a sequence, and anything not fed by `fetch`, are
+  > unaffected.
+
+## [0.9.0] 2026-10-05
+
+> **Behaviour change:** every folding wrapper now raises `TypeError` for
+> keyword arguments it doesn't consume, where it used to drop them silently.
+> If you were passing a keyword that never did anything — `seed=` to a
+> non-Boltz engine, say, or via `cross_engine_fold(**predict_kwargs)` — that
+> call now fails instead of quietly ignoring you. See **Changed** below.
+
+### Added
+- **Aggregate provenance manifests — `aggregate_manifest()` and
+  `AggregateManifest`.** `PipelineManifest` describes one output, but plenty of
+  results aren't one output: a consensus structure stands on several folds, a
+  ranking on a screen of thousands. Emitting one manifest per contributing
+  prediction answers the question in a form nobody can read, and restates the
+  shared upstream work — the target prep, the MSA — once per prediction.
+  `aggregate_manifest(outputs)` folds them into one manifest in which every
+  distinct computation appears once, carrying a `contributes_to` count of how
+  many outputs descend from it: a thousand predictions off one MSA give one MSA
+  step marked `contributes_to: 1000`. `PipelineManifest.aggregate(manifests)`
+  does the same from manifests rather than live objects, so a directory of
+  `pipeline.yaml` files off a cluster run folds together without the outputs
+  still being in memory — and produces *identical* step ids, so the two routes
+  are interchangeable. `emit_aggregate` / `load_aggregate` mirror
+  `emit_pipeline` / `load_pipeline`. Provenance itself stays linear: one parent
+  pointer, so `chain()` keeps meaning what it says and cache keys keep their
+  shape, with the many-to-one structure living in the aggregate instead. Guide
+  coverage under
+  [Many outputs at once](docs/guide/reproducibility.md#many-outputs-at-once).
+  Closes [#30](https://github.com/DoctorDean/molforge/issues/30).
+- **`Provenance.content_id()` — one definition of "the same computation".**
+  A digest of engine, version, operation, parameters, inputs and the whole
+  parent chain, with timestamps stripped. Equal ids mean the same work reached
+  the same way, which is what lets an aggregate manifest recognise a shared
+  ancestor; that the ancestry participates is the part that matters, since the
+  same docking run under two different folds is two steps, not one.
+  `molforge.cache` was already computing this shape privately and now shares
+  it, so the cache's idea of a redundant recomputation and a manifest's idea of
+  a shared ancestor can't drift apart. The cache passes
+  `include_operation=False`, because its key predates the field and folding it
+  in would orphan every entry already on disk; cache keys are unchanged, pinned
+  by tests.
+- **MSA-depth control — `Boltz(msa_depth=...)` and `Chai1(msa_depth=...)`.** An
+  AF3-class model leans on coevolution, so shrinking the alignment is how you
+  see what it predicts without that support — and how you push it off a
+  dominant conformation. Neither wrapper exposed a depth knob, so sweeping a
+  ladder (8 / 16 / 32 / 64 / full) meant reaching past molforge into each
+  engine's own interface. `msa_depth` caps the sequences the model may use:
+  Boltz receives `--subsample_msa --num_subsampled_msa <n>`, Chai-1 receives
+  `recycle_msa_subsample=<n>`. The two differ in where the cap bites — Chai-1
+  subsamples only during trunk recycling, Boltz throughout — which is
+  documented rather than smoothed over, since the same `N` is not the same
+  experiment on both. The depth is recorded in provenance, so every rung of a
+  ladder gets its own cache slot instead of colliding. `msa_depth=0` raises and
+  points at `use_msa_server=False`: no alignment at all is a different
+  mechanism, not depth zero. Cookbook coverage under
+  [MSA depth](docs/cookbook/choosing-folding.md#msa-depth).
+  Closes [#31](https://github.com/DoctorDean/molforge/issues/31).
+- **Template policy — `molforge.folding.TemplatePolicy`.** A model handed a
+  structure of the thing you are asking about will hand it back, so taking
+  templates away is how you check that a prediction is a prediction. Neither
+  folding wrapper exposed any template control. `TemplatePolicy` names the
+  mechanism rather than pretending the engines are interchangeable, because
+  they aren't: `from_structures(*paths)` is Boltz's (emitted as a `templates:`
+  block in its input YAML), `from_hits(path)` and `from_server()` are Chai-1's
+  (`template_hits_path` / `use_templates_server`), and `none()` — the control
+  arm — works on both. An engine given a mode it cannot honour raises and names
+  what it does support, rather than folding without the templates that were
+  asked for and returning a structure that looks fine. The policy is recorded
+  in provenance, so an ablation and its control never share a cached result.
+  molforge deliberately doesn't decide *which* templates are appropriate;
+  that's a judgement about your targets, made by choosing what to pass.
+  Cookbook coverage under
+  [Templates](docs/cookbook/choosing-folding.md#templates).
+  Closes [#32](https://github.com/DoctorDean/molforge/issues/32).
+- **Bemis-Murcko scaffolds — `molforge.chem.murcko_scaffold()`.** Reduces a
+  molecule to its scaffold (ring systems plus linkers, side chains stripped)
+  and returns it as a `Molecule`, so scaffold analysis stays inside molforge
+  instead of dropping out to raw RDKit. `generic=True` gives the element- and
+  bond-order-agnostic framework, which collapses scaffolds that differ only in
+  their heteroatoms. Scaffold-level grouping comes with it:
+  `Molecule.scaffold_smiles` (the identity key), `unique(..., key="scaffold")`
+  and `MoleculeDataset.dedup(key="scaffold")` to keep one representative per
+  chemical series, and the terminal `MoleculeDataset.group_by_scaffold()` for
+  the groups themselves. Acyclic molecules have no scaffold and share the empty
+  one, following Bemis-Murcko's own convention. New module `chem/scaffold.py`;
+  cookbook coverage under
+  [Group by scaffold](docs/cookbook/small-molecules.md#group-by-scaffold).
+  Closes [#21](https://github.com/DoctorDean/molforge/issues/21).
+- **Seed control for Boltz — `Boltz(seed=...)`.** Diffusion sampling is now
+  reproducible: the seed is passed to the CLI as `--seed`, can be overridden
+  per call (`predict(seq, seed=7)` — the cheap way to draw a seeded ensemble),
+  and is recorded in provenance, so it participates in the cache key and a
+  replayed manifest re-runs with the seed it was folded with. This brings Boltz
+  in line with `Chai1`, which has taken a `seed` since it was wrapped.
+  Closes [#23](https://github.com/DoctorDean/molforge/issues/23).
+- **PDB chemical-component lookup — `io.fetch_ccd()`.** Resolves a Chemical
+  Component Dictionary code (`STI`, `NAD`, `ATP`) — the identifier experimental
+  datasets actually record — to a `Molecule`, so "this structure binds STI" can
+  become a ligand you co-fold, describe, or match decoys against without
+  leaving molforge. Downloads RCSB's per-component SDF, so unlike the
+  SMILES-based `fetch_chembl` the molecule arrives with a 3D conformer, ready
+  to dock without an embedding step. `fetch_ccd_many` mirrors
+  `fetch_chembl_many`'s `on_error="skip"` policy for ligand sets. Components
+  that coordinate a metal (`HEM`, `B12`) encode coordination as ordinary bonds
+  and fail RDKit's valence model; the error names `sanitize=False` as the way
+  through. New module `io/ccd.py`; cookbook coverage under
+  [Resolve a PDB ligand code](docs/cookbook/fetch-and-search.md#resolve-a-pdb-ligand-code).
+  Closes [#37](https://github.com/DoctorDean/molforge/issues/37).
+- **Every Chai-1 diffusion sample — `Chai1.predict_samples()` and
+  `predict_complex_samples()`.** Chai-1 always computes five diffusion samples
+  per call; the wrapper picked the best and discarded the other four
+  structures, keeping only their scores. They cost nothing extra — the GPU time
+  is already spent — so for ensemble, occupancy, or pose-diversity work this is
+  five times the usable output per run. Both methods return the samples ranked
+  by `aggregate_score`, so element 0 is exactly what `predict()` /
+  `predict_complex()` return; each sample adds `sample_index` (Chai's own 0-4
+  index) and `sample_rank` to its metadata. The single-best and full-ensemble
+  results are cached under distinct keys *and* cross-populate each other, so
+  calling one after the other on the same input is a cache hit rather than a
+  second identical inference. The cache learned a `protein_list` type to hold
+  them. Cookbook coverage under
+  [Every sample, not just the best](docs/cookbook/choosing-folding.md#every-sample-not-just-the-best-chai-1).
+  Closes [#34](https://github.com/DoctorDean/molforge/issues/34).
+- **Structure downloads are cached — `io.fetch(..., cache=True)`.**
+  `fetch` performed a plain HTTP GET per call, so a pipeline that resolved the
+  same entries at several stages paid the full download every time, and a long
+  fetch loop that died partway through started over. Downloads now go through
+  `molforge.cache`, keyed on `(pdb_id, source, format)` and honouring the usual
+  `MOLFORGE_CACHE_DIR` / `MOLFORGE_CACHE=disabled` environment variables.
+  `force_refresh=True` re-downloads and replaces the entry (for a revised RCSB
+  release); `cache=False` bypasses the cache in both directions. `fetch_many`
+  forwards both. The entry holds the downloaded file byte-for-byte rather than
+  a serialized `Protein`, so a cache hit re-parses exactly what a miss would
+  have parsed — there is no behavioural difference between the two. Cookbook
+  coverage under
+  [Downloads are cached](docs/cookbook/fetch-and-search.md#downloads-are-cached).
+  Closes [#35](https://github.com/DoctorDean/molforge/issues/35).
+- **Engine and backend version registry — `molforge.engine_versions()`.** A run
+  manifest needs to say which engine versions produced a result, but a wrapper
+  that shells out to a native binary — fpocket, P2Rank, GROMACS, `sander`,
+  gnina — has no version to record, so manifests carried blanks exactly where a
+  reader wants a number, and there was no way to capture the environment
+  *before* a long run. `engine_versions()` reports every backend molforge can
+  drive, installed or not, as a `BackendVersion` carrying its category, how it
+  was found (`python` via `importlib.metadata`, `executable` via `$PATH` plus a
+  version probe, or `repo` for the checkout-based engines molforge cannot
+  detect), availability, resolved location, and a plain-language reason for any
+  empty version — three distinct facts that a single blank used to conflate.
+  Nothing raises, on any machine. `PipelineManifest` uses it to fill its own
+  blanks under a separate `engines_detected` key, kept apart from `engines`
+  because it describes what is installed now rather than what ran. New module
+  `molforge/versions.py`; guide coverage under
+  [Engine and backend versions](docs/guide/reproducibility.md#engine-and-backend-versions).
+  Closes [#33](https://github.com/DoctorDean/molforge/issues/33).
+
+### Changed
+- **`Boltz.predict()` / `predict_complex()` / `predict_affinity()` reject
+  unknown keyword arguments.** Their `**kwargs` were documented as "reserved
+  for future per-call options" and silently dropped everything, so a
+  `predict(spec, seed=7)` ran *unseeded* while looking reproducible. Only
+  `seed` is accepted per call now; anything else raises `TypeError` naming the
+  offending keyword. Code that passed keywords which never did anything will
+  now fail loudly — which was the point.
+- **Every folding wrapper now rejects unknown keyword arguments**, not just
+  Boltz. `Chai1.predict()` / `predict_complex()`, `ESMFold.predict()`,
+  `AlphaFold.predict()` and `RoseTTAFold.predict()` all declared `**kwargs`
+  "reserved for future per-call options" and dropped whatever arrived, so
+  `Chai1().predict_complex(spec, seed=7)` folded unseeded, silently, while
+  provenance recorded a run that looked reproducible. None of these four takes
+  per-call options: any keyword now raises `TypeError` naming the offender and
+  pointing at the constructor where the option actually lives. The check is a
+  shared helper, so it applies before the engine's heavy dependency is even
+  imported. Note that this reaches `cross_engine_fold(**predict_kwargs)`, which
+  forwards one set of keywords to every engine — `seed=` there now raises from
+  the non-Boltz engines rather than being ignored by them.
+  Closes [#36](https://github.com/DoctorDean/molforge/issues/36).
+
+### Fixed
+- **A desalted molecule is usable again.** RDKit builds the fragment parent by
+  deleting atoms and leaves the result's ring-info and valence caches
+  uninitialized, so after `largest_fragment()` — or the default
+  `standardize()`, which desalts — every ring-aware question about a
+  multi-fragment input died on a bare RDKit `RingInfo not initialized`
+  precondition violation: `tpsa`, `n_rotatable_bonds`, `molecule_descriptors()`,
+  and the new scaffold extraction alike. The caches are now restored before the
+  fragment is handed back, so the documented
+  standardize → filter → scaffold pipeline composes on salts.
+
+## [0.8.0] 2026-07-23
+
+This release rounds out molforge's reproducibility and scoring story. Pipeline
+manifests are no longer just emitted but **replayed** — a `pipeline.yaml` can be
+re-executed end to end; a unified, direction-aware scoring layer lets
+heterogeneous scorers rank and compare together and plug into the design loop;
+and a single structure-quality report rolls up the geometry checks. It also adds
+two engine capabilities — Boltz-2 binding-affinity prediction and P2Rank ML
+pocket detection. All changes are additive and backwards compatible with 0.7.0,
+**except** a corrected backbone-dihedral sign convention (see Fixed) that changes
+φ/ψ/ω signs and Ramachandran classification.
+
+### Added
+- **Unified, direction-aware scoring — `molforge.scoring`.** Every score carries
+  an explicit `Direction` (`HIGHER_IS_BETTER` / `LOWER_IS_BETTER`) so
+  heterogeneous scorers — docking affinity (lower is better), folding confidence
+  (higher is better), learned potentials — rank and compare on one axis without
+  the caller tracking which way is good. A `Scorer` protocol with built-ins
+  (`DockingScorer`, `ConfidenceScorer`, `FunctionScorer`), a `Score` value type,
+  and `rank` / `best` helpers. A `DesignLoop` now accepts a `Scorer` directly as
+  its objective, so the design loop and the scoring layer share one vocabulary.
+  New subpackage `molforge/scoring/`; reference and guide pages.
+- **Rolled-up structure-quality report — `molforge.validation.report()`.** One
+  call gathers the standalone geometry checks (steric clashes, Ramachandran,
+  backbone bond lengths, Cα chirality) into a single `QualityReport` of
+  `QualityCheck`s — a one-look "is this folded/docked structure physically
+  sane?" gate over the per-check functions shipped in 0.7. New module
+  `validation/quality.py`; guide and cookbook coverage.
+- **Pipeline replay — `molforge.reproducibility.replay()`.** A `pipeline.yaml`
+  manifest is now re-executable, not just inspectable: `replay(manifest)` walks
+  the steps, reconstructs each engine call from its recorded operation and
+  parameters, and re-runs the workflow. Backed by a new `operation` field on
+  `Provenance` (the engine *method* that produced an output — the wrappers now
+  record it), per-operation `register_replay_handler(...)` extensibility, and a
+  `ReplayError` for unresolvable steps. Emit (0.7) → replay (0.8) closes the
+  reproducibility loop.
+- **Boltz-2 binding-affinity prediction — `Boltz.predict_affinity()`.** Predicts
+  a protein-ligand complex *and* its binding affinity in one call, surfacing
+  `affinity_value` (log-scale, lower = stronger), `affinity_probability` (0-1
+  binder likelihood), and the raw affinity JSON on the returned `Protein`.
+  Requires a Boltz-2 engine (`model_version="boltz2"`).
+- **P2Rank ML pocket detection — `detect_pockets_p2rank()`.** A machine-learning
+  (random-forest) ligand-binding-site detector alongside the geometric fpocket,
+  returning `Pocket`s ranked by P2Rank score and feeding straight into the
+  docking workflow. Runs `prank predict` in its own Java process;
+  `P2RankNotInstalledError` when absent. New wrapper
+  `wrappers/pockets/p2rank.py`.
+- **Documentation.** A [benchmarks page](docs/architecture/benchmarks.md) with
+  real measured timings for the analysis stack; a
+  [migration guide](docs/getting-started/migrating.md) mapping BioPython /
+  Biotite / MDAnalysis idioms to molforge; a whole-stack
+  [end-to-end cookbook recipe](docs/cookbook/end-to-end.md) exercising the
+  Identity layer (design → fold → score → reproduce); and a **Getting help**
+  section in `CONTRIBUTING.md` plus a statement-of-need paragraph in the README.
+
+### Fixed
+- **Backbone dihedral sign convention.** `dihedral()` and `dihedrals_batch()`
+  returned the *negation* of the IUPAC convention (verified: molforge ==
+  −`Bio.PDB.calc_dihedral` exactly over hundreds of quartets), so φ/ψ/ω and all
+  Ramachandran classification were sign-flipped — right-handed α-helices read as
+  outliers. Corrected the cross-product order; a reference-value guard now pins
+  the sign against Biopython, and two Ramachandran tests that had encoded the
+  flipped sign were fixed. **Behavior change:** dihedral signs flip and
+  Ramachandran labels change — becoming correct (ubiquitin now reads ~90%
+  favored with a single outlier).
+
 ## [0.7.0] 2026-07-18
 
 This release completes molforge's **Identity** chapter — the engine-agnostic

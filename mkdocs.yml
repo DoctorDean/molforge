@@ -48,6 +48,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - Coming from another library: getting-started/migrating.md
   - User guide:
       - Data model: guide/data-model.md
       - File I/O: guide/io.md
@@ -60,6 +61,7 @@ nav:
       - Reproducibility: guide/reproducibility.md
   - Cookbook:
       - Overview: cookbook/index.md
+      - "End to end: design → reproduce": cookbook/end-to-end.md
       - Fold a sequence: cookbook/folding.md
       - Multi-component cofolding: cookbook/multi-component-folding.md
       - Fold then dock: cookbook/folding-then-docking.md
@@ -92,7 +94,9 @@ nav:
   - Architecture:
       - Overview: architecture/overview.md
       - Binding free energy: architecture/free-energy.md
+      - Performance benchmarks: architecture/benchmarks.md
       - API stability: architecture/api-stability.md
+      - Longevity & maintenance: architecture/longevity.md
       - Roadmap: architecture/roadmap.md
   - API reference:
       - molforge.core: reference/core.md
@@ -109,11 +113,13 @@ nav:
       - molforge.md: reference/md.md
       - molforge.prep: reference/prep.md
       - molforge.docking: reference/docking.md
+      - molforge.folding: reference/folding.md
       - molforge.chem: reference/chem.md
       - molforge.freeenergy: reference/freeenergy.md
       - molforge.plugins: reference/plugins.md
       - molforge.parallel: reference/parallel.md
       - molforge.cache: reference/cache.md
+      - molforge.versions: reference/versions.md
       - molforge.wrappers:
           - Overview: reference/wrappers.md
           - molforge.wrappers.folding: reference/wrappers/folding.md

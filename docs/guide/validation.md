@@ -72,6 +72,40 @@ for a full walkthrough including consensus rules.
     `"raise"`. Code relying on the old fault-tolerant default must
     now pass `on_error="record"` explicitly.*
 
+## Structure quality: `report()`
+
+The criteria/verdict machinery above grades candidates by *whatever metrics
+you supply*. For **geometric** quality specifically, `report()` rolls up the
+individual checks in [`molforge.structure`](../reference/structure.md) —
+steric clashes, Ramachandran, Cα chirality, backbone bond lengths — into one
+verdict, so you can gate folding or docking output on geometry in a single
+call:
+
+```python
+from molforge.validation import report
+
+q = report(protein)
+if not q.passed:
+    print(q.summary())
+    # quality: FAIL (score 0.75)
+    #   [ok]   clashscore: 15.0 clashes / 1000 atoms (<= 20)
+    #   [FAIL] ramachandran: 6/74 outliers (8.1%), 84% favored
+    #   [ok]   chirality: 0 Cα chirality outlier(s)
+    #   [ok]   bond_length: 0 backbone bond-length outlier(s) (> 4 sigma)
+```
+
+`q.passed` (all checks pass) is the real gate; `q.score` is the fraction of
+checks that passed (0–1). Access an individual check by name
+(`q["clashscore"].value`) and tighten any threshold per call:
+
+```python
+strict = report(protein, thresholds={"clashscore": 5.0})
+```
+
+This is MolProbity *in spirit*, not a MolProbity number — the published
+MolProbity score also weighs rotamer outliers, which molforge doesn't yet
+analyze.
+
 ## Reference
 
 - [`molforge.validation`](../reference/validation.md) — full API.

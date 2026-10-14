@@ -4,13 +4,14 @@ Not every structure or compound starts as a file on disk. molforge can pull
 them straight from the public databases — the RCSB Protein Data Bank, the
 AlphaFold Protein Structure Database, and ChEMBL — and hand the results to the
 rest of the library. The structure side is pure standard library (no extra
-dependency); the ChEMBL side builds `Molecule` objects and so needs RDKit.
+dependency); the compound side builds `Molecule` objects and so needs RDKit.
 
-This recipe covers fetching by ID, fetching in bulk, searching the PDB, and
-pulling compounds from ChEMBL.
+This recipe covers fetching by ID, fetching in bulk, searching the PDB, pulling
+compounds from ChEMBL, and resolving PDB ligand codes.
 
 The structure functions (`fetch`, `fetch_many`, `search_rcsb`) work out of the
-box. `fetch_chembl` builds molecules, so it needs the `chem` extra:
+box. `fetch_chembl` and `fetch_ccd` build molecules, so they need the `chem`
+extra:
 
 ```
 pip install "molforge[chem]"
@@ -18,6 +19,8 @@ pip install "molforge[chem]"
 
 Everything here does live network I/O: a missing ID or a dropped connection
 surfaces as `OSError`, and every call takes a `timeout` (seconds, default 30).
+Structure downloads are cached, so a given entry crosses the network once —
+see [Downloads are cached](#downloads-are-cached) below.
 
 # Fetch a structure by ID
 
@@ -53,6 +56,57 @@ back whatever resolved:
 ```python
 structures = fetch_many(ids, on_error="skip")   # failed IDs simply don't appear
 ```
+
+# Fetched structures know where they came from
+
+A structure pulled from RCSB or AlphaFold DB carries a `Provenance`
+recording the ID, source and format it came from:
+
+```python
+from molforge.core import metadata_keys as mk
+
+protein = fetch("1UBQ")
+protein.metadata[mk.PROVENANCE].inputs      # {'pdb_id': '1UBQ'}
+protein.metadata[mk.PROVENANCE].parameters  # {'source': 'rcsb', 'format': 'pdb'}
+```
+
+That matters downstream: docking, pocket detection and MD all take their
+provenance parent from the input structure, so a pipeline that begins with
+a fetch is traceable back to the exact entry it rests on, and
+[`replay`](../guide/reproducibility.md) can re-run it from the download
+onwards.
+
+# Downloads are cached
+
+`fetch` and `fetch_many` go through [`molforge.cache`](caching-results.md), so
+an entry is downloaded once and read from disk thereafter:
+
+```python
+protein = fetch("1UBQ")     # over the network
+again = fetch("1UBQ")       # from ~/.cache/molforge, no request
+```
+
+This matters most in the shape of pipeline that resolves the same set at
+several stages — prepare, predict, score. Each stage used to pay the full
+download; now only the first does. It also makes a long loop cheap to
+restart: a `fetch_many` over a thousand IDs that dies at 700 picks up at 701
+on the next run, because the first 700 are already banked.
+
+What is stored is the downloaded file itself, not the parsed `Protein`, so a
+cached read parses exactly the bytes a fresh download would have. There is no
+behavioural difference between a hit and a miss.
+
+Two escape hatches:
+
+```python
+fresh = fetch("1UBQ", force_refresh=True)  # re-download, replace the entry
+once = fetch("1UBQ", cache=False)          # neither read nor write the cache
+```
+
+Use `force_refresh` when RCSB has revised an entry. Use `cache=False` for a
+one-off you don't want left on disk. The cache honours the usual environment
+variables — `MOLFORGE_CACHE_DIR` moves it, `MOLFORGE_CACHE=disabled` turns it
+off everywhere.
 
 # Search the PDB
 
@@ -98,10 +152,49 @@ from molforge.io import fetch_chembl_many
 actives = fetch_chembl_many(["CHEMBL25", "CHEMBL521", "CHEMBL1201585"], on_error="skip")
 ```
 
+# Resolve a PDB ligand code
+
+Every ligand in the PDB is identified by a short Chemical Component Dictionary
+code — `STI` for imatinib, `NAD`, `ATP`. That code is what experimental
+datasets record, so going from "this structure binds `STI`" to a molecule you
+can actually use is a common first step. `fetch_ccd` does it:
+
+```python
+from molforge.io import fetch_ccd
+
+imatinib = fetch_ccd("STI")
+print(imatinib.name)                  # 'STI'
+print(imatinib.smiles)
+print(imatinib.metadata["source"])    # 'rcsb-ccd'
+```
+
+Unlike the SMILES-based ChEMBL path, this comes from RCSB's per-component SDF,
+so the molecule arrives **with a 3D conformer** — ready to dock or co-fold
+without an embedding step. Those are the component's *idealized* coordinates,
+computed for it in isolation; for a ligand as actually bound, fetch the holo
+structure with `fetch` and slice it out.
+
+Components that coordinate a metal (`HEM`, `B12`) encode the coordination as
+ordinary bonds, which RDKit rejects on valence grounds. The error says so and
+names the way through:
+
+```python
+heme = fetch_ccd("HEM", sanitize=False)   # valences left un-normalized
+```
+
+`fetch_ccd_many` mirrors `fetch_chembl_many`, so a benchmark's ligand set
+survives one obsolete code:
+
+```python
+from molforge.io import fetch_ccd_many
+
+ligands = fetch_ccd_many(["STI", "NAD", "ATP"], on_error="skip")
+```
+
 # From a database straight into a pipeline
 
-Because `MoleculeDataset` accepts any iterable of `Molecule`, a ChEMBL pull
-drops straight into the ingest → clean → filter pipeline from
+Because `MoleculeDataset` accepts any iterable of `Molecule`, a ChEMBL or CCD
+pull drops straight into the ingest → clean → filter pipeline from
 [Work with small molecules](small-molecules.md):
 
 ```python

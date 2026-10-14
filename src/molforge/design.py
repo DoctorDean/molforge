@@ -211,7 +211,9 @@ class DesignLoop:
         folder: FoldingEngine | Sequence[FoldingEngine],
         docker: DockingEngine | None = None,
         generator: GenerativeEngine | None = None,
-        objective: DesignObjective | Callable[[DesignCandidate], float] | Scorer = "self_consistency",
+        objective: DesignObjective
+        | Callable[[DesignCandidate], float]
+        | Scorer = "self_consistency",
         n_designs: int = 8,
         n_rounds: int = 1,
         select_top: int = 4,
@@ -463,7 +465,9 @@ def _resolve_objective(
     )
 
 
-def _objective_name(objective: DesignObjective | Callable[[DesignCandidate], float] | Scorer) -> str:
+def _objective_name(
+    objective: DesignObjective | Callable[[DesignCandidate], float] | Scorer,
+) -> str:
     """Human-readable objective label for the DesignTable."""
     if isinstance(objective, str):
         return objective
