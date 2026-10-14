@@ -191,6 +191,15 @@ target-version = "py310"
 src = ["src", "tests"]
 extend-exclude = ["notebooks"]
 
+[tool.ruff.format]
+# ruff 0.16 began formatting Python code blocks inside Markdown. The docs
+# are written by hand — comments are aligned into columns and examples are
+# laid out to read well on the page — and the formatter flattens all of
+# that, so a dependency bump would otherwise silently rewrite 35 pages of
+# documentation. Keep the formatter to Python; `ruff check` still reads
+# the Markdown blocks.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
