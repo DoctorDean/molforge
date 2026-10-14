@@ -99,7 +99,7 @@ dev = [
     "pytest-xdist>=3.5",
     "pytest-benchmark>=4.0",
     "hypothesis>=6.92",
-    "ruff==0.15.14",  # pinned to the pre-commit rev so CI and local agree
+    "ruff==0.16.10",  # pinned to the pre-commit rev so CI and local agree
     "mypy>=1.8",
     "pre-commit>=3.6",
     "build>=1.0",
@@ -190,6 +190,15 @@ line-length = 100
 target-version = "py310"
 src = ["src", "tests"]
 extend-exclude = ["notebooks"]
+
+[tool.ruff.format]
+# ruff 0.16 began formatting Python code blocks inside Markdown. The docs
+# are written by hand — comments are aligned into columns and examples are
+# laid out to read well on the page — and the formatter flattens all of
+# that, so a dependency bump would otherwise silently rewrite 35 pages of
+# documentation. Keep the formatter to Python; `ruff check` still reads
+# the Markdown blocks.
+exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = [
