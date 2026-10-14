@@ -354,6 +354,7 @@ class RFdiffusion(GenerativeEngine):
             # of N designs this is, not part of the engine config.
             prov = Provenance.from_engine(
                 engine="RFdiffusion",
+                operation="generate",
                 parameters={
                     **source_args,
                     "rfdiffusion_dir": (

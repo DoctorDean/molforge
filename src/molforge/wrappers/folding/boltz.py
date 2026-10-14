@@ -424,7 +424,11 @@ class Boltz(FoldingEngine):
             prov_inputs = {"complex_spec": _serialize_spec_for_provenance(spec)}
         return Provenance.from_engine(
             engine="Boltz",
-            operation="predict",
+            # An affinity run is a different operation, not a fold with an
+            # extra argument: replaying it as "predict" would quietly return
+            # a structure with no affinity on it. `operation` is excluded
+            # from the cache key, so naming it doesn't disturb any entry.
+            operation="predict_affinity" if affinity_binder is not None else "predict",
             engine_version=engine_version("boltz"),
             parameters={
                 "model_version": self.model_version,

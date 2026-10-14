@@ -255,6 +255,7 @@ class ProteinMPNN(GenerativeEngine):
 
         return Provenance.from_engine(
             engine="ProteinMPNN",
+            operation="generate",
             parameters={
                 "model_name": self.model_name,
                 "use_soluble_model": self.use_soluble_model,

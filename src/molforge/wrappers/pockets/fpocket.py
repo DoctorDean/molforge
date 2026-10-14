@@ -260,6 +260,7 @@ def _parse_fpocket_output(
     # ProteinMPNN sharing one Provenance across its designs.
     shared_provenance = Provenance.from_engine(
         engine="fpocket",
+        operation="detect_pockets",
         parameters={
             "fpocket_executable": fpocket_executable,
             "min_alpha_spheres": min_alpha_spheres,
