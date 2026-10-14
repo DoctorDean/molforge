@@ -7,16 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] 2026-10-14
+
+A bug-fix release for 0.9.0's reproducibility work. Two of the operations
+0.9.0 introduced could be written into a manifest and not read back out of
+one, and `io.fetch` was discarding the provenance it had just built.
+
+> **Behaviour change:** structures from `io.fetch` now carry provenance, and
+> docking, pocket detection and MD take their provenance parent from the
+> input structure — so a step whose receptor came from `fetch()` has a
+> different cache key and recomputes once. That is the correct result, since
+> those outputs genuinely do depend on which entry was downloaded and nothing
+> recorded it before, but it is a one-time invalidation. Folds from a
+> sequence, and anything not fed by `fetch`, are unaffected.
+
+### Fixed
+- **`replay` handles every operation molforge records.** Two operations
+  shipped in 0.9.0 with no replay handler, so a manifest containing either
+  described a run it could not re-run: `predict_samples` (Chai-1's full
+  diffusion ensemble) and `fetch`. A third gap predated them — the `predict`
+  handler only ever looked for a `sequence` input, so a recorded
+  `predict_complex` raised `ReplayError` too. All three now replay. A test
+  walks the source for every `operation="..."` a wrapper records and asserts
+  it has a handler, so the next operation added without one fails CI instead
+  of surfacing later as an unreplayable manifest.
+- **`io.fetch` records where a structure came from.** It built a `Provenance`
+  describing the download, used it as the cache key, and then threw it away —
+  so the returned `Protein` arrived with empty metadata and every chain that
+  began with a fetch was rooted in nothing, unable to say which entry, from
+  which source, in which format the result rested on. The provenance is now
+  attached at `metadata["provenance"]` on every path (cache hit, cache miss,
+  and `cache=False`), which also makes the download a replayable first step.
+
 ### Added
-- **`replay` handles every operation molforge records.** Two shipped in 0.9.0
-  with no replay handler, so a manifest containing them described a run it
-  could not re-run: `predict_samples` (Chai-1's full diffusion ensemble) and
-  `fetch`. A third gap predated them — the `predict` handler only ever looked
-  for a `sequence` input, so a recorded `predict_complex` raised
-  `ReplayError` too. All three now replay. A test walks the source for every
-  `operation="..."` a wrapper records and asserts it has a handler, so the
-  next operation added without one fails CI instead of surfacing later as an
-  unreplayable manifest.
 - **`ComplexSpec.to_provenance()` / `from_provenance()`.** The serialized
   shape recorded in provenance now has a documented inverse, which is what
   makes a multi-component fold replayable rather than merely describable.
@@ -28,20 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the cache key, is unchanged.
 
 ### Changed
-- **`io.fetch` records where a structure came from.** It built a `Provenance`
-  describing the download, used it as the cache key, and then threw it away —
-  so the returned `Protein` arrived with empty metadata and every chain that
-  began with a fetch was rooted in nothing. The provenance is now attached at
-  `metadata["provenance"]` on every path (cache hit, cache miss, and
-  `cache=False`), which also makes the download replayable.
-
-  > **Behaviour change:** docking, pocket detection and MD take their
-  > provenance parent from the input structure, so a step whose receptor came
-  > from `fetch()` now has a different cache key and will recompute once. That
-  > is the correct result — those outputs really do depend on which entry was
-  > downloaded, and nothing recorded it before — but it is a one-time
-  > invalidation. Folds from a sequence, and anything not fed by `fetch`, are
-  > unaffected.
+- **ruff pinned to 0.16.10**, with `.pre-commit-config.yaml` and
+  `pyproject.toml` bumped together and a test asserting they agree — the two
+  had drifted, which would have had CI and the pre-commit hook formatting
+  with different ruff versions. ruff 0.16 also began formatting Python code
+  blocks inside Markdown; the formatter is scoped to Python so a dependency
+  bump doesn't silently rewrite the hand-laid-out documentation examples.
+- **`actions/setup-python` bumped to v7** across every workflow, which also
+  picks up a job that had been left behind on v5.
 
 ## [0.9.0] 2026-10-05
 
