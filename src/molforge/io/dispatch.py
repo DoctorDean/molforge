@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from molforge.cache import get_default_cache
+from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
 from molforge.io.fasta import read_fasta, write_fasta
 from molforge.io.mmcif import read_cif, read_cif_string, write_cif
@@ -192,6 +193,21 @@ def _download_structure(url: str, *, source: str, pdb_id: str, timeout: float) -
     return text
 
 
+def _parse_fetched(text: str, reader: Callable[[str], Protein], provenance: Provenance) -> Protein:
+    """Parse a downloaded structure and record where it came from.
+
+    Attaching the provenance is what makes a download a *first* step
+    rather than a dead end. Everything downstream — docking, pocket
+    detection, MD — takes its parent from the input structure's
+    provenance, so without this a chain that began with ``fetch`` is
+    rooted in nothing and the manifest cannot say which entry, from which
+    source, in which format the whole result rests on.
+    """
+    protein = reader(text)
+    protein.metadata[mk.PROVENANCE] = provenance
+    return protein
+
+
 def fetch(
     pdb_id: str,
     *,
@@ -243,7 +259,12 @@ def fetch(
 
     Returns:
         A :class:`~molforge.core.Protein` parsed from the downloaded
-        file.
+        file, carrying a
+        :class:`~molforge.core.provenance.Provenance` at
+        ``metadata["provenance"]`` that records the ID, source and
+        format it came from. Downstream steps take their parent from it,
+        so a pipeline that starts with a fetch is traceable back to the
+        entry it rests on.
 
     Raises:
         ValueError: If ``source`` or ``format`` is unrecognized, or
@@ -271,10 +292,12 @@ def fetch(
         raise ValueError(f"format must be 'pdb' or 'cif', got {format!r}")
 
     reader = read_cif_string if format == "cif" else read_pdb_string
+    # Built unconditionally: it is the cache key *and* the structure's
+    # provenance, so it is needed even when the cache is bypassed.
+    provenance = _fetch_provenance(pdb_id, source, format)
     store = get_default_cache() if cache else None
-    provenance = _fetch_provenance(pdb_id, source, format) if store is not None else None
 
-    if store is not None and provenance is not None:
+    if store is not None:
         if force_refresh:
             # put() will not overwrite an existing entry, so the stale
             # one has to go before the fresh download can take its slot.
@@ -282,16 +305,16 @@ def fetch(
         else:
             cached = store.get(provenance, _DOWNLOAD_TYPE_TAG)
             if cached is not None:
-                return reader(cached)
+                return _parse_fetched(cached, reader, provenance)
 
     text = _download_structure(
         _fetch_url(pdb_id, source, format), source=source, pdb_id=pdb_id, timeout=timeout
     )
 
-    if store is not None and provenance is not None:
+    if store is not None:
         store.put(provenance, text, _DOWNLOAD_TYPE_TAG)
 
-    return reader(text)
+    return _parse_fetched(text, reader, provenance)
 
 
 def fetch_many(

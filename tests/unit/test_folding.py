@@ -14,6 +14,8 @@ they hit the folding engine (where errors are opaque):
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from molforge.folding import ComplexSpec, Entity, _index_to_chain_id
@@ -503,3 +505,100 @@ class TestCoerceTemplatePolicy:
 
         with pytest.raises(ValueError, match="from_structures"):
             _coerce_template_policy("apo")
+
+
+class TestComplexSpecProvenanceRoundTrip:
+    """`to_provenance` / `from_provenance` are inverses — which is what
+    makes a recorded multi-component fold replayable rather than merely
+    describable."""
+
+    CASES: ClassVar[dict[str, tuple[Entity, ...]]] = {
+        "single protein": (Entity(kind="protein", sequence="MKQ"),),
+        "homodimer": (Entity(kind="protein", sequence="MKQ", copies=2),),
+        "protein + smiles ligand": (
+            Entity(kind="protein", sequence="MKQ"),
+            Entity(kind="ligand", smiles="CCO"),
+        ),
+        "protein + ccd ligand": (
+            Entity(kind="protein", sequence="MKQ"),
+            Entity(kind="ligand", ccd="ATP"),
+        ),
+        "explicit id in the middle": (
+            Entity(kind="protein", sequence="MKQ", copies=2),
+            Entity(kind="protein", sequence="HIS", chain_id="X"),
+            Entity(kind="ligand", smiles="O"),
+        ),
+        "explicit id first": (
+            Entity(kind="protein", sequence="MKQ", chain_id="X"),
+            Entity(kind="protein", sequence="HIS", copies=2),
+        ),
+        "dna duplex": (
+            Entity(kind="dna", sequence="ATCG", chain_id="A"),
+            Entity(kind="dna", sequence="CGAT", chain_id="B"),
+        ),
+        "named entity": (Entity(kind="protein", sequence="MKQ", name="target"),),
+        "multi-copy of both kinds": (
+            Entity(kind="protein", sequence="MKQ", copies=3),
+            Entity(kind="ligand", smiles="O", copies=2),
+        ),
+    }
+
+    @pytest.mark.parametrize("label", sorted(CASES))
+    def test_payload_round_trips(self, label: str) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES[label])
+        payload = spec.to_provenance()
+        assert ComplexSpec.from_provenance(payload).to_provenance() == payload
+
+    @pytest.mark.parametrize("label", sorted(CASES))
+    def test_chain_assignment_is_reproduced(self, label: str) -> None:
+        """The chain IDs matter most: a rebuilt spec that lays chains out
+        differently would replay into a structure that doesn't match."""
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES[label])
+        rebuilt = ComplexSpec.from_provenance(spec.to_provenance())
+        assert rebuilt.assigned_chain_ids() == spec.assigned_chain_ids()
+
+    def test_payload_is_json_native(self) -> None:
+        import json
+
+        from molforge.folding import ComplexSpec
+
+        payload = ComplexSpec(entities=self.CASES["explicit id in the middle"]).to_provenance()
+        assert json.loads(json.dumps(payload)) == payload
+
+    def test_chain_ids_are_recorded_as_assigned(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQ", copies=2),))
+        assert spec.to_provenance()["entities"][0]["chain_ids"] == ["A", "B"]
+
+    def test_entity_kinds_survive(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES["dna duplex"])
+        rebuilt = ComplexSpec.from_provenance(spec.to_provenance())
+        assert [e.kind for e in rebuilt.entities] == ["dna", "dna"]
+
+    def test_ligand_identity_survives(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec(entities=self.CASES["protein + ccd ligand"])
+        rebuilt = ComplexSpec.from_provenance(spec.to_provenance())
+        assert rebuilt.entities[1].ccd == "ATP"
+        assert rebuilt.entities[1].smiles is None
+
+    def test_payload_without_entities_rejected(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        for bad in ({}, {"entities": []}, {"entities": None}):
+            with pytest.raises(ValueError, match="no 'entities' list"):
+                ComplexSpec.from_provenance(bad)
+
+    def test_entity_without_kind_rejected(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        with pytest.raises(ValueError, match="no 'kind'"):
+            ComplexSpec.from_provenance({"entities": [{"sequence": "MKQ"}]})

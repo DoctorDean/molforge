@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`replay` handles every operation molforge records.** Two shipped in 0.9.0
+  with no replay handler, so a manifest containing them described a run it
+  could not re-run: `predict_samples` (Chai-1's full diffusion ensemble) and
+  `fetch`. A third gap predated them — the `predict` handler only ever looked
+  for a `sequence` input, so a recorded `predict_complex` raised
+  `ReplayError` too. All three now replay. A test walks the source for every
+  `operation="..."` a wrapper records and asserts it has a handler, so the
+  next operation added without one fails CI instead of surfacing later as an
+  unreplayable manifest.
+- **`ComplexSpec.to_provenance()` / `from_provenance()`.** The serialized
+  shape recorded in provenance now has a documented inverse, which is what
+  makes a multi-component fold replayable rather than merely describable.
+  Each entity's first assigned chain ID is pinned and its copies counted, so
+  a rebuilt spec reproduces the original chain layout exactly — including
+  when some entities had explicit IDs and others were auto-assigned around
+  them. The serializer moved here from the two folding wrappers, which held
+  byte-identical copies of it and now delegate; the recorded shape, and so
+  the cache key, is unchanged.
+
+### Changed
+- **`io.fetch` records where a structure came from.** It built a `Provenance`
+  describing the download, used it as the cache key, and then threw it away —
+  so the returned `Protein` arrived with empty metadata and every chain that
+  began with a fetch was rooted in nothing. The provenance is now attached at
+  `metadata["provenance"]` on every path (cache hit, cache miss, and
+  `cache=False`), which also makes the download replayable.
+
+  > **Behaviour change:** docking, pocket detection and MD take their
+  > provenance parent from the input structure, so a step whose receptor came
+  > from `fetch()` now has a different cache key and will recompute once. That
+  > is the correct result — those outputs really do depend on which entry was
+  > downloaded, and nothing recorded it before — but it is a one-time
+  > invalidation. Folds from a sequence, and anything not fed by `fetch`, are
+  > unaffected.
+
 ## [0.9.0] 2026-10-05
 
 > **Behaviour change:** every folding wrapper now raises `TypeError` for

@@ -314,3 +314,201 @@ class TestOperationInManifest:
     def test_operation_round_trips(self) -> None:
         step = PipelineStep(step=1, engine="E", operation="dock")
         assert PipelineStep.from_dict(step.to_dict()).operation == "dock"
+
+
+# ----------------------------------------------------------------------
+# Replay: operations that 0.9.0 added but didn't teach replay about
+# ----------------------------------------------------------------------
+
+
+class _FakeSampler:
+    """An engine that returns a whole ensemble, as Chai-1 does."""
+
+    name = "FakeSampler"
+
+    def __init__(self, seed: int | None = None) -> None:
+        self.seed = seed
+
+    def predict(self, sequence: str) -> str:
+        return f"best({sequence})"
+
+    def predict_complex(self, spec: object) -> str:
+        return f"best_complex({len(spec.entities)})"  # type: ignore[attr-defined]
+
+    def predict_samples(self, sequence: str) -> list[str]:
+        return [f"sample{i}({sequence})" for i in range(5)]
+
+    def predict_complex_samples(self, spec: object) -> list[str]:
+        return [f"csample{i}" for i in range(5)]
+
+
+@pytest.fixture
+def registered_sampler():
+    from molforge import plugins
+
+    plugins.register_engine("FakeSampler", _FakeSampler)
+    yield
+    plugins.clear()
+
+
+def _spec_payload() -> dict:
+    from molforge.folding import ComplexSpec, Entity
+
+    return ComplexSpec(
+        entities=(
+            Entity(kind="protein", sequence="MKQ", copies=2),
+            Entity(kind="ligand", smiles="CCO"),
+        )
+    ).to_provenance()
+
+
+class TestReplayComplexPredictions:
+    """A recorded `predict_complex` was describable but not replayable:
+    the handler only ever looked for a `sequence` input."""
+
+    def test_complex_predict_replays(self, registered_sampler) -> None:
+        prov = Provenance.from_engine(
+            "FakeSampler", operation="predict", inputs={"complex_spec": _spec_payload()}
+        )
+        assert replay(prov) == "best_complex(2)"
+
+    def test_single_sequence_still_replays(self, registered_sampler) -> None:
+        prov = Provenance.from_engine(
+            "FakeSampler", operation="predict", inputs={"sequence": "MKQ"}
+        )
+        assert replay(prov) == "best(MKQ)"
+
+    def test_live_spec_from_context_wins(self, registered_sampler) -> None:
+        from molforge.folding import ComplexSpec, Entity
+
+        prov = Provenance.from_engine(
+            "FakeSampler", operation="predict", inputs={"complex_spec": _spec_payload()}
+        )
+        live = ComplexSpec(entities=(Entity(kind="protein", sequence="AAA"),))
+        assert replay(prov, context={"complex_spec": live}) == "best_complex(1)"
+
+    def test_engine_without_complex_support_explains_itself(self, registered_fakes) -> None:
+        prov = Provenance.from_engine(
+            "FakeFold", operation="predict", inputs={"complex_spec": _spec_payload()}
+        )
+        with pytest.raises(ReplayError, match="has no predict_complex"):
+            replay(prov)
+
+
+class TestReplaySampleEnsembles:
+    def test_sequence_ensemble_replays(self, registered_sampler) -> None:
+        prov = Provenance.from_engine(
+            "FakeSampler", operation="predict_samples", inputs={"sequence": "MKQ"}
+        )
+        out = replay(prov)
+        assert len(out) == 5
+        assert out[0] == "sample0(MKQ)"
+
+    def test_complex_ensemble_replays(self, registered_sampler) -> None:
+        prov = Provenance.from_engine(
+            "FakeSampler", operation="predict_samples", inputs={"complex_spec": _spec_payload()}
+        )
+        assert replay(prov) == [f"csample{i}" for i in range(5)]
+
+    def test_constructor_parameters_are_reconstructed(self, registered_sampler) -> None:
+        prov = Provenance.from_engine(
+            "FakeSampler",
+            operation="predict_samples",
+            parameters={"seed": 7},
+            inputs={"sequence": "MKQ"},
+        )
+        # The stub encodes nothing about the seed, so assert via the engine
+        # the handler built rather than the output.
+        from molforge.reproducibility import _construct, _resolve_engine
+
+        engine = _construct(_resolve_engine("FakeSampler"), prov.parameters)
+        assert engine.seed == 7
+        assert len(replay(prov)) == 5
+
+    def test_engine_without_ensemble_support_explains_itself(self, registered_fakes) -> None:
+        prov = Provenance.from_engine(
+            "FakeFold", operation="predict_samples", inputs={"sequence": "MKQ"}
+        )
+        with pytest.raises(ReplayError, match="has no predict_samples"):
+            replay(prov)
+
+
+class TestReplayFetch:
+    """A download is a recorded step; a chain that can't replay its first
+    step can't replay at all."""
+
+    _PDB = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n"
+
+    @classmethod
+    def _resp(cls) -> object:
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.read.return_value = cls._PDB.encode("utf-8")
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = False
+        return resp
+
+    def test_fetch_is_resolvable_as_a_step_producer(self) -> None:
+        from molforge.reproducibility import _resolve_engine
+
+        assert _resolve_engine("molforge.io.fetch").__name__ == "fetch"
+
+    def test_fetched_structure_replays(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("1ubq")
+
+        # The download is cached, so replaying costs no network at all.
+        with patch("urllib.request.urlopen", side_effect=AssertionError("should hit the cache")):
+            out = replay(pipeline_manifest(protein))
+
+        assert out.n_atoms == protein.n_atoms
+        assert out.coords.tolist() == protein.coords.tolist()
+
+    def test_replay_honours_the_recorded_source_and_format(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("P00520", source="alphafold")
+
+        with patch("urllib.request.urlopen", return_value=self._resp()) as m:
+            replay(pipeline_manifest(protein), context={})
+        # Cached, so no call; the point is it didn't raise on an
+        # unrecognised source/format.
+        assert m.call_count == 0
+
+    def test_context_can_redirect_the_id(self) -> None:
+        from unittest.mock import patch
+
+        from molforge.io import fetch
+
+        with patch("urllib.request.urlopen", return_value=self._resp()):
+            protein = fetch("1ubq")
+
+        with patch("urllib.request.urlopen", return_value=self._resp()) as m:
+            replay(pipeline_manifest(protein), context={"pdb_id": "4HHB"})
+        assert m.call_args[0][0].endswith("4HHB.pdb")
+
+
+class TestEveryRecordedOperationHasAHandler:
+    def test_no_operation_is_left_unreplayable(self) -> None:
+        """The regression this whole change closes: an operation a wrapper
+        records but replay has never heard of."""
+        import re
+        from pathlib import Path
+
+        import molforge.reproducibility as repro
+
+        src = Path(repro.__file__).resolve().parents[1]
+        recorded = set()
+        for path in src.rglob("*.py"):
+            recorded.update(re.findall(r'operation="([a-z_]+)"', path.read_text()))
+
+        missing = recorded - set(repro._REPLAY_HANDLERS)
+        assert not missing, f"operations recorded but not replayable: {sorted(missing)}"

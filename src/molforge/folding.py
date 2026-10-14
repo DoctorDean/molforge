@@ -68,9 +68,10 @@ format using the engine instance's documented advanced API.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from os import PathLike
 
 # The set of entity kinds supported across Boltz and Chai-1. Both
@@ -389,6 +390,94 @@ class ComplexSpec:
     # ------------------------------------------------------------------
     # Iteration with chain-ID assignment
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Provenance round-trip
+    # ------------------------------------------------------------------
+
+    def to_provenance(self) -> dict[str, Any]:
+        """Flatten to the JSON-safe shape recorded in :class:`Provenance`.
+
+        ``Provenance.inputs`` must be JSON-serialisable and a
+        :class:`ComplexSpec` is not — it's a frozen dataclass of
+        :class:`Entity` tuples. This flattens it to a list of dicts with
+        engine-agnostic keys, so the same structure appears in provenance
+        whichever engine produced the prediction, and a Boltz run can be
+        compared with a Chai-1 one side by side.
+
+        Chain IDs are recorded *as assigned*, not as declared, so the
+        record says which chains actually came back rather than leaving
+        the reader to re-run the allocator.
+
+        Returns:
+            ``{"entities": [{...}, ...]}``, one dict per entity.
+        """
+        entities_payload: list[dict[str, Any]] = []
+        for entity, chain_ids in zip(self.entities, self.assigned_chain_ids(), strict=True):
+            payload: dict[str, Any] = {
+                "kind": entity.kind,
+                "chain_ids": chain_ids,
+            }
+            if entity.is_polymer:
+                payload["sequence"] = entity.normalized_sequence()
+            elif entity.smiles is not None:
+                payload["smiles"] = entity.smiles
+            else:
+                payload["ccd"] = entity.ccd
+            if entity.name is not None:
+                payload["name"] = entity.name
+            entities_payload.append(payload)
+        return {"entities": entities_payload}
+
+    @classmethod
+    def from_provenance(cls, payload: Mapping[str, Any]) -> ComplexSpec:
+        """Rebuild a spec from :meth:`to_provenance` output.
+
+        The inverse exists so a recorded complex prediction can be
+        *replayed*: without it a manifest can describe a multi-component
+        fold perfectly well and still be unable to re-run it.
+
+        Each entity's first assigned chain ID is pinned explicitly and the
+        remaining copies are counted, which reproduces the original
+        assignment exactly — including when some entities had explicit IDs
+        and others were auto-assigned around them.
+
+        Args:
+            payload: A dict shaped like :meth:`to_provenance`'s output.
+
+        Returns:
+            A :class:`ComplexSpec` that re-serialises to ``payload``.
+
+        Raises:
+            ValueError: If ``payload`` has no ``entities`` list, or an
+                entity is missing the fields its kind requires.
+        """
+        entities_payload = payload.get("entities")
+        if not isinstance(entities_payload, list) or not entities_payload:
+            raise ValueError(
+                "complex_spec payload has no 'entities' list; it was not produced "
+                "by ComplexSpec.to_provenance()."
+            )
+        entities: list[Entity] = []
+        for i, item in enumerate(entities_payload):
+            kind = item.get("kind")
+            if kind is None:
+                raise ValueError(f"complex_spec entity {i} has no 'kind'")
+            chain_ids = list(item.get("chain_ids") or [])
+            entities.append(
+                Entity(
+                    kind=kind,
+                    sequence=item.get("sequence"),
+                    smiles=item.get("smiles"),
+                    ccd=item.get("ccd"),
+                    # Pinning the first ID and counting the rest reproduces
+                    # the original allocation; see the method docstring.
+                    chain_id=chain_ids[0] if chain_ids else None,
+                    copies=len(chain_ids) or 1,
+                    name=item.get("name"),
+                )
+            )
+        return cls(entities=tuple(entities))
+
     def assigned_chain_ids(self) -> list[list[str]]:
         """Return chain IDs per entity after auto-assignment.
 

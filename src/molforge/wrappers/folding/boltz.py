@@ -912,28 +912,11 @@ def _boltz_yaml_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
 def _serialize_spec_for_provenance(spec: ComplexSpec | None) -> object:
     """Render a ComplexSpec to a JSON-safe shape for Provenance.inputs.
 
-    Provenance.inputs must be JSON-serializable; the dataclass itself
-    is not (it's a frozen dataclass with Entity tuples). We flatten
-    it to a list of dicts where each entry has the key fields. The
-    Provenance still cross-references back to the actual spec via
-    ``Protein.metadata["complex_spec"]`` for callers that want the
-    rich type.
+    Thin shim over :meth:`ComplexSpec.to_provenance`, which is where the
+    shape is defined (alongside its inverse, so the two cannot drift).
+    Kept as a module-level name because that is how the provenance
+    builders in this module read.
     """
     if spec is None:
         return None
-    entities_payload: list[dict[str, object]] = []
-    for entity, chain_ids in zip(spec.entities, spec.assigned_chain_ids(), strict=True):
-        payload: dict[str, object] = {
-            "kind": entity.kind,
-            "chain_ids": chain_ids,
-        }
-        if entity.is_polymer:
-            payload["sequence"] = entity.normalized_sequence()
-        elif entity.smiles is not None:
-            payload["smiles"] = entity.smiles
-        else:
-            payload["ccd"] = entity.ccd
-        if entity.name is not None:
-            payload["name"] = entity.name
-        entities_payload.append(payload)
-    return {"entities": entities_payload}
+    return spec.to_provenance()

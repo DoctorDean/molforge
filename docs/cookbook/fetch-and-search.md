@@ -57,6 +57,25 @@ back whatever resolved:
 structures = fetch_many(ids, on_error="skip")   # failed IDs simply don't appear
 ```
 
+# Fetched structures know where they came from
+
+A structure pulled from RCSB or AlphaFold DB carries a `Provenance`
+recording the ID, source and format it came from:
+
+```python
+from molforge.core import metadata_keys as mk
+
+protein = fetch("1UBQ")
+protein.metadata[mk.PROVENANCE].inputs      # {'pdb_id': '1UBQ'}
+protein.metadata[mk.PROVENANCE].parameters  # {'source': 'rcsb', 'format': 'pdb'}
+```
+
+That matters downstream: docking, pocket detection and MD all take their
+provenance parent from the input structure, so a pipeline that begins with
+a fetch is traceable back to the exact entry it rests on, and
+[`replay`](../guide/reproducibility.md) can re-run it from the download
+onwards.
+
 # Downloads are cached
 
 `fetch` and `fetch_many` go through [`molforge.cache`](caching-results.md), so
