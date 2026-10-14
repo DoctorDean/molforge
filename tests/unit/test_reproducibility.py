@@ -512,3 +512,240 @@ class TestEveryRecordedOperationHasAHandler:
 
         missing = recorded - set(repro._REPLAY_HANDLERS)
         assert not missing, f"operations recorded but not replayable: {sorted(missing)}"
+
+
+# ----------------------------------------------------------------------
+# Replay: generate / detect_pockets / predict_affinity
+# ----------------------------------------------------------------------
+
+
+class _FakeInverseFolder:
+    name = "FakeInverse"
+
+    def __init__(self, model_name: str = "default") -> None:
+        self.model_name = model_name
+
+    def generate(
+        self, backbone: object, *, chains_to_design: str | None = None, timeout: float | None = None
+    ) -> str:
+        return f"designs(bb={backbone},chains={chains_to_design},model={self.model_name})"
+
+
+class _FakeDeNovo:
+    name = "FakeDeNovo"
+
+    def __init__(self, device: str | None = None) -> None:
+        self.device = device
+
+    def generate(self, *, length: int | None = None, contigs: object = None) -> str:
+        return f"backbones(length={length},contigs={contigs},device={self.device})"
+
+
+class _FakeAffinity:
+    name = "FakeAffinity"
+
+    def __init__(self, model_version: str = "boltz2") -> None:
+        self.model_version = model_version
+
+    def predict_complex(self, spec: object) -> str:
+        return "folded_only"
+
+    def predict_affinity(self, spec: object) -> str:
+        return f"affinity({len(spec.entities)})"  # type: ignore[attr-defined]
+
+
+def _fake_detector(
+    protein: object, *, fpocket_executable: str = "fpocket", min_volume: float | None = None
+) -> str:
+    return f"pockets({protein},exe={fpocket_executable},vol={min_volume})"
+
+
+@pytest.fixture
+def registered_extras():
+    from molforge import plugins
+
+    plugins.register_engine("FakeInverse", _FakeInverseFolder)
+    plugins.register_engine("FakeDeNovo", _FakeDeNovo)
+    plugins.register_engine("FakeAffinity", _FakeAffinity)
+    plugins.register_engine("FakeDetector", _fake_detector)
+    yield
+    plugins.clear()
+
+
+class TestReplayGenerate:
+    """Inverse folding and de-novo generation share one operation; which
+    shape a step is depends on whether a backbone was recorded."""
+
+    def test_inverse_folding_uses_the_recorded_backbone(self, registered_extras) -> None:
+        prov = Provenance.from_engine(
+            "FakeInverse",
+            operation="generate",
+            parameters={"model_name": "v_48_020", "chains_to_design": "A"},
+            inputs={"backbone": "bb.pdb"},
+        )
+        out = replay(prov)
+        assert "bb=bb.pdb" in out
+        assert "chains=A" in out
+
+    def test_call_arguments_are_separated_from_constructor_ones(self, registered_extras) -> None:
+        """Provenance stores both in one flat dict; each must land in the
+        right place or the call is replayed with its arguments dropped."""
+        prov = Provenance.from_engine(
+            "FakeInverse",
+            operation="generate",
+            parameters={"model_name": "v_48_020", "chains_to_design": "B"},
+            inputs={"backbone": "bb.pdb"},
+        )
+        out = replay(prov)
+        assert "model=v_48_020" in out  # constructor
+        assert "chains=B" in out  # call
+
+    def test_backbone_threads_from_the_previous_step(self, registered_fakes) -> None:
+        from molforge import plugins
+
+        plugins.register_engine("FakeInverse", _FakeInverseFolder)
+        prov = Provenance.from_engine(
+            "FakeInverse", operation="generate", inputs={}, parent=_fold_prov()
+        )
+        assert "bb=structure(MKTV,T=0.5)" in replay(prov)
+
+    def test_context_overrides_the_recorded_backbone(self, registered_extras) -> None:
+        prov = Provenance.from_engine(
+            "FakeInverse", operation="generate", inputs={"backbone": "bb.pdb"}
+        )
+        assert "bb=other.pdb" in replay(prov, context={"backbone": "other.pdb"})
+
+    def test_de_novo_needs_no_backbone(self, registered_extras) -> None:
+        """RFdiffusion-shaped: the parameters are the whole input."""
+        prov = Provenance.from_engine(
+            "FakeDeNovo",
+            operation="generate",
+            parameters={"length": 120, "device": "cuda"},
+            inputs={},
+        )
+        out = replay(prov)
+        assert "length=120" in out
+        assert "device=cuda" in out
+
+
+class TestReplayDetectPockets:
+    def test_structure_comes_from_context(self, registered_extras) -> None:
+        prov = Provenance.from_engine(
+            "FakeDetector",
+            operation="detect_pockets",
+            parameters={"fpocket_executable": "fpocket", "min_volume": 100},
+            inputs={"protein": "1UBQ"},
+        )
+        out = replay(prov, context={"protein": "<structure>"})
+        assert "pockets(<structure>" in out
+        assert "vol=100" in out
+
+    def test_structure_threads_from_the_previous_step(self, registered_fakes) -> None:
+        from molforge import plugins
+
+        plugins.register_engine("FakeDetector", _fake_detector)
+        prov = Provenance.from_engine(
+            "FakeDetector", operation="detect_pockets", inputs={}, parent=_fold_prov()
+        )
+        assert "pockets(structure(MKTV,T=0.5)" in replay(prov)
+
+    def test_unchained_step_without_context_explains_itself(self, registered_extras) -> None:
+        """The recorded `protein` input is a display name, not something
+        that can be reloaded — so say that rather than passing it on."""
+        prov = Provenance.from_engine(
+            "FakeDetector", operation="detect_pockets", inputs={"protein": "1UBQ"}
+        )
+        with pytest.raises(ReplayError, match="only the structure's name is recorded"):
+            replay(prov)
+
+    def test_builtin_detectors_resolve(self) -> None:
+        from molforge.reproducibility import _resolve_engine
+
+        assert _resolve_engine("fpocket").__name__ == "detect_pockets"
+        assert _resolve_engine("p2rank").__name__ == "detect_pockets_p2rank"
+
+
+class TestReplayPredictAffinity:
+    def test_calls_predict_affinity_not_predict(self, registered_extras) -> None:
+        """Recorded as `predict` until 0.9.2, which replayed as a plain fold
+        and returned a structure with no affinity on it."""
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQ"),
+                Entity(kind="ligand", smiles="CCO"),
+            )
+        )
+        prov = Provenance.from_engine(
+            "FakeAffinity",
+            operation="predict_affinity",
+            parameters={"model_version": "boltz2"},
+            inputs={"complex_spec": spec.to_provenance()},
+        )
+        assert replay(prov) == "affinity(2)"
+
+    def test_sequence_only_step_is_rejected(self, registered_extras) -> None:
+        prov = Provenance.from_engine(
+            "FakeAffinity", operation="predict_affinity", inputs={"sequence": "MKQ"}
+        )
+        with pytest.raises(ReplayError, match="needs a complex_spec"):
+            replay(prov)
+
+    def test_engine_without_affinity_support_explains_itself(self, registered_fakes) -> None:
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQ"),))
+        prov = Provenance.from_engine(
+            "FakeFold", operation="predict_affinity", inputs={"complex_spec": spec.to_provenance()}
+        )
+        with pytest.raises(ReplayError, match="has no predict_affinity"):
+            replay(prov)
+
+
+class TestWrappersRecordTheirOperation:
+    """The gap this closes was never a missing handler — it was wrappers
+    attaching provenance with no operation at all, which replay reports as
+    'no recorded operation'."""
+
+    def test_boltz_affinity_is_its_own_operation(self) -> None:
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.wrappers.folding import Boltz
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQ"),
+                Entity(kind="ligand", smiles="CCO"),
+            )
+        )
+        fold = Boltz()._build_provenance(spec, single_sequence=None)
+        affinity = Boltz()._build_provenance(spec, single_sequence=None, affinity_binder="B")
+        assert fold.operation == "predict"
+        assert affinity.operation == "predict_affinity"
+
+    def test_recording_an_operation_does_not_move_the_cache_key(self) -> None:
+        """`operation` is excluded from the cache key by design, so naming
+        these operations invalidated nothing on anyone's disk."""
+        from molforge.cache import cache_key
+
+        base = Provenance.from_engine("X", parameters={"a": 1}, inputs={"b": 2})
+        keys = {
+            cache_key(base.replace(operation=op))
+            for op in ("", "generate", "detect_pockets", "predict_affinity")
+        }
+        assert len(keys) == 1
+
+
+class TestCallKwargs:
+    def test_filters_to_the_callables_own_parameters(self) -> None:
+        from molforge.reproducibility import _call_kwargs
+
+        def fn(protein: object, *, min_volume: float | None = None) -> None: ...
+
+        got = _call_kwargs(fn, {"min_volume": 100, "device": "cuda", "protein": "x"})
+        assert got == {"min_volume": 100, "protein": "x"}
+
+    def test_unintrospectable_callable_yields_nothing(self) -> None:
+        from molforge.reproducibility import _call_kwargs
+
+        assert _call_kwargs(print, {"a": 1}) in ({}, {})

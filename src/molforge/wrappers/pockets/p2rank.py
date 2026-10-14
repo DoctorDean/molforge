@@ -198,6 +198,7 @@ def _parse_p2rank_predictions(
     parent = protein.metadata.get(mk.PROVENANCE)
     shared_provenance = Provenance.from_engine(
         engine="p2rank",
+        operation="detect_pockets",
         parameters={"prank_executable": prank_executable},
         inputs={"protein": protein.name or "<Protein>"},
         parent=parent if isinstance(parent, Provenance) else None,

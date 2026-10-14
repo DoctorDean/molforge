@@ -223,6 +223,7 @@ class ESMIF1(GenerativeEngine):
         )
         return Provenance.from_engine(
             engine="ESM-IF1",
+            operation="generate",
             parameters={
                 "model_name": self.model_name,
                 "device": self.device,

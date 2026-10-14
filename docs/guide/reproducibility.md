@@ -187,12 +187,23 @@ Every operation molforge's wrappers record has a handler:
 | --- | --- | --- |
 | `predict` | `predict(sequence)` *or* `predict_complex(spec)` | the recorded `complex_spec` is rebuilt into a real `ComplexSpec` |
 | `predict_samples` | `predict_samples()` / `predict_complex_samples()` | the whole diffusion ensemble, not just the best |
+| `predict_affinity` | `predict_affinity(spec)` | its own operation, so a replay returns the affinity rather than a bare fold |
 | `dock` | `dock(receptor, ligand)` | receptor threaded from the previous step |
+| `generate` | `generate(backbone)` *or* `generate(**params)` | inverse folding threads a backbone in; de-novo generation takes none |
+| `detect_pockets` | `detect_pockets(protein)` / `detect_pockets_p2rank(protein)` | structure threaded from the previous step, or via `context` |
 | `fetch` | `io.fetch(pdb_id, ...)` | served from the download cache, so it usually costs no network |
 
+Provenance records constructor settings and per-call arguments in one flat
+`parameters` dict — ProteinMPNN's `model_name` sits beside its
+`chains_to_design`. Replay sorts them by signature, so each lands where it
+belongs instead of the call being re-run with its arguments dropped.
+
 A step whose engine lacks the needed method — only Chai-1 returns a sample
-ensemble — raises `ReplayError` naming the method, rather than an
-`AttributeError` from somewhere inside the machinery.
+ensemble, only Boltz-2 predicts affinity — raises `ReplayError` naming the
+method, rather than an `AttributeError` from somewhere inside the
+machinery. Pocket detection is the one step that can't recover its own
+input: only the structure's *name* is recorded, so an unchained step needs
+`context={"protein": ...}`, and says so.
 
 A test walks the source for every `operation="..."` a wrapper records and
 asserts each one has a handler, so adding an operation without teaching

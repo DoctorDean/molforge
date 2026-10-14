@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Every wrapper now records the operation it performed, and every one
+  replays.** 0.9.1 gave each *recorded* operation a handler, but three
+  wrapper families were recording no operation at all — the generative
+  engines and both pocket detectors — so their steps failed replay with
+  *"no recorded operation"* rather than a missing handler. Worse,
+  `Boltz.predict_affinity` recorded `operation="predict"`, so replaying an
+  affinity run returned a folded complex with no affinity on it: a wrong
+  answer rather than an error, and one the operation-coverage guard could
+  not catch, since `predict` did have a handler. Seven operations are now
+  recorded and seven have handlers — `predict`, `predict_samples`,
+  `predict_affinity`, `dock`, `generate`, `detect_pockets`, `fetch`.
+  `generate` covers both shapes: inverse folding threads a backbone in like
+  docking threads a receptor, while de-novo generation is driven entirely by
+  its recorded arguments. **No cache entry is affected** — `operation` is
+  excluded from the cache key by design, so naming these invalidated
+  nothing.
+
+
 ## [0.9.1] 2026-10-14
 
 A bug-fix release for 0.9.0's reproducibility work. Two of the operations

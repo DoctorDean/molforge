@@ -1144,6 +1144,13 @@ def _register_builtin_engines() -> None:
 
     plugins.register_engine("molforge.io.fetch", fetch)
 
+    # Pocket detection is a pair of functions rather than an engine class,
+    # but its steps are recorded like any other and have to resolve.
+    from molforge.wrappers.pockets import detect_pockets, detect_pockets_p2rank
+
+    plugins.register_engine("fpocket", detect_pockets)
+    plugins.register_engine("p2rank", detect_pockets_p2rank)
+
 
 def _construct(factory: Callable[..., Any], parameters: dict[str, Any]) -> Any:
     """Instantiate ``factory`` from recorded parameters.
@@ -1205,6 +1212,24 @@ def _fold_target(step: PipelineStep, context: dict[str, Any]) -> tuple[str, Any]
     )
 
 
+def _call_kwargs(func: Callable[..., Any], parameters: dict[str, Any]) -> dict[str, Any]:
+    """Filter recorded parameters to the keywords ``func`` actually takes.
+
+    Provenance records constructor settings and per-call arguments in one
+    flat ``parameters`` dict — ProteinMPNN's ``model_name`` sits beside its
+    ``chains_to_design``. :func:`_construct` already picks out the
+    constructor's share; this picks out the call's, so each lands where it
+    belongs instead of the call being replayed with its arguments dropped.
+    """
+    import inspect
+
+    try:
+        accepted = set(inspect.signature(func).parameters)
+    except (TypeError, ValueError):  # pragma: no cover - builtins, C callables
+        return {}
+    return {k: v for k, v in parameters.items() if k in accepted and k != "self"}
+
+
 def _engine_method(engine: Any, name: str, step: PipelineStep) -> Callable[..., Any]:
     """Look up a method the replayed step needs, or explain its absence.
 
@@ -1260,6 +1285,83 @@ def _replay_predict_samples(
     kind, target = _fold_target(step, context)
     name = "predict_samples" if kind == "sequence" else "predict_complex_samples"
     return _engine_method(engine, name, step)(target)
+
+
+@register_replay_handler("predict_affinity")
+def _replay_predict_affinity(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a Boltz-2 affinity prediction.
+
+    Recorded as ``predict`` until 0.9.2, which meant a replay returned a
+    folded complex with no affinity on it — the structure looked right and
+    the number the run existed for was simply missing.
+    """
+    engine = _construct(factory, step.parameters)
+    kind, target = _fold_target(step, context)
+    if kind == "sequence":
+        raise ReplayError(
+            f"step {step.step}: an affinity prediction needs a complex_spec "
+            "(a binder and a target), but this step recorded only a sequence."
+        )
+    return _engine_method(engine, "predict_affinity", step)(target)
+
+
+@register_replay_handler("generate")
+def _replay_generate(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a sequence- or backbone-generation step.
+
+    Two shapes share this operation. Inverse folding (ProteinMPNN, ESM-IF1)
+    threads a backbone in, like docking threads a receptor; de-novo
+    generation (RFdiffusion) takes none and is driven entirely by its
+    recorded arguments. Which one this is depends on whether a backbone was
+    recorded, so the handler asks rather than assuming.
+    """
+    engine = _construct(factory, step.parameters)
+    generate = _engine_method(engine, "generate", step)
+    kwargs = _call_kwargs(generate, step.parameters)
+
+    backbone = context.get("backbone", upstream)
+    if backbone is None:
+        backbone = step.inputs.get("backbone")
+    if backbone is None:
+        # De-novo: nothing to fold from, the parameters are the whole input.
+        return generate(**kwargs)
+    return generate(backbone, **kwargs)
+
+
+@register_replay_handler("detect_pockets")
+def _replay_detect_pockets(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a pocket-detection step.
+
+    ``factory`` is the detector function itself — fpocket and P2Rank are
+    functions, not engine classes. The structure comes from the previous
+    step, as a docking receptor does; the recorded ``protein`` input is a
+    display name, not something that can be reloaded, so an unchained step
+    needs one via ``context``.
+    """
+    protein = context.get("protein", upstream)
+    if protein is None:
+        raise ReplayError(
+            f"step {step.step} ({step.engine}) needs the structure to detect "
+            "pockets in. It isn't recoverable from the manifest — only the "
+            "structure's name is recorded — so pass it via "
+            'context={"protein": ...}.'
+        )
+    return factory(protein, **_call_kwargs(factory, step.parameters))
 
 
 @register_replay_handler("fetch")
