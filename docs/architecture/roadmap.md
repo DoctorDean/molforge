@@ -44,21 +44,13 @@ depth items that had concrete consumers — `molforge.scoring`,
   calculation is the one large, high-value piece left in §4 — the
   orchestration that would make molforge genuinely all-encompassing. A real
   undertaking, and the only thing of that size still outstanding.
-- **Next — finish the replay surface.** Two holes are left, both narrow and
-  both the kind that only bite months later, when someone tries to re-run a
-  result and can't:
-    - The **generative and pocket wrappers attach provenance with no
-      `operation`**, so a manifest containing one of their steps raises
-      *"no recorded operation"*. The missing piece is the recorded operation,
-      not the handler.
-    - **`predict_affinity` records `operation="predict"`** with the binder in
-      its parameters, so replaying it runs a plain fold and drops the
-      affinity request — silently, which is worse than raising. It needs its
-      own operation and handler.
-
-  Also here: a **local MSA path** (§5), which 0.9's `msa_depth` made more
-  pressing — shipping a depth ladder that still sources its alignment from a
-  shared public server is an awkward place to stand.
+- **Next — a local MSA path** (§5). `mmseqs2` / `hmmer` / `jackhmmer`,
+  so the folding wrappers stop depending on ColabFold's public server for
+  every alignment. 0.9.0 made this more pressing by turning alignment depth
+  into a parameter users sweep: shipping a depth ladder that still sources
+  the alignment itself from a shared community resource is an awkward place
+  to stand. The replay surface that sat here is **finished** — every
+  operation a wrapper records is now recorded *and* replayable (§3).
 - **Later — opportunistic breadth.** More engines, ML/data layers, enhanced
   sampling, performance work, the error taxonomy (§6) — pulled forward by
   demand, not by the matrix.
@@ -136,9 +128,11 @@ built on the now-trustworthy base. **All four shipped:**
   `pipeline.yaml` with a consolidated environment block; `replay`
   re-executes it, resolving engines from a self-registering registry and
   reconstructing each step via per-*operation* handlers. Backed by a
-  `Provenance.operation` field. As of 0.9.1 every operation a wrapper
-  *records* has a handler — `predict` (single-chain and complex),
-  `predict_samples`, `dock`, `fetch` — and a test asserts that stays true.
+  `Provenance.operation` field. Every operation a wrapper performs is now
+  both recorded and replayable — `predict` (single-chain and complex),
+  `predict_samples`, `predict_affinity`, `dock`, `generate`,
+  `detect_pockets`, `fetch` — with a test asserting each recorded operation
+  keeps a handler.
 - **Plugin ecosystem — shipped.** `molforge.plugins` is documented, and
   `plugins/example_plugin/` is a complete, CI-verified reference plugin
   (registers a real `FoldingEngine`) that doubles as the copy-paste
@@ -156,13 +150,14 @@ molforge has good *components*; these make chaining them ergonomic.
   `cross_engine_fold` and `DesignLoop`.
 - **`pipeline.yaml` replay — shipped.** Re-executing an emitted manifest,
   via a `Provenance.operation` field, a self-registering engine registry
-  (`molforge.plugins`), and per-operation replay handlers. See §2. Two
-  narrow holes remain, and both are about what gets *recorded* rather than
-  what gets handled: the generative and pocket wrappers attach provenance
-  with no `operation` at all, so their steps raise *"no recorded
-  operation"*; and `predict_affinity` records `operation="predict"` with
-  the binder in its parameters, so a replay runs a plain fold and drops the
-  affinity request silently. See **Next** above.
+  (`molforge.plugins`), and per-operation replay handlers. See §2. The
+  last two holes closed after 0.9.1, and both were about what got
+  *recorded* rather than what got handled: the generative and pocket
+  wrappers attached provenance with no `operation` at all, and
+  `predict_affinity` recorded `operation="predict"`, so a replay returned a
+  fold with no affinity on it. Worth remembering that the
+  handler-coverage test passed throughout — it proves handlers exist for
+  recorded operations, not that a step is replayable.
 - **Provenance — shipped.** `molforge.core.Provenance`: a frozen
   dataclass (engine / operation / version / parameters / inputs / recursive
   parent), JSON-round-trippable, on `metadata[PROVENANCE]`, adopted across
@@ -225,10 +220,10 @@ Kept here as a demand-driven wishlist, not a plan:
 - **Generative:** LigandMPNN, Chroma, Protpardelle.
 - **MSA / sequence search:** local `mmseqs2` / `hmmer` / `jackhmmer` — the
   one genuinely-wanted gap, since folding wrappers currently lean on
-  ColabFold's MSA server. **Promoted to *Next***: 0.9.0's `msa_depth`
-  turned alignment depth into a parameter users sweep, which makes
-  depending on a shared public server for the alignment itself harder to
-  defend.
+  ColabFold's MSA server. **This is now the whole of *Next***: 0.9.0's
+  `msa_depth` turned alignment depth into a parameter users sweep, which
+  makes depending on a shared public server for the alignment itself
+  harder to defend.
 
 ## 6. Opportunistic — ML, performance, I/O
 
