@@ -12,8 +12,10 @@ detection); a canonical data model with `Provenance` and a
 content-addressed cache; a from-scratch analysis stack (RMSD, SASA, DSSP,
 contacts, dihedrals, superposition, plus TM-score / GDT / lDDT / DockQ);
 structure-quality validation (clashes, Ramachandran, chirality,
-bond-length); remote data ingestion (RCSB / AlphaFold DB / ChEMBL); and ML
-featurization. It ships on PyPI with docs.
+bond-length); remote data ingestion (RCSB / AlphaFold DB / ChEMBL / the
+PDB chemical-component dictionary), cached; reproducibility that emits,
+replays, and aggregates across many outputs; and ML featurization. It
+ships on PyPI with docs.
 
 So the next chapters are **not more engines.** They are:
 
@@ -41,14 +43,25 @@ depth items that had concrete consumers — `molforge.scoring`,
 - **Now — the FEP endeavour.** *Running* (not just ingesting) an FEP/TI
   calculation is the one large, high-value piece left in §4 — the
   orchestration that would make molforge genuinely all-encompassing. A real
-  undertaking; everything else in the "Now" horizon is done.
-- **Next — documentation polish.** A performance-benchmarks page and
-  migration guides ("coming from BioPython / Biotite / MDAnalysis"), plus
-  smaller cache/manifest follow-ups (docking + MD-trajectory caches,
-  multi-output manifests).
-- **Later — opportunistic breadth.** More engines, local MSA, ML/data
-  layers, enhanced sampling, performance work — pulled forward by demand,
-  not by the matrix.
+  undertaking, and the only thing of that size still outstanding.
+- **Next — finish the replay surface.** Two holes are left, both narrow and
+  both the kind that only bite months later, when someone tries to re-run a
+  result and can't:
+    - The **generative and pocket wrappers attach provenance with no
+      `operation`**, so a manifest containing one of their steps raises
+      *"no recorded operation"*. The missing piece is the recorded operation,
+      not the handler.
+    - **`predict_affinity` records `operation="predict"`** with the binder in
+      its parameters, so replaying it runs a plain fold and drops the
+      affinity request — silently, which is worse than raising. It needs its
+      own operation and handler.
+
+  Also here: a **local MSA path** (§5), which 0.9's `msa_depth` made more
+  pressing — shipping a depth ladder that still sources its alignment from a
+  shared public server is an awkward place to stand.
+- **Later — opportunistic breadth.** More engines, ML/data layers, enhanced
+  sampling, performance work, the error taxonomy (§6) — pulled forward by
+  demand, not by the matrix.
 
 ## Principles
 
@@ -96,7 +109,10 @@ chapter is **done**.
 - **Engine version guards — done.** Wrappers record the installed engine
   version in provenance and warn non-fatally on drift outside the tested
   range, so a new engine release that changes an output format is
-  diagnosable.
+  diagnosable. 0.9.0 added `molforge.engine_versions()`, a registry over
+  every backend molforge can drive — including the native binaries that
+  have no version to record at call time, which used to leave a manifest
+  blank exactly where a reader wants a number.
 
 ## 2. Distinguishing identity  — *Shipped*
 
@@ -119,8 +135,10 @@ built on the now-trustworthy base. **All four shipped:**
   `emit_pipeline` linearizes an output's provenance chain into a citable
   `pipeline.yaml` with a consolidated environment block; `replay`
   re-executes it, resolving engines from a self-registering registry and
-  reconstructing each step via per-*operation* handlers (`predict` / `dock`
-  ship in v1). Backed by a new `Provenance.operation` field.
+  reconstructing each step via per-*operation* handlers. Backed by a
+  `Provenance.operation` field. As of 0.9.1 every operation a wrapper
+  *records* has a handler — `predict` (single-chain and complex),
+  `predict_samples`, `dock`, `fetch` — and a test asserts that stays true.
 - **Plugin ecosystem — shipped.** `molforge.plugins` is documented, and
   `plugins/example_plugin/` is a complete, CI-verified reference plugin
   (registers a real `FoldingEngine`) that doubles as the copy-paste
@@ -138,20 +156,28 @@ molforge has good *components*; these make chaining them ergonomic.
   `cross_engine_fold` and `DesignLoop`.
 - **`pipeline.yaml` replay — shipped.** Re-executing an emitted manifest,
   via a `Provenance.operation` field, a self-registering engine registry
-  (`molforge.plugins`), and per-operation replay handlers (`predict` /
-  `dock`). See §2. Follow-ups: handlers for the other operations
-  (generate / pocket-detect / affinity) and multi-output manifests.
+  (`molforge.plugins`), and per-operation replay handlers. See §2. Two
+  narrow holes remain, and both are about what gets *recorded* rather than
+  what gets handled: the generative and pocket wrappers attach provenance
+  with no `operation` at all, so their steps raise *"no recorded
+  operation"*; and `predict_affinity` records `operation="predict"` with
+  the binder in its parameters, so a replay runs a plain fold and drops the
+  affinity request silently. See **Next** above.
 - **Provenance — shipped.** `molforge.core.Provenance`: a frozen
   dataclass (engine / operation / version / parameters / inputs / recursive
   parent), JSON-round-trippable, on `metadata[PROVENANCE]`, adopted across
-  every wrapper and the prep pipelines. Optional polish (sidecar
-  persistence, deeper engine-version introspection) is deferred.
+  every wrapper and the prep pipelines. Engine-version introspection
+  landed in 0.9.0 as `molforge.engine_versions()` (§1); sidecar
+  persistence is still deferred. `Provenance.content_id()` gives the
+  canonical "same computation" identity the cache and aggregate manifests
+  now share.
 - **Caching — shipped.** Content-addressed result cache keyed on
   `(engine, parameters, inputs, parent_chain)` with cascading
-  invalidation; folding, sequence design, and free-energy results
-  participate. Docking-engine and MD-trajectory caches remain follow-ups
-  (MD trajectories deliberately uncached — multi-GB; use upstream
-  checkpointing).
+  invalidation. Folding, sequence design, docking, free-energy results,
+  Chai-1 sample ensembles and `io.fetch` downloads all participate — six
+  entry types. MD trajectories stay deliberately uncached (multi-GB; use
+  the upstream framework's checkpointing), which is now the only gap
+  rather than a follow-up.
 - **A `Pipeline` / DAG builder — deferred, probably don't.** Open
   question below; the default answer is to compose with
   Prefect/Hydra/Snakemake rather than build another runtime.
@@ -189,15 +215,20 @@ until the verification story (§1) covers what's already here** — a new
 wrapper that's green-on-mocks widens the trust gap rather than closing it.
 Kept here as a demand-driven wishlist, not a plan:
 
-- **Folding:** ESM3, AlphaFold-3 (DeepMind), Protenix. Modifications,
-  restraints, per-entity MSAs on the existing multi-component path.
+- **Folding:** ESM3, AlphaFold-3 (DeepMind), Protenix. On the existing
+  multi-component path: modifications, restraints, and per-entity MSAs.
+  (MSA *depth* and template policy landed in 0.9.0 as `msa_depth` and
+  `TemplatePolicy`; these are the per-entity refinements, not the
+  whole-prediction controls.)
 - **Docking:** AutoDock-GPU, Uni-Dock (GPU-accelerated Vina variants).
 - **MD:** NAMD, LAMMPS (non-bio workloads).
 - **Generative:** LigandMPNN, Chroma, Protpardelle.
 - **MSA / sequence search:** local `mmseqs2` / `hmmer` / `jackhmmer` — the
   one genuinely-wanted gap, since folding wrappers currently lean on
-  ColabFold's MSA server. Serious users need a local path; this one may
-  jump to *Next* on demand.
+  ColabFold's MSA server. **Promoted to *Next***: 0.9.0's `msa_depth`
+  turned alignment depth into a parameter users sweep, which makes
+  depending on a shared public server for the alignment itself harder to
+  defend.
 
 ## 6. Opportunistic — ML, performance, I/O
 
