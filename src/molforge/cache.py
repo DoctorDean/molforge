@@ -27,6 +27,9 @@ What gets cached:
     - The raw text of a structure downloaded by
       :func:`molforge.io.fetch` — the server's bytes, not the parsed
       Protein, so a hit and a miss parse identically.
+    - :class:`molforge.sequence.MultipleSequenceAlignment` from a homology
+      search. A deep search is minutes to hours and the same query against
+      the same database is the same answer.
 
     Extra result types register via :func:`register_serializer`.
 
@@ -951,6 +954,34 @@ def _deserialize_structure_text(entry: Path) -> str:
 
 
 # ---------------------------------------------------------------------
+# MSA serializer
+# ---------------------------------------------------------------------
+
+
+def _serialize_msa(msa: Any, entry: Path) -> None:
+    """Store an alignment as JSON rather than a3m.
+
+    a3m is the interchange format, but it has nowhere to record a hit's
+    source database or pairing key — and the pairing key is what makes an
+    alignment usable for a complex. Round-tripping through a3m would
+    quietly demote every cached alignment to monomer-only.
+    """
+    payload = {"query": msa.query.to_dict(), "hits": [h.to_dict() for h in msa.hits]}
+    (entry / "msa.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _deserialize_msa(entry: Path) -> Any:
+    """Inverse of :func:`_serialize_msa`."""
+    from molforge.sequence import AlignedSequence, MultipleSequenceAlignment
+
+    payload = json.loads((entry / "msa.json").read_text(encoding="utf-8"))
+    return MultipleSequenceAlignment(
+        query=AlignedSequence(**payload["query"]),
+        hits=tuple(AlignedSequence(**h) for h in payload["hits"]),
+    )
+
+
+# ---------------------------------------------------------------------
 # Register built-ins
 # ---------------------------------------------------------------------
 
@@ -972,3 +1003,4 @@ register_serializer(
     _deserialize_free_energy_result,
 )
 register_serializer("structure_text", _serialize_structure_text, _deserialize_structure_text)
+register_serializer("msa", _serialize_msa, _deserialize_msa)
