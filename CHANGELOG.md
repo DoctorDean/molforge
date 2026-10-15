@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multiple sequence alignments — `molforge.sequence.MultipleSequenceAlignment`.**
+  molforge could describe two sequences aligned to each other and nothing
+  else, so there was no way to hand a folding model an alignment you had
+  computed yourself — the wrappers could only ask a public server for one.
+  The type is a query plus its hits, each hit carrying `source_database` and
+  `pairing_key` alongside its letters: the pairing key is the organism token
+  used to match hits *across chains* of a complex, which is the entire basis
+  of complex prediction from coevolution, and carrying it is what separates
+  an alignment that can fold a monomer from one that can fold a dimer.
+  `from_a3m` / `to_a3m` and `read_a3m` / `write_a3m` handle the format both
+  AF3-class engines accept, preserving a3m's lower-case insertion convention
+  verbatim — normalising it away is the corruption the format exists to
+  avoid, which is also why a3m lives with the type rather than going through
+  the generic FASTA reader. Alignment width is validated on construction, so
+  a malformed file is rejected where it is read rather than reaching a model.
+  `subsample(depth, seed=)` samples rather than truncates when seeded, since
+  the top of a search output is its most redundant part and a shallow
+  alignment of near-identical sequences is not the same experiment as a
+  shallow alignment of diverse ones; `deduplicate()` drops rows repeating an
+  earlier row's columns. First of three steps toward local MSA search
+  (§5 of the roadmap): the type, then the search wrappers, then wiring both
+  engines to accept a precomputed alignment.
+
+
 ### Fixed
 - **Every wrapper now records the operation it performed, and every one
   replays.** 0.9.1 gave each *recorded* operation a handler, but three

@@ -8,8 +8,15 @@ What's here:
       :func:`mutate_protein` — point mutations on sequences and Proteins.
     - :func:`composition`, :func:`molecular_weight`, :func:`gravy`,
       :func:`aromaticity`, :func:`length` — sequence properties.
+    - :class:`MultipleSequenceAlignment` / :class:`AlignedSequence`,
+      :func:`read_a3m` / :func:`write_a3m` — the many-to-one alignment an
+      AF3-class folding model actually runs on, with the per-hit source and
+      pairing metadata a complex prediction needs.
 
-For sequence I/O see :mod:`molforge.io` (FASTA).
+For sequence I/O see :mod:`molforge.io` (FASTA). a3m lives with the MSA
+type rather than in :mod:`molforge.io`, because its lower-case insertion
+convention has to survive parsing verbatim and the generic FASTA reader
+normalises it away.
 """
 
 from __future__ import annotations
@@ -34,6 +41,12 @@ from molforge.sequence.matrices import (
     available_matrices,
     get_matrix,
 )
+from molforge.sequence.msa import (
+    AlignedSequence,
+    MultipleSequenceAlignment,
+    read_a3m,
+    write_a3m,
+)
 from molforge.sequence.mutations import (
     Mutation,
     apply_mutation,
@@ -43,6 +56,11 @@ from molforge.sequence.mutations import (
 )
 
 __all__ = [  # noqa: RUF022 — grouped by concern
+    # Multiple sequence alignments
+    "MultipleSequenceAlignment",
+    "AlignedSequence",
+    "read_a3m",
+    "write_a3m",
     # Alignment
     "align",
     "needleman_wunsch",
