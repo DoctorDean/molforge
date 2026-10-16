@@ -373,11 +373,19 @@ class Boltz(FoldingEngine):
             output_dir.mkdir()
 
             input_yaml.write_text(
-                self._build_input_yaml_from_spec(spec, affinity_binder=affinity_binder),
+                self._build_input_yaml_from_spec(
+                    spec, affinity_binder=affinity_binder, msa_dir=tmpdir
+                ),
                 encoding="utf-8",
             )
 
-            cmd = self._build_command(binary, input_yaml, output_dir, seed=seed)
+            cmd = self._build_command(
+                binary,
+                input_yaml,
+                output_dir,
+                seed=seed,
+                msas_supplied=_every_protein_has_an_msa(spec),
+            )
             env = self._build_env()
             self._invoke(cmd, env=env)
 
@@ -480,7 +488,11 @@ class Boltz(FoldingEngine):
         return self._build_input_yaml_from_spec(ComplexSpec.from_protein(sequence))
 
     def _build_input_yaml_from_spec(
-        self, spec: ComplexSpec, *, affinity_binder: str | None = None
+        self,
+        spec: ComplexSpec,
+        *,
+        affinity_binder: str | None = None,
+        msa_dir: Path | None = None,
     ) -> str:
         """Construct the Boltz YAML input for a ComplexSpec.
 
@@ -501,7 +513,7 @@ class Boltz(FoldingEngine):
         chain_ids_per_entity = spec.assigned_chain_ids()
 
         for entity, chain_ids in zip(spec.entities, chain_ids_per_entity, strict=True):
-            lines.extend(_boltz_yaml_entity(entity, chain_ids))
+            lines.extend(_boltz_yaml_entity(entity, chain_ids, msa_dir))
 
         # Templates: a top-level `templates` list of structure files.
         # Boltz matches each against the query chains itself unless a
@@ -546,6 +558,7 @@ class Boltz(FoldingEngine):
         output_dir: Path,
         *,
         seed: int | None = None,
+        msas_supplied: bool = False,
     ) -> list[str]:
         """Assemble the ``boltz predict ...`` command line.
 
@@ -556,6 +569,11 @@ class Boltz(FoldingEngine):
             seed: Seed for this call; ``None`` falls back to the engine's
                 ``seed``, and an unseeded engine omits ``--seed`` so Boltz
                 keeps its own (unseeded) default.
+            msas_supplied: Whether every protein chain in the spec carries
+                its own alignment. When it does, ``--use_msa_server`` is
+                omitted: Boltz documents the server and a supplied ``msa:``
+                as alternatives, so sending both asks it to fetch
+                alignments it has already been given.
         """
         cmd: list[str] = [
             binary,
@@ -571,7 +589,7 @@ class Boltz(FoldingEngine):
             # `--override` is safe in our tempdir.
             "--override",
         ]
-        if self.use_msa_server:
+        if self.use_msa_server and not msas_supplied:
             cmd.append("--use_msa_server")
         if self.msa_depth is not None:
             # --subsample_msa is the switch; --num_subsampled_msa is the
@@ -860,7 +878,9 @@ def _maybe_float(value: object) -> float | None:
         return None
 
 
-def _boltz_yaml_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
+def _boltz_yaml_entity(
+    entity: Entity, chain_ids: list[str], msa_dir: Path | None = None
+) -> list[str]:
     """Render one ComplexSpec.Entity as Boltz YAML lines.
 
     Returns a list of lines (without trailing newlines) ready to be
@@ -900,6 +920,7 @@ def _boltz_yaml_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
 
     if entity.is_polymer:
         body.append(f"      sequence: {entity.normalized_sequence()}")
+        body.extend(_boltz_yaml_msa(entity, chain_ids, msa_dir))
     elif entity.is_ligand:
         if entity.smiles is not None:
             # YAML strings with special chars (e.g. SMILES with
@@ -911,6 +932,49 @@ def _boltz_yaml_entity(entity: Entity, chain_ids: list[str]) -> list[str]:
             body.append(f"      ccd: {entity.ccd}")
 
     return body
+
+
+def _every_protein_has_an_msa(spec: ComplexSpec) -> bool:
+    """Whether the spec leaves the MSA server nothing to do.
+
+    Boltz treats ``--use_msa_server`` and a per-chain ``msa:`` as
+    alternatives, so the flag is dropped once every protein chain carries
+    its own alignment. A spec where only *some* chains do keeps the flag,
+    because the rest still need one.
+
+    A spec with no protein chains at all — a ligand-only system — is not
+    "fully supplied"; there is simply nothing to decide, and leaving the
+    flag alone keeps that case exactly as it was.
+    """
+    proteins = [e for e in spec.entities if e.kind == "protein"]
+    return bool(proteins) and all(e.msa is not None for e in proteins)
+
+
+def _boltz_yaml_msa(entity: Entity, chain_ids: list[str], msa_dir: Path | None) -> list[str]:
+    """Emit the ``msa:`` line for one protein entity, writing the a3m.
+
+    Boltz reads a precomputed alignment from a path, so the alignment has
+    to exist on disk beside the YAML that names it. It is written into the
+    same temporary directory as the input, named for the chain, so a
+    multi-chain complex gets one alignment per chain and nothing collides.
+
+    ``msa: empty`` is Boltz's documented single-sequence mode and needs no
+    file. An unset alignment emits nothing at all, leaving Boltz to its own
+    behaviour — which, with ``--use_msa_server``, is to go and fetch one.
+    """
+    if entity.msa is None:
+        return []
+    if entity.msa == "empty":
+        return ["      msa: empty"]
+    if msa_dir is None:
+        raise RuntimeError(
+            "an Entity carries a precomputed MSA but no directory was given to "
+            "write it to. This is a molforge bug: _build_input_yaml_from_spec "
+            "needs msa_dir= whenever a spec contains an alignment."
+        )
+    path = msa_dir / f"msa_{chain_ids[0]}.a3m"
+    path.write_text(entity.msa.to_a3m(), encoding="utf-8")
+    return [f"      msa: {path}"]
 
 
 def _serialize_spec_for_provenance(spec: ComplexSpec | None) -> object:

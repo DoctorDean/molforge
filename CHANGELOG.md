@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fold against your own alignment — `Entity(msa=...)`, honoured by Boltz.**
+  The folding wrappers could only take whatever ColabFold's public server
+  returned. A chain can now carry a
+  `MultipleSequenceAlignment`, which Boltz receives as a per-chain `msa:`
+  path in its input YAML, or `"empty"` to force single-sequence mode for
+  that chain specifically — narrower than `use_msa_server=False`, which
+  turns the server off for the whole prediction. It is per-chain because
+  that is the shape of the problem: each chain of a complex has its own
+  homologues, and a spec can supply alignments for some chains and leave
+  the rest to the engine. An alignment whose query doesn't match the chain
+  is rejected at construction, since folding a chain against another
+  chain's homologues gives a confident wrong answer. `--use_msa_server` is
+  omitted once every protein chain is supplied, because Boltz documents the
+  server and a supplied `msa:` as alternatives. Provenance records a digest
+  and the depth rather than the sequences — a deep alignment is thousands
+  of rows and embedding one would make every manifest unreadable — which
+  still separates cache entries and lets a reader verify which alignment
+  ran, but means replaying such a fold requires supplying it. Specs without
+  an alignment serialise exactly as before, so no cached fold is orphaned.
+  Third of three steps toward local MSA (§5); Chai-1's `.aligned.pqt` path
+  is the remaining piece.
+
 - **Local homology search — `molforge.wrappers.msa.MMseqs2`.** The folding
   wrappers have always sourced alignments from ColabFold's public MMseqs2
   server, which rate-limits, needs network access from wherever the job runs,

@@ -245,6 +245,66 @@ with no MSA at all, use `Boltz(use_msa_server=False)` — or Chai-1's
 default, which is already MSA-free. `msa_depth=0` raises and says so
 rather than quietly meaning one of the two.
 
+### Bring your own MSA
+
+By default Boltz fetches its alignment from ColabFold's public MMseqs2
+server. For a handful of predictions that's fine; at scale it rate-limits,
+needs network access from wherever the job runs, and puts the single most
+influential input to your prediction somewhere you can't inspect.
+
+An alignment you computed goes on the chain it belongs to:
+
+```python
+from molforge.folding import ComplexSpec, Entity
+from molforge.wrappers.msa import MMseqs2
+from molforge.wrappers.folding import Boltz
+
+msa = MMseqs2(database="/data/uniref90").search(sequence)
+
+spec = ComplexSpec(entities=(Entity(kind="protein", sequence=sequence, msa=msa),))
+structure = Boltz().predict_complex(spec)
+```
+
+It's per-chain rather than per-engine because that's what the problem is:
+each chain of a complex has its own homologues, and Boltz's input format
+puts `msa:` on the chain. A chain left without one still gets whatever the
+engine would have done anyway, so you can supply alignments for the chains
+you care about and leave the rest.
+
+`msa="empty"` forces single-sequence mode for one chain specifically —
+narrower than `use_msa_server=False`, which turns the server off for the
+whole prediction.
+
+Three things worth knowing:
+
+- **An alignment built for a different sequence is rejected.** Folding a
+  chain against another chain's homologues produces a confident, wrong
+  answer, so the mismatch raises at construction rather than at the model.
+- **`--use_msa_server` is dropped once every protein chain has an
+  alignment.** Boltz documents the server and a supplied `msa:` as
+  alternatives; sending both would ask it to fetch what it already has.
+  A spec where only some chains are supplied keeps the flag, because the
+  rest still need one.
+- **Provenance records a digest, not the sequences.** A deep alignment is
+  thousands of rows; embedding one would make every manifest unreadable.
+  The digest still separates cache entries — two alignments are two
+  predictions — and lets a reader verify which alignment was used. It
+  cannot rebuild one, so [replaying](../guide/reproducibility.md) a fold
+  that used an alignment means supplying it.
+
+To fold against an alignment from disk, read it first — there's no path
+form, so a typo surfaces as a missing file rather than being mistaken for
+a mode:
+
+```python
+from molforge.sequence import read_a3m
+
+Entity(kind="protein", sequence=sequence, msa=read_a3m("hits.a3m"))
+```
+
+Chai-1 takes alignments through a different mechanism (a directory of
+`.aligned.pqt` files) and doesn't accept `Entity.msa` yet.
+
 ### Templates
 
 A template lets the model copy a known fold instead of deriving one.
