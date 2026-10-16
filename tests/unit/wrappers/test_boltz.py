@@ -1007,3 +1007,178 @@ class TestSamplingControlsCacheCompatibility:
             "device",
             "affinity_binder",
         }
+
+
+class TestPrecomputedMsa:
+    """Boltz reads an alignment from a path, so the a3m has to exist on
+    disk beside the YAML that names it."""
+
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(f">q\n{query}\n>h OX=9606\n{query}\n")
+
+    def _spec(self, **kwargs: object):
+        from molforge.folding import ComplexSpec, Entity
+
+        return ComplexSpec(entities=(Entity(kind="protein", sequence="MKQHKA", **kwargs),))  # type: ignore[arg-type]
+
+    def test_alignment_is_written_and_referenced(self, tmp_path: Path) -> None:
+        yaml = Boltz()._build_input_yaml_from_spec(self._spec(msa=self._msa()), msa_dir=tmp_path)
+        written = list(tmp_path.glob("*.a3m"))
+        assert len(written) == 1
+        assert f"msa: {written[0]}" in yaml
+
+    def test_written_file_is_the_alignment(self, tmp_path: Path) -> None:
+        msa = self._msa()
+        Boltz()._build_input_yaml_from_spec(self._spec(msa=msa), msa_dir=tmp_path)
+        assert next(tmp_path.glob("*.a3m")).read_text(encoding="utf-8") == msa.to_a3m()
+
+    def test_empty_mode_needs_no_file(self, tmp_path: Path) -> None:
+        yaml = Boltz()._build_input_yaml_from_spec(self._spec(msa="empty"), msa_dir=tmp_path)
+        assert "      msa: empty" in yaml
+        assert list(tmp_path.glob("*.a3m")) == []
+
+    def test_unset_emits_nothing(self, tmp_path: Path) -> None:
+        yaml = Boltz()._build_input_yaml_from_spec(self._spec(), msa_dir=tmp_path)
+        assert "msa:" not in yaml
+
+    def test_each_chain_gets_its_own_file(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQHKA", msa=self._msa("MKQHKA")),
+                Entity(kind="protein", sequence="HISHIS", msa=self._msa("HISHIS")),
+            )
+        )
+        yaml = Boltz()._build_input_yaml_from_spec(spec, msa_dir=tmp_path)
+        names = sorted(f.name for f in tmp_path.glob("*.a3m"))
+        assert names == ["msa_A.a3m", "msa_B.a3m"]
+        assert yaml.count("msa: ") == 2
+
+    def test_ligands_are_untouched(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQHKA", msa=self._msa()),
+                Entity(kind="ligand", smiles="CCO"),
+            )
+        )
+        yaml = Boltz()._build_input_yaml_from_spec(spec, msa_dir=tmp_path)
+        assert yaml.count("msa: ") == 1
+
+    def test_missing_directory_is_a_loud_bug(self) -> None:
+        """Rather than silently dropping the alignment the caller supplied."""
+        with pytest.raises(RuntimeError, match="molforge bug"):
+            Boltz()._build_input_yaml_from_spec(self._spec(msa=self._msa()))
+
+
+class TestMsaServerInteraction:
+    """Boltz documents --use_msa_server and a supplied `msa:` as
+    alternatives, so sending both asks it to fetch what it already has."""
+
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(f">q\n{query}\n>h\n{query}\n")
+
+    def _supplied(self, spec: object) -> bool:
+        from molforge.wrappers.folding.boltz import _every_protein_has_an_msa
+
+        return _every_protein_has_an_msa(spec)  # type: ignore[arg-type]
+
+    def test_flag_kept_when_no_chain_has_an_alignment(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec
+
+        spec = ComplexSpec.from_protein("MKQHKA")
+        cmd = Boltz()._build_command(
+            "/bin/boltz", tmp_path / "i", tmp_path / "o", msas_supplied=self._supplied(spec)
+        )
+        assert "--use_msa_server" in cmd
+
+    def test_flag_dropped_when_every_chain_has_one(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQHKA", msa=self._msa()),))
+        cmd = Boltz()._build_command(
+            "/bin/boltz", tmp_path / "i", tmp_path / "o", msas_supplied=self._supplied(spec)
+        )
+        assert "--use_msa_server" not in cmd
+
+    def test_flag_kept_when_only_some_chains_have_one(self, tmp_path: Path) -> None:
+        """The rest still need an alignment from somewhere."""
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQHKA", msa=self._msa()),
+                Entity(kind="protein", sequence="HISHIS"),
+            )
+        )
+        assert self._supplied(spec) is False
+
+    def test_ligand_only_spec_changes_nothing(self) -> None:
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(entities=(Entity(kind="ligand", smiles="CCO"),))
+        assert self._supplied(spec) is False
+
+    def test_explicitly_disabled_server_stays_disabled(self, tmp_path: Path) -> None:
+        cmd = Boltz(use_msa_server=False)._build_command(
+            "/bin/boltz", tmp_path / "i", tmp_path / "o", msas_supplied=True
+        )
+        assert "--use_msa_server" not in cmd
+
+
+class TestMsaCacheKeys:
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(f">q\n{query}\n>h OX=9606\n{query}\n")
+
+    def test_different_alignments_do_not_share_an_entry(self) -> None:
+        from molforge.cache import cache_key
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.sequence import MultipleSequenceAlignment
+
+        deep = MultipleSequenceAlignment.from_a3m(">q\nMKQHKA\n>a\nMKAHKA\n>b\nMKRHKA\n")
+        keys = {
+            cache_key(
+                Boltz()._build_provenance(
+                    ComplexSpec(entities=(Entity(kind="protein", sequence="MKQHKA", msa=m),)),
+                    single_sequence=None,
+                )
+            )
+            for m in (self._msa(), deep, "empty", None)
+        }
+        assert len(keys) == 4
+
+    def test_no_alignment_leaves_the_payload_untouched(self) -> None:
+        """Adding Entity.msa must not orphan cached folds. The mechanism is
+        that an unset alignment contributes no key at all, so a spec
+        without one serialises exactly as it did before the field existed.
+        """
+        from molforge.folding import ComplexSpec, Entity
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQHKA"),
+                Entity(kind="ligand", smiles="CCO"),
+            )
+        )
+        prov = Boltz()._build_provenance(spec, single_sequence=None)
+        for entity in prov.inputs["complex_spec"]["entities"]:
+            assert "msa" not in entity
+
+    def test_single_sequence_path_is_unaffected(self) -> None:
+        from molforge.folding import ComplexSpec
+
+        prov = Boltz()._build_provenance(
+            ComplexSpec.from_protein("MKTVRQ"), single_sequence="MKTVRQ"
+        )
+        assert prov.inputs == {"sequence": "MKTVRQ"}

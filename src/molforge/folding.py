@@ -67,8 +67,11 @@ format using the engine instance's documented advanced API.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
+
+from molforge.sequence import MultipleSequenceAlignment
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -124,6 +127,18 @@ class Entity:
         name: Human-readable identifier for logs and reports.
             ``None`` defaults to ``"{kind}_{chain_id}"`` at
             serialization time.
+        msa: A precomputed alignment for this chain. ``None`` (default)
+            leaves the engine to its own behaviour — usually a public
+            MSA server. A :class:`~molforge.sequence.MultipleSequenceAlignment`
+            is handed to the engine instead, which is how you fold against
+            an alignment you computed and can inspect. ``"empty"`` forces
+            single-sequence mode for this chain specifically. Protein
+            chains only: nucleic acids and ligands have no alignment.
+
+            To use an alignment from disk, read it first —
+            ``Entity(..., msa=read_a3m("hits.a3m"))`` — rather than
+            passing a path, so a typo surfaces as a missing file instead
+            of being mistaken for a mode.
 
     Examples:
         Single protein chain::
@@ -155,6 +170,7 @@ class Entity:
     chain_id: str | None = None
     copies: int = 1
     name: str | None = None
+    msa: MultipleSequenceAlignment | Literal["empty"] | None = None
 
     def __post_init__(self) -> None:
         # copies validation, applies to every kind.
@@ -173,6 +189,38 @@ class Entity:
 
         if self.chain_id is not None:
             self._validate_chain_id()
+
+        if self.msa is not None:
+            self._validate_msa(self.msa)
+
+    def _validate_msa(self, msa: MultipleSequenceAlignment | str) -> None:
+        """An alignment only means something for a protein chain.
+
+        Takes the value rather than reading the attribute so the narrowing
+        done by the caller survives into here.
+        """
+        if self.kind != "protein":
+            raise ValueError(
+                f"Entity.msa is only meaningful for kind='protein', not {self.kind!r}. "
+                "Nucleic acids and ligands are not folded from an alignment."
+            )
+        if isinstance(msa, str):
+            if msa != "empty":
+                raise ValueError(
+                    f"Entity.msa must be a MultipleSequenceAlignment or the string "
+                    f"'empty' (single-sequence mode), got {msa!r}. To use an "
+                    "alignment from disk, read it with molforge.sequence.read_a3m()."
+                )
+            return
+        aligned = msa.query_sequence
+        declared = (self.sequence or "").strip().upper()
+        if aligned != declared:
+            raise ValueError(
+                f"Entity.msa was built for a different sequence: the alignment's "
+                f"query is {len(aligned)} residues, this entity declares "
+                f"{len(declared)}. Folding a chain against another chain's "
+                "alignment produces a confident, wrong answer, so it is rejected."
+            )
 
     def _validate_ligand(self) -> None:
         if self.sequence is not None:
@@ -425,6 +473,8 @@ class ComplexSpec:
                 payload["ccd"] = entity.ccd
             if entity.name is not None:
                 payload["name"] = entity.name
+            if entity.msa is not None:
+                payload["msa"] = _msa_for_provenance(entity.msa)
             entities_payload.append(payload)
         return {"entities": entities_payload}
 
@@ -474,6 +524,12 @@ class ComplexSpec:
                     chain_id=chain_ids[0] if chain_ids else None,
                     copies=len(chain_ids) or 1,
                     name=item.get("name"),
+                    # A recorded alignment is a digest, not the sequences:
+                    # it identifies which alignment was used and can verify
+                    # a candidate, but it cannot rebuild one. "empty" is the
+                    # exception, being a mode rather than data. Replaying a
+                    # fold that used a real alignment means supplying it.
+                    msa="empty" if item.get("msa") == "empty" else None,
                 )
             )
         return cls(entities=tuple(entities))
@@ -647,6 +703,25 @@ class TemplatePolicy:
         if self.hits_file is not None:
             payload["hits_file"] = self.hits_file
         return payload
+
+
+def _msa_for_provenance(msa: MultipleSequenceAlignment | str) -> Any:
+    """Summarise an alignment for the provenance record.
+
+    A digest rather than the sequences themselves. A deep alignment runs to
+    thousands of rows; embedding one would make every manifest unreadable
+    and every cache key enormous, for a record nobody would read. The
+    digest still does the two jobs that matter: two different alignments
+    give two different cache slots, and a reader can verify that a
+    candidate alignment is the one that was used.
+
+    The depth travels alongside because it is the one property of an
+    alignment anyone wants at a glance, and a bare hash tells you nothing.
+    """
+    if isinstance(msa, str):
+        return msa
+    digest = hashlib.sha256(msa.to_a3m().encode("utf-8")).hexdigest()
+    return {"depth": msa.depth, "sha256": digest}
 
 
 def _coerce_template_policy(value: TemplatePolicy | str | None) -> TemplatePolicy | None:

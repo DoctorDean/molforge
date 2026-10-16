@@ -602,3 +602,104 @@ class TestComplexSpecProvenanceRoundTrip:
 
         with pytest.raises(ValueError, match="no 'kind'"):
             ComplexSpec.from_provenance({"entities": [{"sequence": "MKQ"}]})
+
+
+class TestEntityMsa:
+    """A precomputed alignment attaches to the chain it was built for."""
+
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(f">q\n{query}\n>h OX=9606\n{query}\n")
+
+    def test_defaults_to_none(self) -> None:
+        assert Entity(kind="protein", sequence="MKQHKA").msa is None
+
+    def test_accepts_an_alignment(self) -> None:
+        entity = Entity(kind="protein", sequence="MKQHKA", msa=self._msa())
+        assert entity.msa.depth == 2  # type: ignore[union-attr]
+
+    def test_accepts_the_empty_mode(self) -> None:
+        assert Entity(kind="protein", sequence="MKQHKA", msa="empty").msa == "empty"
+
+    @pytest.mark.parametrize(
+        ("kind", "kwargs"),
+        [
+            ("dna", {"sequence": "ATCG"}),
+            ("rna", {"sequence": "AUCG"}),
+            ("ligand", {"smiles": "CCO"}),
+        ],
+    )
+    def test_rejected_on_non_protein_entities(self, kind: str, kwargs: dict) -> None:
+        with pytest.raises(ValueError, match="only meaningful for kind='protein'"):
+            Entity(kind=kind, msa="empty", **kwargs)  # type: ignore[arg-type]
+
+    def test_unknown_string_mode_rejected(self) -> None:
+        with pytest.raises(ValueError, match="or the string 'empty'"):
+            Entity(kind="protein", sequence="MKQHKA", msa="full")  # type: ignore[arg-type]
+
+    def test_error_points_at_read_a3m(self) -> None:
+        """Passing a path is the obvious mistake; name the right call."""
+        with pytest.raises(ValueError, match="read_a3m"):
+            Entity(kind="protein", sequence="MKQHKA", msa="hits.a3m")  # type: ignore[arg-type]
+
+    def test_alignment_for_another_sequence_rejected(self) -> None:
+        """Folding a chain against another chain's alignment gives a
+        confident, wrong answer — so it's refused."""
+        with pytest.raises(ValueError, match="built for a different sequence"):
+            Entity(kind="protein", sequence="MKQ", msa=self._msa("MKQHKA"))
+
+    def test_matching_alignment_accepted_case_insensitively(self) -> None:
+        entity = Entity(kind="protein", sequence="mkqhka", msa=self._msa("MKQHKA"))
+        assert entity.msa is not None
+
+
+class TestMsaInProvenance:
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(f">q\n{query}\n>h OX=9606\n{query}\n")
+
+    def _spec(self, msa: object) -> ComplexSpec:
+        return ComplexSpec(entities=(Entity(kind="protein", sequence="MKQHKA", msa=msa),))  # type: ignore[arg-type]
+
+    def test_absent_when_unset(self) -> None:
+        """Keeps every existing cache entry valid."""
+        payload = ComplexSpec.from_protein("MKQHKA").to_provenance()
+        assert "msa" not in payload["entities"][0]
+
+    def test_recorded_as_a_digest_not_the_sequences(self) -> None:
+        """Embedding a deep alignment would make manifests unreadable."""
+        recorded = self._spec(self._msa()).to_provenance()["entities"][0]["msa"]
+        assert set(recorded) == {"depth", "sha256"}
+        assert recorded["depth"] == 2
+        assert len(recorded["sha256"]) == 64
+
+    def test_empty_mode_recorded_verbatim(self) -> None:
+        assert self._spec("empty").to_provenance()["entities"][0]["msa"] == "empty"
+
+    def test_different_alignments_digest_differently(self) -> None:
+        a = self._spec(self._msa()).to_provenance()
+        from molforge.sequence import MultipleSequenceAlignment
+
+        other = MultipleSequenceAlignment.from_a3m(">q\nMKQHKA\n>x OX=1\nMKAHKA\n")
+        b = self._spec(other).to_provenance()
+        assert a["entities"][0]["msa"]["sha256"] != b["entities"][0]["msa"]["sha256"]
+
+    def test_payload_is_json_native(self) -> None:
+        import json
+
+        payload = self._spec(self._msa()).to_provenance()
+        assert json.loads(json.dumps(payload)) == payload
+
+    def test_empty_mode_round_trips(self) -> None:
+        rebuilt = ComplexSpec.from_provenance(self._spec("empty").to_provenance())
+        assert rebuilt.entities[0].msa == "empty"
+
+    def test_digest_cannot_rebuild_an_alignment(self) -> None:
+        """A digest identifies an alignment; it can't reconstruct one.
+        Replaying such a fold means supplying the alignment."""
+        rebuilt = ComplexSpec.from_provenance(self._spec(self._msa()).to_provenance())
+        assert rebuilt.entities[0].msa is None
