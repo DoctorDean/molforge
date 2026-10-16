@@ -1151,6 +1151,13 @@ def _register_builtin_engines() -> None:
     plugins.register_engine("fpocket", detect_pockets)
     plugins.register_engine("p2rank", detect_pockets_p2rank)
 
+    # Homology search: not a folding or docking engine, but a recorded step
+    # — and the one most worth re-running, since an alignment is the single
+    # most influential input to the fold that follows it.
+    from molforge.wrappers.msa import MMseqs2
+
+    plugins.register_engine(MMseqs2.name, MMseqs2)
+
 
 def _construct(factory: Callable[..., Any], parameters: dict[str, Any]) -> Any:
     """Instantiate ``factory`` from recorded parameters.
@@ -1362,6 +1369,25 @@ def _replay_detect_pockets(
             'context={"protein": ...}.'
         )
     return factory(protein, **_call_kwargs(factory, step.parameters))
+
+
+@register_replay_handler("search_msa")
+def _replay_search_msa(
+    factory: Callable[..., Any],
+    step: PipelineStep,
+    upstream: Any,
+    context: dict[str, Any],
+) -> Any:
+    """Replay a homology search.
+
+    Cheap when the search cache still holds the result and expensive when
+    it doesn't — a deep search is minutes to hours — but reproducible
+    either way, which is the point: the alignment is the single largest
+    influence on the fold that consumes it.
+    """
+    engine = _construct(factory, step.parameters)
+    sequence = _resolve_input(step, "sequence", context, what="a sequence")
+    return _engine_method(engine, "search", step)(sequence)
 
 
 @register_replay_handler("fetch")

@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Local homology search — `molforge.wrappers.msa.MMseqs2`.** The folding
+  wrappers have always sourced alignments from ColabFold's public MMseqs2
+  server, which rate-limits, needs network access from wherever the job runs,
+  and puts the single most influential input to a prediction somewhere you
+  can't inspect. `MMseqs2(database=...).search(sequence)` runs the same search
+  locally and returns a `MultipleSequenceAlignment`. The database is passed
+  per call or set once as `$MOLFORGE_MSA_DB`; molforge deliberately does not
+  download or build it — that's hundreds of gigabytes and hours, and not
+  something anyone should trigger by accident from a notebook — so the
+  "no database" error names the one-line `mmseqs databases` command instead.
+  Searches participate in the result cache, which matters more here than
+  usual: a deep search is minutes to hours and the same query against the
+  same database is the same answer. Cached alignments are stored as JSON
+  rather than a3m, because a3m has nowhere to record a hit's source database
+  or pairing key and round-tripping through it would quietly demote every
+  cached alignment to monomer-only. Searches are recorded as a `search_msa`
+  operation and replay like any other step. Second of three steps toward
+  local MSA (§5): the type shipped first, the engine wiring comes next.
+
 - **Multiple sequence alignments — `molforge.sequence.MultipleSequenceAlignment`.**
   molforge could describe two sequences aligned to each other and nothing
   else, so there was no way to hand a folding model an alignment you had
