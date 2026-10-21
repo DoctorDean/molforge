@@ -27,8 +27,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still separates cache entries and lets a reader verify which alignment
   ran, but means replaying such a fold requires supplying it. Specs without
   an alignment serialise exactly as before, so no cached fold is orphaned.
-  Third of three steps toward local MSA (§5); Chai-1's `.aligned.pqt` path
-  is the remaining piece.
+- **Chai-1 honours `Entity(msa=...)` too.** It reads alignments as a
+  directory of `.aligned.pqt` parquet files, one per chain, named by
+  `sha256` of the chain's sequence. molforge writes those straight from the
+  alignment rather than converting via a3m — including through chai_lab's
+  own `a3m-to-pqt` helper — because a3m has nowhere to record a hit's
+  source database or pairing key, and those are the two columns the file
+  exists to carry. Chai-1 accepts only a fixed set of `source_database`
+  values and uses the label to decide how hits pair across chains, so an
+  alignment labelled anything else is rejected before folding with a
+  pointer at `with_source_database()` rather than guessed at. Supplying
+  alignments turns the MSA server off, as it does for Boltz. The filename
+  hash mirrors chai_lab's own, with a test asserting the two agree whenever
+  chai_lab is importable. This completes local MSA (§5): search, represent,
+  and fold on either AF3-class engine.
 
 - **Local homology search — `molforge.wrappers.msa.MMseqs2`.** The folding
   wrappers have always sourced alignments from ColabFold's public MMseqs2

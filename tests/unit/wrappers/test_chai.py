@@ -478,7 +478,7 @@ class TestPredictPipeline:
 
     @patch.object(Chai1, "_run_inference")
     def test_predict_end_to_end(self, mock_run: MagicMock) -> None:
-        def _populate(fasta_path: Path, output_dir: Path) -> None:
+        def _populate(fasta_path: Path, output_dir: Path, **_kwargs: object) -> None:
             _write_synthetic_outputs(output_dir)
 
         mock_run.side_effect = _populate
@@ -503,7 +503,7 @@ class TestPredictPipeline:
         called — we don't want to waste a GPU forward pass on bad
         input."""
 
-        def _populate(fasta_path: Path, output_dir: Path) -> None:
+        def _populate(fasta_path: Path, output_dir: Path, **_kwargs: object) -> None:
             _write_synthetic_outputs(output_dir)
 
         mock_run.side_effect = _populate
@@ -521,7 +521,7 @@ class TestPredictPipeline:
         the Chai-style ``>protein|name=...`` header."""
         captured_fasta: dict[str, Any] = {}
 
-        def _capture(fasta_path: Path, output_dir: Path) -> None:
+        def _capture(fasta_path: Path, output_dir: Path, **_kwargs: object) -> None:
             captured_fasta["text"] = fasta_path.read_text()
             _write_synthetic_outputs(output_dir)
 
@@ -743,7 +743,7 @@ class TestPredictSamplesPipeline:
     """The public ensemble API, with _run_inference mocked."""
 
     def _populate(self, scores: list[float] | None = None):
-        def _inner(fasta_path: Path, output_dir: Path) -> None:
+        def _inner(fasta_path: Path, output_dir: Path, **_kwargs: object) -> None:
             _write_synthetic_outputs(output_dir, aggregate_scores=scores)
 
         return _inner
@@ -797,7 +797,7 @@ class TestSampleCaching:
     second identical run just because the caller wanted the other one.
     """
 
-    def _populate(self, fasta_path: Path, output_dir: Path) -> None:
+    def _populate(self, fasta_path: Path, output_dir: Path, **_kwargs: object) -> None:
         _write_synthetic_outputs(output_dir)
 
     @patch.object(Chai1, "_run_inference")
@@ -1047,3 +1047,204 @@ class TestChaiSamplingControlsCacheCompatibility:
             "seed",
             "cache_dir",
         }
+
+
+class TestAlignedPqtNaming:
+    """Chai-1 finds a chain's alignment by hashing the chain's sequence,
+    so the filename is not ours to choose."""
+
+    def test_is_sha256_of_the_upper_cased_sequence(self) -> None:
+        import hashlib
+
+        from molforge.wrappers.folding.chai import _aligned_pqt_basename
+
+        expected = hashlib.sha256(b"MKQHKA").hexdigest()
+        assert _aligned_pqt_basename("MKQHKA") == f"{expected}.aligned.pqt"
+
+    def test_case_insensitive(self) -> None:
+        from molforge.wrappers.folding.chai import _aligned_pqt_basename
+
+        assert _aligned_pqt_basename("mkqhka") == _aligned_pqt_basename("MKQHKA")
+
+    def test_different_sequences_get_different_names(self) -> None:
+        from molforge.wrappers.folding.chai import _aligned_pqt_basename
+
+        assert _aligned_pqt_basename("MKQHKA") != _aligned_pqt_basename("HISHIS")
+
+    def test_agrees_with_chai_labs_own_function(self) -> None:
+        """Guards against the two drifting apart. Skipped without chai_lab,
+        which is exactly when we can't check."""
+        aligned_pqt = pytest.importorskip("chai_lab.data.parsing.msas.aligned_pqt")
+
+        from molforge.wrappers.folding.chai import _aligned_pqt_basename
+
+        assert _aligned_pqt_basename("MKQHKA") == aligned_pqt.expected_basename("MKQHKA")
+
+
+class TestMsaDirectorySelection:
+    """Which chains get a file, decided without touching pandas."""
+
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(
+            f">q\n{query}\n>h OX=9606\n{query}\n"
+        ).with_source_database("uniref90")
+
+    def test_no_alignments_means_no_directory(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec
+        from molforge.wrappers.folding.chai import _write_msa_directory
+
+        spec = ComplexSpec.from_protein("MKQHKA")
+        assert _write_msa_directory(spec, tmp_path / "msas") is None
+
+    def test_empty_mode_writes_nothing(self, tmp_path: Path) -> None:
+        """Chai-1 is MSA-free by default, so a chain with no file already
+        gets single-sequence treatment — 'empty' needs no artifact."""
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.wrappers.folding.chai import _write_msa_directory
+
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQHKA", msa="empty"),))
+        assert _write_msa_directory(spec, tmp_path / "msas") is None
+
+    def test_rejects_a_source_chai_cannot_read(self, tmp_path: Path) -> None:
+        """The label drives how Chai-1 pairs hits across chains, so it
+        can't be guessed on the user's behalf."""
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.sequence import MultipleSequenceAlignment
+        from molforge.wrappers.folding.chai import _write_msa_directory
+
+        msa = MultipleSequenceAlignment.from_a3m(
+            ">q\nMKQHKA\n>h\nMKAHKA\n", source_database="my_custom_db"
+        )
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQHKA", msa=msa),))
+        with pytest.raises(ValueError, match="only accepts source_database"):
+            _write_msa_directory(spec, tmp_path / "msas")
+
+    def test_rejection_names_the_fix(self, tmp_path: Path) -> None:
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.sequence import MultipleSequenceAlignment
+        from molforge.wrappers.folding.chai import _write_msa_directory
+
+        msa = MultipleSequenceAlignment.from_a3m(">q\nMKQ\n>h\nMKA\n", source_database="odd")
+        spec = ComplexSpec(entities=(Entity(kind="protein", sequence="MKQ", msa=msa),))
+        with pytest.raises(ValueError, match="with_source_database"):
+            _write_msa_directory(spec, tmp_path / "msas")
+
+
+class TestAlignedPqtContents:
+    """The parquet itself. Needs pandas, which arrives with chai_lab."""
+
+    @staticmethod
+    def _msa(query: str = "MKQHKA"):
+        from molforge.sequence import MultipleSequenceAlignment
+
+        return MultipleSequenceAlignment.from_a3m(
+            f">q\n{query}\n>sp|P1|H OX=9606\n{query}\n>sp|P2|H2 OX=10090\n{query}ll\n"
+        ).with_source_database("uniref90")
+
+    def _frame(self, tmp_path: Path, msa: object):
+        pytest.importorskip("pandas")
+        pytest.importorskip("pyarrow")
+        import pandas as pd
+
+        from molforge.wrappers.folding.chai import _write_aligned_pqt
+
+        path = _write_aligned_pqt(msa, tmp_path)  # type: ignore[arg-type]
+        return pd.read_parquet(path)
+
+    def test_columns_match_chais_schema(self, tmp_path: Path) -> None:
+        frame = self._frame(tmp_path, self._msa())
+        assert list(frame.columns) == [
+            "sequence",
+            "source_database",
+            "pairing_key",
+            "comment",
+        ]
+
+    def test_query_row_comes_first_and_is_labelled_query(self, tmp_path: Path) -> None:
+        frame = self._frame(tmp_path, self._msa())
+        assert frame.iloc[0]["source_database"] == "query"
+
+    def test_hits_keep_their_source_and_pairing_key(self, tmp_path: Path) -> None:
+        frame = self._frame(tmp_path, self._msa())
+        hits = frame.iloc[1:]
+        assert set(hits["source_database"]) == {"uniref90"}
+        assert list(hits["pairing_key"]) == ["9606", "10090"]
+
+    def test_insertions_survive_into_the_parquet(self, tmp_path: Path) -> None:
+        """Lower-case insertions are meaningful to the model; writing
+        straight from the alignment keeps them."""
+        frame = self._frame(tmp_path, self._msa())
+        assert frame.iloc[2]["sequence"].endswith("ll")
+
+    def test_written_from_the_alignment_not_via_a3m(self, tmp_path: Path) -> None:
+        """Routing through a3m — which chai_lab's own converter does —
+        would discard source_database and pairing_key, the two columns the
+        file exists to carry."""
+        frame = self._frame(tmp_path, self._msa())
+        assert frame["pairing_key"].astype(bool).sum() == 2
+
+    def test_file_is_named_for_the_query_sequence(self, tmp_path: Path) -> None:
+        pytest.importorskip("pandas")
+        pytest.importorskip("pyarrow")
+        from molforge.wrappers.folding.chai import _aligned_pqt_basename, _write_aligned_pqt
+
+        path = _write_aligned_pqt(self._msa(), tmp_path)
+        assert path.name == _aligned_pqt_basename("MKQHKA")
+
+    def test_one_file_per_supplied_chain(self, tmp_path: Path) -> None:
+        pytest.importorskip("pandas")
+        pytest.importorskip("pyarrow")
+        from molforge.folding import ComplexSpec, Entity
+        from molforge.wrappers.folding.chai import _write_msa_directory
+
+        spec = ComplexSpec(
+            entities=(
+                Entity(kind="protein", sequence="MKQHKA", msa=self._msa("MKQHKA")),
+                Entity(kind="protein", sequence="HISHIS", msa=self._msa("HISHIS")),
+                Entity(kind="protein", sequence="WWWWWW"),
+                Entity(kind="ligand", smiles="CCO"),
+            )
+        )
+        directory = _write_msa_directory(spec, tmp_path / "msas")
+        assert directory is not None
+        assert len(list(directory.glob("*.aligned.pqt"))) == 2
+
+
+class TestMsaReachesRunInference:
+    @staticmethod
+    def _kwargs(engine: Chai1, tmp_path: Path, msa_directory: Path | None) -> dict:
+        captured: dict = {}
+        fake_torch = MagicMock()
+        fake_torch.cuda.is_available.return_value = True
+        fake_chai1 = MagicMock()
+        fake_chai1.run_inference.side_effect = lambda **kw: captured.update(kw)
+        with patch.dict(
+            "sys.modules",
+            {"torch": fake_torch, "chai_lab": MagicMock(), "chai_lab.chai1": fake_chai1},
+        ):
+            engine._run_inference(
+                tmp_path / "in.fasta", tmp_path / "out", msa_directory=msa_directory
+            )
+        return captured
+
+    def test_directory_is_passed_through(self, tmp_path: Path) -> None:
+        kwargs = self._kwargs(Chai1(), tmp_path, tmp_path / "msas")
+        assert kwargs["msa_directory"] == tmp_path / "msas"
+
+    def test_server_is_turned_off_when_alignments_are_supplied(self, tmp_path: Path) -> None:
+        """Supplied alignments and the MSA server are alternatives."""
+        kwargs = self._kwargs(Chai1(use_msa_server=True), tmp_path, tmp_path / "msas")
+        assert kwargs["use_msa_server"] is False
+
+    def test_absent_when_no_alignments(self, tmp_path: Path) -> None:
+        kwargs = self._kwargs(Chai1(), tmp_path, None)
+        assert "msa_directory" not in kwargs
+
+    def test_server_url_still_honoured_without_alignments(self, tmp_path: Path) -> None:
+        kwargs = self._kwargs(
+            Chai1(use_msa_server=True, msa_server_url="https://example.test"), tmp_path, None
+        )
+        assert kwargs["msa_server_url"] == "https://example.test"

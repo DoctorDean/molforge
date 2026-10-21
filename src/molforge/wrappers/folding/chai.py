@@ -64,6 +64,7 @@ wrappers in a future commit.
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -74,6 +75,7 @@ from molforge.cache import get_default_cache
 from molforge.core import metadata_keys as mk
 from molforge.core.provenance import Provenance
 from molforge.folding import ComplexSpec, Entity, TemplatePolicy, _coerce_template_policy
+from molforge.sequence import MultipleSequenceAlignment
 from molforge.wrappers._versions import engine_version
 from molforge.wrappers.folding._base import (
     FoldingEngine,
@@ -104,6 +106,97 @@ _HEADLINE_SCORE_KEYS = (
     "ptm",
     "iptm",
 )
+
+
+#: The ``source_database`` values Chai-1's loader accepts. An alignment
+#: labelled anything else is rejected at write time rather than deep inside
+#: chai_lab, where the message would be about a dataframe.
+_CHAI_SOURCE_DATABASES = frozenset({"query", "uniprot", "uniref90", "bfd_uniclust", "mgnify"})
+
+
+def _aligned_pqt_basename(sequence: str) -> str:
+    """The filename Chai-1 looks for, for a given chain sequence.
+
+    Chai-1 locates a chain's alignment by hashing the chain's own
+    sequence, so the name is not ours to choose. Mirrors
+    ``chai_lab.data.parsing.msas.aligned_pqt.expected_basename``:
+    SHA-256 of the upper-cased sequence. A test asserts this agrees with
+    chai_lab's own function whenever chai_lab is importable, so the two
+    can't drift apart silently.
+    """
+    digest = hashlib.sha256(sequence.upper().encode("utf-8")).hexdigest()
+    return f"{digest}.aligned.pqt"
+
+
+def _write_aligned_pqt(msa: MultipleSequenceAlignment, directory: Path) -> Path:
+    """Write one alignment as the parquet Chai-1 reads.
+
+    Written directly from the alignment's own rows rather than converted
+    from a3m. a3m has nowhere to record a hit's source database or pairing
+    key, so routing through it — which is what chai_lab's own
+    ``a3m-to-pqt`` converter does — would discard exactly the two columns
+    this file exists to carry.
+
+    pandas and pyarrow come with chai_lab, so this path can rely on them;
+    it only ever runs when chai_lab is installed.
+    """
+    rows = msa.to_pairing_rows()
+    unknown = {r["source_database"] for r in rows} - _CHAI_SOURCE_DATABASES
+    if unknown:
+        raise ValueError(
+            f"Chai-1 only accepts source_database values "
+            f"{sorted(_CHAI_SOURCE_DATABASES)}; this alignment carries "
+            f"{sorted(unknown)}. Label it before folding, e.g. "
+            'msa.with_source_database("uniref90") — the label drives how '
+            "Chai-1 pairs hits across chains, so it can't be guessed."
+        )
+
+    # Checked after the input, so a mislabelled alignment reports the real
+    # problem rather than a missing dependency.
+    try:
+        import pandas as pd
+    except ImportError as e:  # pragma: no cover - chai_lab ships pandas
+        raise FoldingEngineNotInstalledError(
+            "Writing Chai-1's MSA parquet needs pandas, which normally arrives "
+            "with chai_lab. Install with: pip install chai_lab"
+        ) from e
+
+    frame = pd.DataFrame(
+        [
+            {
+                "sequence": r["sequence"],
+                "source_database": r["source_database"],
+                "pairing_key": r["pairing_key"],
+                "comment": r["comment"] or r["identifier"],
+            }
+            for r in rows
+        ]
+    )
+    path = directory / _aligned_pqt_basename(msa.query_sequence)
+    frame.to_parquet(path, index=False)
+    return path
+
+
+def _write_msa_directory(spec: ComplexSpec, directory: Path) -> Path | None:
+    """Write one ``.aligned.pqt`` per protein chain that carries an MSA.
+
+    Returns the directory, or ``None`` when no chain supplied one — in
+    which case Chai-1 is left to its own behaviour.
+
+    ``msa="empty"`` writes nothing: Chai-1 is MSA-free by default, so a
+    chain with no file already gets single-sequence treatment. Saying
+    "empty" is therefore a statement of intent that needs no artifact,
+    which is also why it is recorded in provenance where Boltz's
+    equivalent writes ``msa: empty`` into the YAML.
+    """
+    written = 0
+    for entity in spec.entities:
+        if entity.kind != "protein" or entity.msa is None or entity.msa == "empty":
+            continue
+        directory.mkdir(parents=True, exist_ok=True)
+        _write_aligned_pqt(entity.msa, directory)
+        written += 1
+    return directory if written else None
 
 
 def _validate_chai_templates(templates: TemplatePolicy | str | None) -> TemplatePolicy | None:
@@ -478,8 +571,9 @@ class Chai1(FoldingEngine):
                 self._build_fasta_from_spec(spec),
                 encoding="utf-8",
             )
+            msa_directory = _write_msa_directory(spec, tmpdir / "msas")
 
-            self._run_inference(fasta_path, output_dir)
+            self._run_inference(fasta_path, output_dir, msa_directory=msa_directory)
             return self._collect_samples(output_dir)
 
     def _bank_samples(
@@ -616,7 +710,9 @@ class Chai1(FoldingEngine):
 
         return "".join(records)
 
-    def _run_inference(self, fasta_path: Path, output_dir: Path) -> None:
+    def _run_inference(
+        self, fasta_path: Path, output_dir: Path, *, msa_directory: Path | None = None
+    ) -> None:
         """Single seam to ``chai_lab.chai1.run_inference``.
 
         Tests patch this method to drive the full :meth:`_run_local`
@@ -666,7 +762,13 @@ class Chai1(FoldingEngine):
             "device": device,
             "use_msa_server": self.use_msa_server,
         }
-        if self.msa_server_url is not None:
+        if msa_directory is not None:
+            # A supplied alignment and the MSA server are alternatives:
+            # Chai-1 would otherwise go and fetch alignments for chains it
+            # has already been given one for.
+            kwargs["msa_directory"] = msa_directory
+            kwargs["use_msa_server"] = False
+        elif self.msa_server_url is not None:
             kwargs["msa_server_url"] = self.msa_server_url
         if self.msa_depth is not None:
             # Chai-1 spells the MSA cap `recycle_msa_subsample`: 0 (its
