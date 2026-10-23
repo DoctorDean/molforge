@@ -302,8 +302,25 @@ from molforge.sequence import read_a3m
 Entity(kind="protein", sequence=sequence, msa=read_a3m("hits.a3m"))
 ```
 
-Chai-1 takes alignments through a different mechanism (a directory of
-`.aligned.pqt` files) and doesn't accept `Entity.msa` yet.
+**Chai-1 accepts the same `Entity.msa`**, through its own mechanism: a
+directory of `.aligned.pqt` parquet files, one per chain, named by a hash
+of the chain's sequence. molforge writes those from the alignment
+directly rather than converting via a3m — a3m has nowhere to record a
+hit's source database or pairing key, and those are the two columns the
+parquet exists to carry.
+
+One consequence: Chai-1 only accepts `source_database` values from a
+fixed set (`uniprot`, `uniref90`, `bfd_uniclust`, `mgnify`, `query`), and
+the label drives how it pairs hits across chains. An alignment labelled
+anything else is rejected before folding rather than guessed at:
+
+```python
+msa = MMseqs2(database="/data/my_db").search(sequence)
+msa = msa.with_source_database("uniref90")   # say what it actually is
+```
+
+As with Boltz, supplying alignments turns the MSA server off — the two
+are alternatives.
 
 ### Templates
 

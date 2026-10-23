@@ -262,6 +262,11 @@ module = [
     "mdtraj.*",
     "meeko.*",
     "openmm.*",
+    # Arrives with chai_lab, for writing its MSA parquet. Stubs exist
+    # (pandas-stubs) but molforge doesn't depend on pandas, so requiring
+    # them in the type-check env would be heavier than the one call site
+    # warrants.
+    "pandas.*",
     "pdbfixer.*",
     "rdkit.*",
     "torch.*",
