@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] 2026-10-23
+
+Local MSA, end to end. molforge's AF3-class folding wrappers have always
+sourced their alignments from ColabFold's public MMseqs2 server — a shared
+community resource, rate-limited, requiring network access from wherever
+the job runs, and placing the single most influential input to a prediction
+somewhere you cannot inspect. You can now run the search yourself and fold
+either engine against the result.
+
+All changes are additive and backwards compatible with 0.9.1.
+
 ### Added
 - **Fold against your own alignment — `Entity(msa=...)`, honoured by Boltz.**
   The folding wrappers could only take whatever ColabFold's public server

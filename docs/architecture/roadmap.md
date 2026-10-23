@@ -6,9 +6,9 @@ design across many engines without rewriting the boilerplate each time.
 
 ## Where we are
 
-molforge has **breadth**. Sixteen engine wrappers across six modalities
+molforge has **breadth**. Nineteen engine wrappers across seven modalities
 (folding, docking, MD, generative design, binding free energy, pocket
-detection); a canonical data model with `Provenance` and a
+detection, homology search); a canonical data model with `Provenance` and a
 content-addressed cache; a from-scratch analysis stack (RMSD, SASA, DSSP,
 contacts, dihedrals, superposition, plus TM-score / GDT / lDDT / DockQ);
 structure-quality validation (clashes, Ramachandran, chirality,
@@ -44,13 +44,17 @@ depth items that had concrete consumers — `molforge.scoring`,
   calculation is the one large, high-value piece left in §4 — the
   orchestration that would make molforge genuinely all-encompassing. A real
   undertaking, and the only thing of that size still outstanding.
-- **Next — a local MSA path** (§5). `mmseqs2` / `hmmer` / `jackhmmer`,
-  so the folding wrappers stop depending on ColabFold's public server for
-  every alignment. 0.9.0 made this more pressing by turning alignment depth
-  into a parameter users sweep: shipping a depth ladder that still sources
-  the alignment itself from a shared community resource is an awkward place
-  to stand. The replay surface that sat here is **finished** — every
-  operation a wrapper records is now recorded *and* replayable (§3).
+- **Next — nothing is queued.** Both items that sat here are done: the
+  replay surface (every operation a wrapper records is now recorded *and*
+  replayable, §3) and the local MSA path (§5), which shipped in 0.10.0 as
+  `molforge.sequence.MultipleSequenceAlignment`, the `MMseqs2` wrapper, and
+  `Entity.msa` honoured by both AF3-class engines.
+
+  The obvious continuations, none of them started: `hmmer` / `jackhmmer`
+  alongside MMseqs2 (needs a Stockholm reader), paired multi-chain MSAs
+  built from the `pairing_key` the type already carries, and `DesignLoop`'s
+  round-0 `generator` slot (§2). Each is demand-driven rather than
+  scheduled.
 - **Later — opportunistic breadth.** More engines, ML/data layers, enhanced
   sampling, performance work, the error taxonomy (§6) — pulled forward by
   demand, not by the matrix.
@@ -218,12 +222,13 @@ Kept here as a demand-driven wishlist, not a plan:
 - **Docking:** AutoDock-GPU, Uni-Dock (GPU-accelerated Vina variants).
 - **MD:** NAMD, LAMMPS (non-bio workloads).
 - **Generative:** LigandMPNN, Chroma, Protpardelle.
-- **MSA / sequence search:** local `mmseqs2` / `hmmer` / `jackhmmer` — the
-  one genuinely-wanted gap, since folding wrappers currently lean on
-  ColabFold's MSA server. **This is now the whole of *Next***: 0.9.0's
-  `msa_depth` turned alignment depth into a parameter users sweep, which
-  makes depending on a shared public server for the alignment itself
-  harder to defend.
+- **MSA / sequence search — `mmseqs2` shipped in 0.10.0.**
+  `molforge.wrappers.msa.MMseqs2` searches a local database and returns a
+  `MultipleSequenceAlignment`, which `Entity.msa` feeds to Boltz (as an
+  a3m path) or Chai-1 (as an `.aligned.pqt` directory). `hmmer` /
+  `jackhmmer` remain unwrapped; they emit Stockholm rather than a3m, so
+  they need a reader first. molforge deliberately does not build or
+  download the search databases.
 
 ## 6. Opportunistic — ML, performance, I/O
 
