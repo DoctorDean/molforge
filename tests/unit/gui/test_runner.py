@@ -10,7 +10,7 @@ leaves behind.
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pytest
 
@@ -59,8 +59,10 @@ class _Broken:
 
 
 class _Slow:
+    """Blocks until a test releases it, so a run can be observed mid-flight."""
+
     name = "Slow"
-    released = threading.Event()
+    released: ClassVar[threading.Event] = threading.Event()
 
     def __init__(self) -> None:
         pass
@@ -312,11 +314,29 @@ class TestDescribeOutput:
         assert describe_output(["a", "b", "c"]) == "3 × str"
         assert describe_output([]) == "empty"
 
-    def test_an_object_leads_with_the_count_that_matters(self) -> None:
+    def test_a_structure_leads_with_its_residue_count(self) -> None:
+        """The size is what says the step folded what you meant rather than
+        a fragment of it. Read off the attribute Protein actually exposes."""
+
         class FakeProtein:
-            residues = range(214)
+            n_residues = 214
+            n_atoms = 1673
 
         assert describe_output(FakeProtein()) == "FakeProtein (214 residues)"
+
+    def test_an_alignment_leads_with_its_depth(self) -> None:
+        """Depth is the number that decides the fold that consumes it."""
+
+        class FakeAlignment:
+            depth = 1024
+
+        assert describe_output(FakeAlignment()) == "FakeAlignment (1024 sequences)"
+
+    def test_a_sized_attribute_is_counted(self) -> None:
+        class FakeDocking:
+            poses: ClassVar[list[object]] = [object(), object(), object()]
+
+        assert describe_output(FakeDocking()) == "FakeDocking (3 poses)"
 
     def test_an_object_with_nothing_countable_still_describes_itself(self) -> None:
         class Opaque:
