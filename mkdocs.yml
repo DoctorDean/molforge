@@ -59,6 +59,7 @@ nav:
       - Design loop: guide/design.md
       - Scoring: guide/scoring.md
       - Reproducibility: guide/reproducibility.md
+      - Pipeline editor: guide/editor.md
   - Cookbook:
       - Overview: cookbook/index.md
       - "End to end: design → reproduce": cookbook/end-to-end.md

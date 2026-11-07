@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A visual pipeline editor — `pip install "molforge[gui]"`, then
+  `molforge-gui`.** Blocks for the engines, arrows for what feeds what.
+  The palette, the ports and every setting are derived from the engine
+  registry and the wrapper signatures, so a new wrapper becomes a block
+  with no edit to the editor. Ports are typed and refuse a wire between
+  mismatched kinds. **Save** writes the existing `pipeline.yaml`, **Open**
+  reads one, and **Run** executes it through `replay()` — so a graph drawn
+  here is an ordinary manifest anyone can re-run without the editor.
+  Pipelines are chains: a manifest is linear, so branching is refused at
+  the branching block rather than silently saved as one branch.
+- **`replay_steps()`** — the generator `replay()` is now built on, yielding
+  each step and its output as it lands. `replay()` is unchanged; this adds
+  progress, per-step timing, and the partial results of a chain that fails
+  halfway, which were previously discarded.
+
 ### Fixed
 - **`replay()` re-runs real docking steps.** The dock handler called
   `dock(receptor, ligand)` and dropped every recorded call argument, so a
@@ -26,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new `msa` category. The guard test that should have caught this derived
   its expectations from a hand-written list; it now reads the engine
   registry itself.
+- **The sdist no longer ships a developer's virtualenv.** The root
+  `.gitignore` matched `.venv/` but not `.venv-arm64/`, which git ignored
+  only through the nested ignore file uv writes inside it — and hatchling
+  reads the root file alone. A local `python -m build` therefore swept
+  4,400 files of the local environment into the sdist (16.5 MB, now 1.1
+  MB). CI never had a virtualenv in the tree, which is why it went
+  unnoticed.
 
 ## [0.10.0] 2026-10-23
 
