@@ -1,0 +1,485 @@
+/* Layout and component styling. Colour roles come from theme.css. */
+
+.app {
+  display: grid;
+  grid-template-columns: 236px 1fr 300px;
+  height: 100%;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-inline: 1px solid var(--border);
+}
+
+/* ---------- panels ---------- */
+
+.palette,
+.inspector {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-2);
+}
+
+.panel-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-head h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-head .sub,
+.hint .sub,
+.fatal .sub {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.scroll {
+  overflow-y: auto;
+  padding: 10px 12px 24px;
+  flex: 1;
+}
+
+.scroll section {
+  margin-bottom: 18px;
+}
+
+.scroll h3 {
+  margin: 0 0 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---------- palette ---------- */
+
+.block-chip {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 7px 9px;
+  text-align: left;
+  background: var(--surface-1);
+}
+
+.block-chip .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.block-chip .engine {
+  font-weight: 550;
+}
+
+.block-chip .action {
+  grid-column: 2;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+}
+
+.block-chip[data-unavailable] {
+  opacity: 0.55;
+}
+
+.pill {
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.empty {
+  color: var(--text-muted);
+}
+
+/* ---------- toolbar & status ---------- */
+
+.toolbar {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.toolbar .brand {
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.toolbar .sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.button-like {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-3);
+  cursor: pointer;
+}
+
+.button-like:hover {
+  border-color: var(--border-strong);
+}
+
+.statusbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* A status is never colour alone — the message says what happened. */
+.statusbar[data-kind="ok"] .message {
+  color: var(--status-good);
+}
+.statusbar[data-kind="warn"] .message {
+  color: var(--status-warning);
+}
+.statusbar[data-kind="error"] .message {
+  color: var(--status-critical);
+}
+
+.statusbar .progress {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ---------- canvas ---------- */
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* React Flow's own chrome, themed from the same roles as everything
+   else — its defaults are light-only, so dark mode otherwise gets a
+   white minimap and unreadable controls. */
+.react-flow {
+  --xy-background-color: var(--surface-1);
+  --xy-edge-stroke: var(--border-strong);
+  --xy-edge-stroke-width: 2;
+  --xy-controls-button-background-color: var(--surface-2);
+  --xy-controls-button-background-color-hover: var(--surface-3);
+  --xy-controls-button-color: var(--text-secondary);
+  --xy-controls-button-color-hover: var(--text-primary);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--surface-2);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--surface-1) 65%, transparent);
+  --xy-attribution-background-color: transparent;
+  --xy-selection-border: 1px dashed var(--border-strong);
+}
+
+.react-flow__renderer {
+  background: var(--surface-1);
+}
+
+.react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.react-flow__controls {
+  box-shadow: var(--shadow);
+}
+
+.react-flow__attribution a {
+  color: var(--text-muted);
+}
+
+/* The dot grid: recessive, and visible on both surfaces. */
+.react-flow__background pattern circle {
+  fill: var(--border);
+}
+
+.hint {
+  position: absolute;
+  inset: auto 0 auto 0;
+  top: 44%;
+  text-align: center;
+  pointer-events: none;
+  color: var(--text-secondary);
+}
+
+.hint p {
+  margin: 0 0 4px;
+}
+
+/* ---------- node ---------- */
+
+.block-node {
+  width: 216px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--port-unknown);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+
+.block-node[data-selected] {
+  border-color: var(--border-strong);
+  box-shadow:
+    0 0 0 2px var(--port-structure),
+    var(--shadow);
+}
+
+.block-node[data-state="running"] {
+  box-shadow:
+    0 0 0 2px var(--status-running),
+    var(--shadow);
+}
+
+.block-node[data-state="failed"],
+.block-node[data-problem] {
+  box-shadow:
+    0 0 0 2px var(--status-critical),
+    var(--shadow);
+}
+
+.block-node header {
+  padding: 8px 10px 6px;
+}
+
+.block-node .engine {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.block-node .action {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.block-node .ports {
+  margin: 0;
+  padding: 2px 10px 6px;
+  list-style: none;
+}
+
+.block-node .ports li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  height: 22px;
+}
+
+.block-node .ports .name {
+  color: var(--text-secondary);
+}
+
+.block-node .ports .value {
+  margin-left: auto;
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.block-node .ports em {
+  font-style: normal;
+  color: var(--text-muted);
+}
+
+.block-node .ports em.needed {
+  color: var(--status-warning);
+}
+
+.block-node footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.block-node footer .out {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.block-node footer i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.block-node footer .state {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-node .result,
+.block-node .error {
+  padding: 5px 10px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+
+.block-node .result {
+  color: var(--text-secondary);
+}
+
+.block-node .error {
+  color: var(--status-critical);
+}
+
+/* Handles: a filled dot, with a ring for the plural port types. */
+.react-flow__handle.port {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--surface-2);
+}
+
+.react-flow__handle.port[data-many] {
+  box-shadow: 0 0 0 2px currentColor;
+}
+
+/* ---------- inspector ---------- */
+
+.field {
+  display: block;
+  margin-bottom: 11px;
+}
+
+.field .label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+  font-weight: 550;
+}
+
+.field .label i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.field .label em {
+  margin-left: auto;
+  overflow: hidden;
+  max-width: 130px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.field .req {
+  color: var(--status-warning);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field .wired {
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.field .checkbox {
+  width: auto;
+}
+
+.vector3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.port-line {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin: 0;
+}
+
+.port-line i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.notice {
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.notice.warn {
+  border: 1px solid var(--status-warning);
+  color: var(--text-secondary);
+}
+
+.empty-panel .panel-head h2 {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ---------- fatal ---------- */
+
+.fatal {
+  max-width: 30rem;
+  margin: 15vh auto;
+  padding: 0 1.5rem;
+}
+
+.fatal h1 {
+  font-size: 18px;
+}
+
+.fatal code {
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: var(--surface-3);
+  font-family: var(--mono);
+}

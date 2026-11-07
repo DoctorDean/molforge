@@ -194,10 +194,20 @@ class TestRuns:
 
 
 class TestPage:
-    def test_a_missing_frontend_explains_itself(self, client: TestClient) -> None:
+    def test_a_missing_frontend_explains_itself(self, tmp_path: Any) -> None:
         """A source checkout has no built assets until someone builds them,
-        and a 404 is a poor way to learn that."""
-        response = client.get("/")
+        and a 404 is a poor way to learn that.
+
+        Pointed at an empty directory rather than the package's own: once
+        the frontend *has* been built locally, the real static dir is
+        populated, and a test asserting the opposite would pass only on
+        machines where nobody had run the build."""
+        from fastapi.testclient import TestClient
+
+        from molforge.gui.server import create_app
+
+        with TestClient(create_app(static_dir=tmp_path)) as bare:
+            response = bare.get("/")
         assert response.status_code == 200
         assert "frontend isn't built" in response.text
 
