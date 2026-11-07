@@ -178,6 +178,10 @@ class BlockParameter:
         optional: Whether ``None`` is a legal value — an unset knob the
             engine fills in itself, which is a different state from a knob
             set to its default and worth distinguishing in a UI.
+        required: Whether the argument has no default at all, so a graph
+            that omits it cannot run. Docking's ``center`` is the case
+            that matters: the editor has to insist on it before a run
+            rather than let the call fail.
     """
 
     name: str
@@ -186,6 +190,7 @@ class BlockParameter:
     default: Any = None
     choices: tuple[str, ...] = ()
     optional: bool = False
+    required: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -194,6 +199,7 @@ class BlockParameter:
             "annotation": self.annotation,
             "default": self.default,
             "optional": self.optional,
+            "required": self.required,
         }
         if self.choices:
             out["choices"] = list(self.choices)
@@ -291,42 +297,56 @@ def _widget_kind(annotation: str) -> tuple[str, tuple[str, ...]]:
     return "text", ()
 
 
-def _parameters(factory: Callable[..., Any]) -> tuple[BlockParameter, ...]:
-    """Read a constructor's keyword arguments as editable parameters.
+def _parameters(*callables: Callable[..., Any]) -> tuple[BlockParameter, ...]:
+    """Read keyword arguments from a constructor *and* its operation.
 
-    Annotations are read as text, never resolved: resolving ESMFold's would
-    import torch, and the catalog has to be cheap enough to build on every
-    page load. Positional parameters are skipped — on a class they are
-    ``self``, and on the plain functions (``fetch``, the pocket detectors)
-    they are the block's input port, handled separately.
+    Both are knobs on one block, because both land in one flat dict in
+    provenance — ``_construct`` and ``_call_kwargs`` are precisely the code
+    that splits them apart again on the way back out. Reading only the
+    constructor would leave a docking block with no way to set ``center``,
+    which is required, is the single most consequential docking argument,
+    and is declared on ``dock()`` rather than on ``Vina()``.
+
+    The first declaration of a name wins, so a constructor-level default
+    (Boltz's ``seed``) isn't shadowed by the per-call override of the same
+    name. Annotations are read as text, never resolved: resolving ESMFold's
+    would import torch, and the catalog has to be cheap enough to build on
+    every page load. Positional parameters are skipped — on a class they
+    are ``self``, and on the plain functions (``fetch``, the pocket
+    detectors) they are the block's input port, handled separately.
     """
-    try:
-        signature = inspect.signature(factory)
-    except (TypeError, ValueError):  # pragma: no cover - C callables
-        return ()
-
     out: list[BlockParameter] = []
-    for name, param in signature.parameters.items():
-        if name == "self" or param.kind is not inspect.Parameter.KEYWORD_ONLY:
+    seen: set[str] = set()
+    for func in callables:
+        try:
+            signature = inspect.signature(func)
+        except (TypeError, ValueError):  # pragma: no cover - C callables
             continue
-        if name.startswith("_"):  # **_kwargs sinks and private escape hatches
-            continue
-        annotation = "" if param.annotation is inspect.Parameter.empty else str(param.annotation)
-        bare, optional = _strip_none(annotation)
-        kind, choices = _widget_kind(bare)
-        default = None if param.default is inspect.Parameter.empty else param.default
-        if isinstance(default, tuple):  # box sizes: JSON has no tuple
-            default = list(default)
-        out.append(
-            BlockParameter(
-                name=name,
-                kind=kind,
-                annotation=annotation,
-                default=default,
-                choices=choices,
-                optional=optional,
+        for name, param in signature.parameters.items():
+            if name == "self" or param.kind is not inspect.Parameter.KEYWORD_ONLY:
+                continue
+            if name.startswith("_") or name in seen:
+                continue  # **_kwargs sinks, private escape hatches, duplicates
+            seen.add(name)
+            annotation = (
+                "" if param.annotation is inspect.Parameter.empty else str(param.annotation)
             )
-        )
+            bare, optional = _strip_none(annotation)
+            kind, choices = _widget_kind(bare)
+            default = None if param.default is inspect.Parameter.empty else param.default
+            if isinstance(default, tuple):  # box sizes: JSON has no tuple
+                default = list(default)
+            out.append(
+                BlockParameter(
+                    name=name,
+                    kind=kind,
+                    annotation=annotation,
+                    default=default,
+                    choices=choices,
+                    optional=optional,
+                    required=param.default is inspect.Parameter.empty,
+                )
+            )
     return tuple(out)
 
 
@@ -474,7 +494,7 @@ def build_catalog(*, include_unavailable: bool = True) -> tuple[BlockSpec, ...]:
                     category=env.categories.get(engine, "io"),
                     inputs=inputs,
                     output=output,
-                    parameters=_parameters(factory),
+                    parameters=_parameters(factory, method),
                     available=available,
                     detail="" if available else env.details.get(engine, ""),
                     version=env.versions.get(engine, ""),
