@@ -43,6 +43,7 @@ class TestRegistryShape:
                 "folding",
                 "docking",
                 "pockets",
+                "msa",
                 "md",
                 "freeenergy",
                 "generative",
@@ -59,27 +60,27 @@ class TestRegistryShape:
     def test_engine_names_match_what_wrappers_record(self) -> None:
         """The registry is only useful for provenance if the keys line up.
 
-        These are the ``engine=`` strings molforge's wrappers pass to
-        ``Provenance.from_engine`` (dotted ones like ``GROMACS.minimize``
-        match on the part before the dot).
+        Derived from the engine registry replay resolves against rather
+        than from a list written here: a hand-written copy restates
+        whatever the registry happens to say, which is how ``Chai1`` sat in
+        this assertion while every Chai-1 run recorded ``Chai-1`` and went
+        without a version in its manifest. A wrapper that registers itself
+        now has to appear here too.
         """
+        from molforge import plugins
+        from molforge.reproducibility import _register_builtin_engines
+
+        _register_builtin_engines()
         names = {b.name for b in REGISTRY}
-        for recorded in (
-            "Boltz",
-            "Chai1",
-            "ESMFold",
-            "AlphaFold",
-            "RoseTTAFold",
-            "Vina",
-            "Gnina",
-            "DiffDock",
-            "fpocket",
-            "p2rank",
-            "ProteinMPNN",
-            "RFdiffusion",
-            "ESM-IF1",
-        ):
-            assert recorded in names, f"wrappers record engine={recorded!r}; registry misses it"
+        recorded = {
+            name
+            for name in plugins.available("engine")
+            if not name.startswith("molforge.")  # library functions, not backends
+        }
+        assert recorded, "no engines registered; the registry sweep would be vacuous"
+        missing = {n for n in recorded if n.split(".", 1)[0] not in names}
+        assert not missing, f"wrappers record these engines; the registry misses them: {missing}"
+
         for dotted in ("OpenMM.run", "GROMACS.minimize", "AMBER.prepare"):
             assert dotted.split(".", 1)[0] in names
 

@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a recorded design step failed with "no engine registered". The test
   suite's fake engines accepted anything, which is how both hid; new tests
   replay against the shipped wrapper classes and their real signatures.
+- **`engine_versions()` reports Chai-1 and MMseqs2 under the names they
+  record.** The backend registry keyed Chai-1 as `Chai1` while every Chai-1
+  run records `Chai-1`, and MMseqs2 was missing entirely, so manifests from
+  either silently carried no engine version. MMseqs2 is registered under a
+  new `msa` category. The guard test that should have caught this derived
+  its expectations from a hand-written list; it now reads the engine
+  registry itself.
 
 ## [0.10.0] 2026-10-23
 
