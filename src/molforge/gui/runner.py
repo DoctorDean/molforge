@@ -343,16 +343,33 @@ def describe_output(obj: Any) -> str:
         return f"{len(obj)} × {type(obj[0]).__name__}"
 
     name = type(obj).__name__
-    for attribute, label in (
-        ("residues", "residues"),
-        ("poses", "poses"),
-        ("sequences", "sequences"),
-        ("atoms", "atoms"),
-    ):
+    for attribute, label in _COUNTS:
         value = getattr(obj, attribute, None)
-        try:
-            if value is not None:
-                return f"{name} ({len(value)} {label})"
-        except TypeError:  # pragma: no cover - an attribute that isn't sized
+        if value is None:
             continue
+        count = value if isinstance(value, int) else _length(value)
+        if count is not None:
+            return f"{name} ({count} {label})"
     return name
+
+
+#: Counts worth leading with, most informative first. A structure's size
+#: is what says the step folded what you meant rather than a fragment of
+#: it; an alignment's depth is the number that decides the fold that
+#: consumes it. Both are read off the result types molforge already
+#: exposes (``Protein.n_residues``, ``MultipleSequenceAlignment.depth``)
+#: rather than by reaching into their internals.
+_COUNTS: tuple[tuple[str, str], ...] = (
+    ("n_residues", "residues"),
+    ("depth", "sequences"),
+    ("poses", "poses"),
+    ("n_atoms", "atoms"),
+)
+
+
+def _length(value: Any) -> int | None:
+    """``len(value)`` where that means something, else ``None``."""
+    try:
+        return len(value)
+    except TypeError:
+        return None
