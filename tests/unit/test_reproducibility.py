@@ -514,6 +514,75 @@ class TestEveryRecordedOperationHasAHandler:
         assert not missing, f"operations recorded but not replayable: {sorted(missing)}"
 
 
+class TestReplayAgainstRealEngines:
+    """The fakes above accept anything, which is how two real breakages hid:
+    a handler that drops the arguments a real engine requires, and engines
+    a handler exists for but replay can't resolve. These use the shipped
+    wrapper classes and their actual signatures."""
+
+    @pytest.mark.parametrize(
+        ("module", "base"),
+        [
+            ("molforge.wrappers.folding", "FoldingEngine"),
+            ("molforge.wrappers.docking", "DockingEngine"),
+            ("molforge.wrappers.generative", "GenerativeEngine"),
+        ],
+    )
+    def test_every_shipped_engine_resolves(self, module: str, base: str) -> None:
+        import importlib
+
+        from molforge.reproducibility import _resolve_engine
+
+        mod = importlib.import_module(module)
+        base_cls = getattr(mod, base)
+        engines = [
+            obj
+            for attr in mod.__all__
+            if isinstance(obj := getattr(mod, attr), type)
+            and issubclass(obj, base_cls)
+            and obj is not base_cls
+        ]
+        assert engines
+        for cls in engines:
+            assert _resolve_engine(cls.name) is cls
+
+    def test_vina_replay_threads_the_search_box(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Vina's ``center`` is a required call argument; replay used to call
+        ``dock(receptor, ligand)`` and fail on every real docking step."""
+        import inspect
+
+        from molforge.wrappers.docking import Vina
+
+        calls: list[dict[str, object]] = []
+
+        def recording_dock(self: Vina, receptor: object, ligand: object, **kwargs: object) -> str:
+            calls.append(kwargs)
+            return "poses"
+
+        # Keep the real signature: replay picks call arguments by inspecting it.
+        recording_dock.__signature__ = inspect.signature(Vina.dock)  # type: ignore[attr-defined]
+        monkeypatch.setattr(Vina, "dock", recording_dock)
+
+        recorded = Vina(seed=7)._build_provenance(
+            "rec.pdbqt",
+            "lig.sdf",
+            center=(1.0, 2.0, 3.0),
+            box_size=(22.0, 22.0, 22.0),
+            exhaustiveness=16,
+            n_poses=9,
+            energy_range=3.0,
+            min_rmsd=1.0,
+        )
+        manifest = PipelineManifest.from_yaml(pipeline_manifest(recorded).to_yaml())
+        assert replay(manifest, context={"receptor": "rec.pdbqt"}) == "poses"
+
+        (kwargs,) = calls
+        assert kwargs["center"] == (1.0, 2.0, 3.0)
+        assert kwargs["box_size"] == (22.0, 22.0, 22.0)
+        assert kwargs["exhaustiveness"] == 16
+        assert "seed" not in kwargs  # constructor argument, not a call one
+
+
 # ----------------------------------------------------------------------
 # Replay: generate / detect_pockets / predict_affinity
 # ----------------------------------------------------------------------
