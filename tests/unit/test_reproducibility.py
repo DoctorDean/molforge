@@ -573,7 +573,10 @@ class TestReplayAgainstRealEngines:
             energy_range=3.0,
             min_rmsd=1.0,
         )
-        manifest = PipelineManifest.from_yaml(pipeline_manifest(recorded).to_yaml())
+        # Through JSON, not YAML: the box has to survive serialization as the
+        # lists provenance records and come back as tuples, and JSON needs no
+        # optional extra — this must hold for a bare `pip install molforge`.
+        manifest = PipelineManifest.from_json(pipeline_manifest(recorded).to_json())
         assert replay(manifest, context={"receptor": "rec.pdbqt"}) == "poses"
 
         (kwargs,) = calls
