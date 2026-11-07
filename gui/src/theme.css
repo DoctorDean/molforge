@@ -1,0 +1,143 @@
+/*
+ * Surfaces, ink, and the port-type palette.
+ *
+ * The port colours are the validated categorical palette: fixed slot
+ * order, never cycled, and stepped separately for the dark surface
+ * rather than flipped. Nine port types share seven hues, because "one
+ * versus many" is a secondary encoding rather than a new identity — a
+ * structure and an ensemble of structures are the same kind of thing, so
+ * they share a hue and the ensemble carries a doubled ring. That keeps
+ * the palette inside its documented eight slots and leaves red free to
+ * mean what red should mean in a UI: something is wrong.
+ *
+ * Colour is never the only encoding here. Every port carries its name in
+ * the node body, invalid connections are refused outright, and the
+ * inspector names the type in words — which is the relief the light
+ * mode's sub-3:1 slots require.
+ */
+
+:root {
+  color-scheme: light;
+
+  --surface-1: #fcfcfb; /* canvas */
+  --surface-2: #f4f4f2; /* panels */
+  --surface-3: #ebebe8; /* raised: node headers, inputs */
+  --border: #d9d9d4;
+  --border-strong: #b9b9b1;
+
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #85847e;
+
+  --port-structure: #2a78d6;
+  --port-ligand: #eb6834;
+  --port-sequence: #1baf7a;
+  --port-alignment: #eda100;
+  --port-docking_result: #e87ba4;
+  --port-pockets: #008300;
+  --port-pdb_id: #6250d6;
+  --port-unknown: #85847e;
+
+  --status-good: #008300;
+  --status-warning: #eda100;
+  --status-critical: #d13b3b;
+  --status-running: #2a78d6;
+
+  --radius: 8px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 12px rgb(0 0 0 / 0.04);
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+
+    --surface-1: #1a1a19;
+    --surface-2: #222221;
+    --surface-3: #2c2c2a;
+    --border: #3a3a37;
+    --border-strong: #55554f;
+
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8d8c84;
+
+    --port-structure: #3987e5;
+    --port-ligand: #d95926;
+    --port-sequence: #199e70;
+    --port-alignment: #c98500;
+    --port-docking_result: #d55181;
+    --port-pockets: #008300;
+    --port-pdb_id: #9085e9;
+    --port-unknown: #8d8c84;
+
+    --status-good: #4fae4f;
+    --status-warning: #c98500;
+    --status-critical: #e66767;
+    --status-running: #3987e5;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px rgb(0 0 0 / 0.3);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--port-structure);
+  border-color: var(--port-structure);
+  color: #fff;
+}
+
+input,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 4px 7px;
+  width: 100%;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+  outline: 2px solid var(--port-structure);
+  outline-offset: 1px;
+}
