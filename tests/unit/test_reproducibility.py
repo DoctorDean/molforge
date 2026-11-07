@@ -306,6 +306,67 @@ class TestReplay:
         assert seen["ran"]
 
 
+class TestReplaySteps:
+    """The generator replay() is built on, and what a caller gets from
+    consuming it instead of waiting for the answer."""
+
+    def test_it_yields_each_step_with_its_output(self, registered_fakes) -> None:
+        from molforge.reproducibility import replay_steps
+
+        yielded = list(replay_steps(_fold_dock_prov(), context={"ligand": "CCO"}))
+        assert [step.engine for step, _ in yielded] == ["FakeFold", "FakeDock"]
+        assert yielded[0][1] == "structure(MKTV,T=0.5)"
+        assert yielded[-1][1].startswith("poses(")
+
+    def test_replay_returns_what_the_last_step_yielded(self, registered_fakes) -> None:
+        from molforge.reproducibility import replay_steps
+
+        prov = _fold_dock_prov()
+        assert (
+            replay(prov, context={"ligand": "CCO"})
+            == (list(replay_steps(prov, context={"ligand": "CCO"}))[-1][1])
+        )
+
+    def test_it_runs_lazily_so_a_caller_can_stop(self, registered_fakes) -> None:
+        """A dashboard cancelling a run must not drive the rest of the
+        chain to completion first."""
+        from molforge.reproducibility import replay_steps
+
+        steps = replay_steps(_fold_dock_prov(), context={"ligand": "CCO"})
+        first_engine, _ = next(steps)[0].engine, None
+        assert first_engine == "FakeFold"
+        steps.close()
+
+    def test_partial_output_survives_a_failure(self, registered_fakes) -> None:
+        """The reason the generator exists: a chain that dies in step two
+        has still produced step one, which replay() would discard."""
+        from molforge import plugins
+        from molforge.reproducibility import replay_steps
+
+        class _Exploding:
+            name = "FakeDock"
+
+            def __init__(self, exhaustiveness: int = 8) -> None:
+                pass
+
+            def dock(self, receptor: object, ligand: object) -> str:
+                raise RuntimeError("no binary")
+
+        plugins.register_engine("FakeDock", _Exploding)
+        done = []
+        with pytest.raises(RuntimeError, match="no binary"):
+            for step, output in replay_steps(_fold_dock_prov(), context={"ligand": "CCO"}):
+                done.append((step.engine, output))
+        assert done == [("FakeFold", "structure(MKTV,T=0.5)")]
+
+    def test_an_empty_manifest_raises_when_iterated(self, registered_fakes) -> None:
+        from molforge.reproducibility import replay_steps
+
+        empty = PipelineManifest(environment={}, steps=[])
+        with pytest.raises(ReplayError, match="no steps"):
+            list(replay_steps(empty))
+
+
 class TestOperationInManifest:
     def test_operation_flows_into_step(self) -> None:
         m = pipeline_manifest(_fold_prov())
