@@ -151,15 +151,39 @@ path = "src/molforge/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/molforge"]
+# The built editor is generated into the package and gitignored, and
+# hatchling excludes VCS-ignored paths by default — so without this it is
+# silently absent from the wheel and every PyPI install serves the
+# "frontend isn't built" page forever. Force-included rather than
+# un-ignored: committing a 350 kB bundle on every frontend change is the
+# other way to get this wrong.
+artifacts = ["src/molforge/gui/static/**/*"]
 
 [tool.hatch.build.targets.sdist]
+# Ships the built editor too, so `pip install` from an sdist needs no
+# Node either.
+artifacts = ["src/molforge/gui/static/**/*"]
 include = [
     "src/molforge",
     "tests",
+    "gui",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
     "pyproject.toml",
+]
+# `include` of gui/ would otherwise sweep in the installed dependency
+# tree, which is thousands of files and belongs to npm, not to molforge.
+exclude = [
+    "gui/node_modules",
+    "gui/dist",
+    # Belt and braces. hatchling reads the root .gitignore but not the
+    # nested one uv writes inside a venv, so a venv whose name the root
+    # file doesn't match lands in the sdist — 4400 files of someone's
+    # local environment, published. CI never had one, which is why this
+    # went unnoticed; a maintainer building locally would have shipped it.
+    ".venv*",
+    "**/__pycache__",
 ]
 
 # -----------------------------------------------------------------------------

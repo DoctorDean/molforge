@@ -25,6 +25,8 @@ base install stays small and import-fast.
 | `md`         | mdtraj, openmm (non-Windows)                | Molecular dynamics via the OpenMM wrapper.                |
 | `docking`    | rdkit                                       | Small-molecule prep for AutoDock Vina.                    |
 | `ml`         | torch, transformers                         | ESM-2 embeddings, GNN featurization.                      |
+| `repro`      | pyyaml                                      | Reading and writing `pipeline.yaml`.                      |
+| `gui`        | fastapi, uvicorn                            | The visual [pipeline editor](../guide/editor.md), `molforge-gui`. |
 | `all`        | everything above                            | One-line install when you don't care about footprint.     |
 
 Install combinations with bracket syntax:
@@ -34,6 +36,18 @@ pip install "molforge[structure]"
 pip install "molforge[structure,ml]"
 pip install "molforge[all]"
 ```
+
+## The pipeline editor
+
+```bash
+pip install "molforge[gui]"
+molforge-gui
+```
+
+This opens a visual editor for building, saving and running pipelines —
+see the [editor guide](../guide/editor.md). The wheel ships the built
+interface, so there is nothing to compile; a *source* checkout builds it
+with `cd gui && npm install && npm run build`.
 
 ## Development install
 
