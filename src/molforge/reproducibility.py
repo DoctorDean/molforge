@@ -144,6 +144,7 @@ __all__ = [
     "pipeline_manifest",
     "register_replay_handler",
     "replay",
+    "replay_steps",
 ]
 
 #: On-disk schema version, emitted as the ``molforge_pipeline`` key. Bump
@@ -1051,10 +1052,21 @@ def register_replay_handler(
     return decorator
 
 
-def replay(
+def replay_steps(
     source: PipelineManifest | Provenance | object, *, context: dict[str, Any] | None = None
-) -> Any:
-    """Re-execute a pipeline's chain, returning the terminal output.
+) -> Iterator[tuple[PipelineStep, Any]]:
+    """Re-execute a pipeline, yielding each step and its output as it lands.
+
+    :func:`replay` returns only the terminal output, which is the right
+    answer for a script and the wrong one for anything watching: a fold
+    followed by a deep homology search is an hour in which a caller can
+    report nothing. Consuming the steps as they complete gives progress,
+    per-step timing, and the partial results of a pipeline that fails
+    halfway — the last of which is otherwise simply lost.
+
+    The steps run lazily, one per iteration, so a caller that stops
+    iterating stops the pipeline. Nothing is validated until the first
+    ``next()``, including the empty-manifest check.
 
     Args:
         source: A :class:`PipelineManifest` (e.g. from :func:`load_pipeline`),
@@ -1065,8 +1077,8 @@ def replay(
             primary input is threaded from the previous step automatically;
             ``context`` covers the rest.
 
-    Returns:
-        The output of the final step.
+    Yields:
+        ``(step, output)`` per step, oldest first.
 
     Raises:
         ReplayError: If a step has no recorded operation, its engine can't be
@@ -1095,6 +1107,38 @@ def replay(
             )
         factory = _resolve_engine(step.engine)
         output = handler(factory, step, output, ctx)
+        yield step, output
+
+
+def replay(
+    source: PipelineManifest | Provenance | object, *, context: dict[str, Any] | None = None
+) -> Any:
+    """Re-execute a pipeline's chain, returning the terminal output.
+
+    Args:
+        source: A :class:`PipelineManifest` (e.g. from :func:`load_pipeline`),
+            a :class:`~molforge.core.provenance.Provenance`, or any output
+            carrying one.
+        context: Objects to resolve recorded inputs that aren't literals —
+            keyed by the input name (``{"ligand": "aspirin.sdf"}``). A step's
+            primary input is threaded from the previous step automatically;
+            ``context`` covers the rest.
+
+    Returns:
+        The output of the final step.
+
+    Raises:
+        ReplayError: If a step has no recorded operation, its engine can't be
+            resolved, no handler is registered for its operation, or a
+            required input can't be resolved.
+
+    See Also:
+        :func:`replay_steps`, which yields each step's output as it lands,
+        for callers that need progress rather than only the answer.
+    """
+    output: Any = None
+    for _step, step_output in replay_steps(source, context=context):
+        output = step_output
     return output
 
 
@@ -1118,7 +1162,7 @@ def _resolve_engine(name: str) -> Callable[..., Any]:
 
 
 def _register_builtin_engines() -> None:
-    """Register molforge's built-in folding / docking engines by name.
+    """Register molforge's built-in folding / docking / generative engines by name.
 
     Idempotent and cheap (importing an engine class doesn't import its heavy
     deps — those are lazy). Run on every resolve so a cleared registry
@@ -1126,10 +1170,15 @@ def _register_builtin_engines() -> None:
     """
     from molforge import plugins
     from molforge.docking import DockingEngine
-    from molforge.wrappers import docking, folding
+    from molforge.generative import GenerativeEngine
+    from molforge.wrappers import docking, folding, generative
     from molforge.wrappers.folding import FoldingEngine
 
-    for module, base in ((folding, FoldingEngine), (docking, DockingEngine)):
+    for module, base in (
+        (folding, FoldingEngine),
+        (docking, DockingEngine),
+        (generative, GenerativeEngine),
+    ):
         for attr in getattr(module, "__all__", []):
             obj = getattr(module, attr, None)
             if isinstance(obj, type) and issubclass(obj, base) and obj not in (base,):
@@ -1421,6 +1470,12 @@ def _replay_dock(
     The receptor is the previous step's output (a folded structure) when
     there is one; otherwise it must come from ``context``. The ligand comes
     from ``context`` or the recorded literal.
+
+    The search box is a call argument, not a constructor one, so it has to
+    be threaded through explicitly — Vina and Gnina require ``center``, and
+    dropping it made every real docking step unreplayable. Provenance stores
+    the box as lists (it round-trips through JSON / YAML); they go back to
+    the tuples the engines declare.
     """
     engine = _construct(factory, step.parameters)
     receptor = (
@@ -1429,4 +1484,8 @@ def _replay_dock(
         else _resolve_input(step, "receptor", context, what="a receptor")
     )
     ligand = _resolve_input(step, "ligand", context, what="a ligand")
-    return engine.dock(receptor, ligand)
+    kwargs = {
+        k: tuple(v) if isinstance(v, list) else v
+        for k, v in _call_kwargs(engine.dock, step.parameters).items()
+    }
+    return engine.dock(receptor, ligand, **kwargs)

@@ -42,6 +42,17 @@ jobs:
             exit 1
           fi
 
+      - name: Build the editor frontend
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - run: npm ci
+        working-directory: gui
+      - run: npm run build
+        working-directory: gui
+
       - name: Build sdist + wheel
         run: |
           python -m pip install --upgrade pip build
@@ -58,6 +69,9 @@ jobs:
           /tmp/release-smoke/bin/pip install --upgrade pip
           /tmp/release-smoke/bin/pip install dist/*.whl
           /tmp/release-smoke/bin/python -c "import molforge; print(f'Smoke-test OK: molforge {molforge.__version__}')"
+          # Publishing a wheel with no editor is a silent failure: it
+          # installs, imports, and serves a page saying it isn't built.
+          /tmp/release-smoke/bin/python -c 'import molforge.gui, pathlib; s = pathlib.Path(molforge.gui.__file__).parent / "static"; assert (s / "index.html").is_file(), "the wheel has no built editor"; js = list((s / "assets").glob("*.js")); assert js, "the editor JavaScript is missing from the wheel"; print("editor present:", len(js), "script(s)")'
 
       - uses: actions/upload-artifact@v7
         with:

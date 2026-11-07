@@ -306,6 +306,67 @@ class TestReplay:
         assert seen["ran"]
 
 
+class TestReplaySteps:
+    """The generator replay() is built on, and what a caller gets from
+    consuming it instead of waiting for the answer."""
+
+    def test_it_yields_each_step_with_its_output(self, registered_fakes) -> None:
+        from molforge.reproducibility import replay_steps
+
+        yielded = list(replay_steps(_fold_dock_prov(), context={"ligand": "CCO"}))
+        assert [step.engine for step, _ in yielded] == ["FakeFold", "FakeDock"]
+        assert yielded[0][1] == "structure(MKTV,T=0.5)"
+        assert yielded[-1][1].startswith("poses(")
+
+    def test_replay_returns_what_the_last_step_yielded(self, registered_fakes) -> None:
+        from molforge.reproducibility import replay_steps
+
+        prov = _fold_dock_prov()
+        assert (
+            replay(prov, context={"ligand": "CCO"})
+            == (list(replay_steps(prov, context={"ligand": "CCO"}))[-1][1])
+        )
+
+    def test_it_runs_lazily_so_a_caller_can_stop(self, registered_fakes) -> None:
+        """A dashboard cancelling a run must not drive the rest of the
+        chain to completion first."""
+        from molforge.reproducibility import replay_steps
+
+        steps = replay_steps(_fold_dock_prov(), context={"ligand": "CCO"})
+        first_engine, _ = next(steps)[0].engine, None
+        assert first_engine == "FakeFold"
+        steps.close()
+
+    def test_partial_output_survives_a_failure(self, registered_fakes) -> None:
+        """The reason the generator exists: a chain that dies in step two
+        has still produced step one, which replay() would discard."""
+        from molforge import plugins
+        from molforge.reproducibility import replay_steps
+
+        class _Exploding:
+            name = "FakeDock"
+
+            def __init__(self, exhaustiveness: int = 8) -> None:
+                pass
+
+            def dock(self, receptor: object, ligand: object) -> str:
+                raise RuntimeError("no binary")
+
+        plugins.register_engine("FakeDock", _Exploding)
+        done = []
+        with pytest.raises(RuntimeError, match="no binary"):
+            for step, output in replay_steps(_fold_dock_prov(), context={"ligand": "CCO"}):
+                done.append((step.engine, output))
+        assert done == [("FakeFold", "structure(MKTV,T=0.5)")]
+
+    def test_an_empty_manifest_raises_when_iterated(self, registered_fakes) -> None:
+        from molforge.reproducibility import replay_steps
+
+        empty = PipelineManifest(environment={}, steps=[])
+        with pytest.raises(ReplayError, match="no steps"):
+            list(replay_steps(empty))
+
+
 class TestOperationInManifest:
     def test_operation_flows_into_step(self) -> None:
         m = pipeline_manifest(_fold_prov())
@@ -512,6 +573,78 @@ class TestEveryRecordedOperationHasAHandler:
 
         missing = recorded - set(repro._REPLAY_HANDLERS)
         assert not missing, f"operations recorded but not replayable: {sorted(missing)}"
+
+
+class TestReplayAgainstRealEngines:
+    """The fakes above accept anything, which is how two real breakages hid:
+    a handler that drops the arguments a real engine requires, and engines
+    a handler exists for but replay can't resolve. These use the shipped
+    wrapper classes and their actual signatures."""
+
+    @pytest.mark.parametrize(
+        ("module", "base"),
+        [
+            ("molforge.wrappers.folding", "FoldingEngine"),
+            ("molforge.wrappers.docking", "DockingEngine"),
+            ("molforge.wrappers.generative", "GenerativeEngine"),
+        ],
+    )
+    def test_every_shipped_engine_resolves(self, module: str, base: str) -> None:
+        import importlib
+
+        from molforge.reproducibility import _resolve_engine
+
+        mod = importlib.import_module(module)
+        base_cls = getattr(mod, base)
+        engines = [
+            obj
+            for attr in mod.__all__
+            if isinstance(obj := getattr(mod, attr), type)
+            and issubclass(obj, base_cls)
+            and obj is not base_cls
+        ]
+        assert engines
+        for cls in engines:
+            assert _resolve_engine(cls.name) is cls
+
+    def test_vina_replay_threads_the_search_box(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Vina's ``center`` is a required call argument; replay used to call
+        ``dock(receptor, ligand)`` and fail on every real docking step."""
+        import inspect
+
+        from molforge.wrappers.docking import Vina
+
+        calls: list[dict[str, object]] = []
+
+        def recording_dock(self: Vina, receptor: object, ligand: object, **kwargs: object) -> str:
+            calls.append(kwargs)
+            return "poses"
+
+        # Keep the real signature: replay picks call arguments by inspecting it.
+        recording_dock.__signature__ = inspect.signature(Vina.dock)  # type: ignore[attr-defined]
+        monkeypatch.setattr(Vina, "dock", recording_dock)
+
+        recorded = Vina(seed=7)._build_provenance(
+            "rec.pdbqt",
+            "lig.sdf",
+            center=(1.0, 2.0, 3.0),
+            box_size=(22.0, 22.0, 22.0),
+            exhaustiveness=16,
+            n_poses=9,
+            energy_range=3.0,
+            min_rmsd=1.0,
+        )
+        # Through JSON, not YAML: the box has to survive serialization as the
+        # lists provenance records and come back as tuples, and JSON needs no
+        # optional extra — this must hold for a bare `pip install molforge`.
+        manifest = PipelineManifest.from_json(pipeline_manifest(recorded).to_json())
+        assert replay(manifest, context={"receptor": "rec.pdbqt"}) == "poses"
+
+        (kwargs,) = calls
+        assert kwargs["center"] == (1.0, 2.0, 3.0)
+        assert kwargs["box_size"] == (22.0, 22.0, 22.0)
+        assert kwargs["exhaustiveness"] == 16
+        assert "seed" not in kwargs  # constructor argument, not a call one
 
 
 # ----------------------------------------------------------------------

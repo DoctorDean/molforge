@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A visual pipeline editor — `pip install "molforge[gui]"`, then
+  `molforge-gui`.** Blocks for the engines, arrows for what feeds what.
+  The palette, the ports and every setting are derived from the engine
+  registry and the wrapper signatures, so a new wrapper becomes a block
+  with no edit to the editor. Ports are typed and refuse a wire between
+  mismatched kinds. **Save** writes the existing `pipeline.yaml`, **Open**
+  reads one, and **Run** executes it through `replay()` — so a graph drawn
+  here is an ordinary manifest anyone can re-run without the editor.
+  Pipelines are chains: a manifest is linear, so branching is refused at
+  the branching block rather than silently saved as one branch.
+- **`replay_steps()`** — the generator `replay()` is now built on, yielding
+  each step and its output as it lands. `replay()` is unchanged; this adds
+  progress, per-step timing, and the partial results of a chain that fails
+  halfway, which were previously discarded.
+
+### Fixed
+- **`replay()` re-runs real docking steps.** The dock handler called
+  `dock(receptor, ligand)` and dropped every recorded call argument, so a
+  Vina or Gnina step — both of which require `center` — failed with a
+  `TypeError` on every replay. The search box and the other docking
+  arguments are now threaded through, back as the tuples the engines
+  declare.
+- **`replay()` resolves the generative engines.** A `generate` handler
+  existed, but ProteinMPNN, ESM-IF1 and RFdiffusion were never registered,
+  so a recorded design step failed with "no engine registered". The test
+  suite's fake engines accepted anything, which is how both hid; new tests
+  replay against the shipped wrapper classes and their real signatures.
+- **`engine_versions()` reports Chai-1 and MMseqs2 under the names they
+  record.** The backend registry keyed Chai-1 as `Chai1` while every Chai-1
+  run records `Chai-1`, and MMseqs2 was missing entirely, so manifests from
+  either silently carried no engine version. MMseqs2 is registered under a
+  new `msa` category. The guard test that should have caught this derived
+  its expectations from a hand-written list; it now reads the engine
+  registry itself.
+- **The sdist no longer ships a developer's virtualenv.** The root
+  `.gitignore` matched `.venv/` but not `.venv-arm64/`, which git ignored
+  only through the nested ignore file uv writes inside it — and hatchling
+  reads the root file alone. A local `python -m build` therefore swept
+  4,400 files of the local environment into the sdist (16.5 MB, now 1.1
+  MB). CI never had a virtualenv in the tree, which is why it went
+  unnoticed.
+
 ## [0.10.0] 2026-10-23
 
 Local MSA, end to end. molforge's AF3-class folding wrappers have always
