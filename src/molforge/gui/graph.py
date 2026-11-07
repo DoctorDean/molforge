@@ -311,10 +311,13 @@ class PipelineGraph:
                     node_id=node_id,
                 )
 
-        self._order()  # raises on a cycle or a disconnected graph
+        self.order()  # raises on a cycle or a disconnected graph
 
-    def _order(self) -> list[GraphNode]:
+    def order(self) -> list[GraphNode]:
         """The nodes in execution order, oldest first.
+
+        Public because a runner has to attribute each manifest step back to
+        the node that drew it, and the manifest carries no node ids.
 
         Walks from the one node with no input wire. A graph with no such
         node is a cycle; a walk that doesn't reach every node means there
@@ -356,7 +359,7 @@ class PipelineGraph:
         unwired inputs share a name."""
         wired = {(e.target, e.target_port) for e in self.edges}
         supplied: dict[str, str] = {}
-        for node in self._order():
+        for node in self.order():
             block = blocks[node.block_id]
             for port in block.inputs:
                 if (node.id, port.name) in wired:
@@ -424,7 +427,7 @@ class PipelineGraph:
         steps: list[PipelineStep] = []
         context: dict[str, Any] = {}
 
-        for position, node in enumerate(self._order(), start=1):
+        for position, node in enumerate(self.order(), start=1):
             block = blocks[node.block_id]
             inputs = {
                 port.name: node.inputs[port.name]
