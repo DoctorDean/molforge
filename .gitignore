@@ -80,3 +80,7 @@ data/*
 
 # Built frontend — compiled from gui/ into the package at release time.
 src/molforge/gui/static/
+
+# Release notes are pasted into the GitHub release, not committed;
+# CHANGELOG.md is the version history that lives in the repo.
+RELEASE_NOTES_v*.md
