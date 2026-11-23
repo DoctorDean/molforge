@@ -42,9 +42,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from molforge.gui.artifacts import RunArtifacts
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from molforge.gui.artifacts import ResultView
     from molforge.gui.catalog import BlockSpec
     from molforge.gui.graph import PipelineGraph
 
@@ -85,6 +88,9 @@ class StepRun:
             object itself: a run holds structures and trajectories, and a
             record that pinned them would keep every intermediate of every
             run alive for as long as the server does.
+        result: The output written down — structures on disk, tables of
+            poses or pockets — so the panel can show what was produced
+            rather than only its size. ``None`` until the step finishes.
     """
 
     node_id: str
@@ -97,6 +103,7 @@ class StepRun:
     error: str = ""
     traceback: str = ""
     output: str = ""
+    result: ResultView | None = None
 
     @property
     def elapsed(self) -> float:
@@ -116,6 +123,7 @@ class StepRun:
             "error": self.error,
             "traceback": self.traceback,
             "output": self.output,
+            "result": self.result.to_dict() if self.result is not None else None,
         }
 
 
@@ -146,6 +154,7 @@ class RunRecord:
         context: dict[str, Any] | None = None,
         catalog: Sequence[BlockSpec] | None = None,
         on_change: Callable[[RunRecord], None] | None = None,
+        artifacts: RunArtifacts | None = None,
     ) -> RunRecord:
         """Validate the graph, then run it on a worker thread.
 
@@ -163,6 +172,10 @@ class RunRecord:
             catalog: Blocks to resolve against; defaults to the live one.
             on_change: Called after every state transition, with the
                 record. For pushing updates without polling.
+            artifacts: Where to write each step's output so the results
+                panel can show it. ``None`` writes to the run's own
+                directory under molforge's cache; pass an explicit one to
+                put them elsewhere, or to keep a test off the real cache.
 
         Returns:
             The record, already running.
@@ -190,9 +203,10 @@ class RunRecord:
                 for i, step in enumerate(manifest.steps)
             ]
         )
+        store = RunArtifacts.for_run(record.id) if artifacts is None else artifacts
         record._thread = threading.Thread(
             target=record._run,
-            args=(manifest, merged, on_change),
+            args=(manifest, merged, on_change, store),
             name=f"molforge-run-{record.id}",
             daemon=True,
         )
@@ -207,6 +221,7 @@ class RunRecord:
         manifest: Any,
         context: dict[str, Any],
         on_change: Callable[[RunRecord], None] | None,
+        artifacts: RunArtifacts,
     ) -> None:
         from molforge.reproducibility import replay_steps
 
@@ -222,9 +237,15 @@ class RunRecord:
         self._mark(0, _RUNNING)
         changed()
         output: Any = None
+        previous: Any = None
         try:
             for _step, output in replay_steps(manifest, context=context):
-                self._finish(index, _SUCCEEDED, output=describe_output(output))
+                # `previous` is passed along because a list of pockets has
+                # no structure of its own — drawn without the protein it
+                # was found in, a pocket is a sphere in empty space.
+                view = artifacts.store(index, output, upstream=previous)
+                self._finish(index, _SUCCEEDED, output=describe_output(output), result=view)
+                previous = output
                 index += 1
                 if self._cancel.is_set():
                     self._remaining(_CANCELLED)
@@ -260,7 +281,14 @@ class RunRecord:
                 self.steps[index].started = time.monotonic()
 
     def _finish(
-        self, index: int, state: str, *, output: str = "", error: str = "", tb: str = ""
+        self,
+        index: int,
+        state: str,
+        *,
+        output: str = "",
+        error: str = "",
+        tb: str = "",
+        result: ResultView | None = None,
     ) -> None:
         with self._lock:
             if index >= len(self.steps):  # pragma: no cover - defensive
@@ -271,6 +299,7 @@ class RunRecord:
             step.output = output
             step.error = error
             step.traceback = tb
+            step.result = result
 
     def _remaining(self, state: str) -> None:
         """Mark the steps that never got their turn.

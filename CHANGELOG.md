@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   here is an ordinary manifest anyone can re-run without the editor.
   Pipelines are chains: a manifest is linear, so branching is refused at
   the branching block rather than silently saved as one branch.
+- **A results panel with a 3D structure viewer.** Clicking a finished
+  block shows what it produced: the structure in 3D (3Dmol, bundled, so
+  the editor works offline), with poses, pockets, designs or alignment
+  hits tabulated beside it. Selecting a docking pose shows it in the
+  receptor and dims the others. Outputs are written to `editor-runs/`
+  under molforge's cache directory rather than held in memory, and old
+  runs are pruned as new ones start.
 - **`replay_steps()`** — the generator `replay()` is now built on, yielding
   each step and its output as it lands. `replay()` is unchanged; this adds
   progress, per-step timing, and the partial results of a chain that fails

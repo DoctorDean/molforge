@@ -33,6 +33,7 @@ import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from molforge.gui.artifacts import RunArtifacts
 from molforge.gui.catalog import build_catalog, catalog_to_dict
 from molforge.gui.graph import GraphError, PipelineGraph
 from molforge.gui.runner import RunRecord
@@ -41,6 +42,10 @@ if TYPE_CHECKING:  # pragma: no cover - import-time typing only
     from fastapi import FastAPI
 
 __all__ = ["create_app", "main", "serve"]
+
+#: Runs kept in memory. Records hold descriptions rather than objects, so
+#: this is cheap — but unbounded is still unbounded.
+MAX_REMEMBERED_RUNS = 20
 
 #: Where the built frontend lands. Absent in a source checkout until the
 #: frontend is built, which is why its absence is a served page rather
@@ -199,7 +204,16 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
             record = RunRecord.start(graph, context=payload.get("context") or None)
         except GraphError as e:
             raise HTTPException(status_code=400, detail=_problem(e)) from e
+
         runs[record.id] = record
+        # Housekeeping on start rather than on a timer: it is the one
+        # moment a user is already waiting, and an editor left open for a
+        # month would otherwise accumulate every structure it ever made —
+        # on disk, and in this dict.
+        RunArtifacts.prune()
+        for stale in list(runs)[:-MAX_REMEMBERED_RUNS]:
+            if not runs[stale].running:
+                del runs[stale]
         return record.to_dict()
 
     @app.get("/api/runs")
@@ -213,6 +227,29 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
         if record is None:
             raise HTTPException(status_code=404, detail={"error": "no such run", "node_id": ""})
         return record.to_dict()
+
+    @app.get("/api/runs/{run_id}/steps/{step}/structure/{key}")
+    def structure(run_id: str, step: int, key: str) -> Any:
+        """One structure a step produced, as PDB text.
+
+        Served as a file rather than embedded in the run payload: a
+        polling loop that carried a megabyte of coordinates every 600ms
+        would make watching a run more expensive than running it.
+        """
+        from fastapi.responses import PlainTextResponse
+
+        if run_id not in runs:
+            raise HTTPException(status_code=404, detail={"error": "no such run", "node_id": ""})
+        try:
+            text = RunArtifacts.for_run(run_id).read(step - 1, key)
+        except ValueError as e:  # a key that isn't a key
+            raise HTTPException(status_code=400, detail={"error": str(e), "node_id": ""}) from e
+        except OSError as e:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": f"no stored structure {key!r} for step {step}", "node_id": ""},
+            ) from e
+        return PlainTextResponse(text, media_type="chemical/x-pdb")
 
     @app.post("/api/runs/{run_id}/cancel")
     def cancel_run(run_id: str) -> dict[str, Any]:

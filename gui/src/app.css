@@ -483,3 +483,181 @@ main {
   background: var(--surface-3);
   font-family: var(--mono);
 }
+
+/* ---------- results panel ---------- */
+
+/* An overlay on the canvas rather than a third column: the structure
+   wants the width, and the graph stays visible behind it so you keep
+   the context of which step you are looking at. */
+.results {
+  position: absolute;
+  inset: auto 12px 12px 12px;
+  height: 46%;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 5;
+}
+
+.results-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-3);
+}
+
+.results-head .sub {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.results-head .mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.results-head .close {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.results-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.results-side {
+  display: flex;
+  flex-direction: column;
+  width: 46%;
+  min-width: 260px;
+  border-left: 1px solid var(--border);
+  min-height: 0;
+}
+
+.results-empty {
+  margin: 0;
+  padding: 18px;
+  color: var(--text-secondary);
+}
+
+.results-note {
+  margin: 0;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* ---------- viewer ---------- */
+
+.viewer {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-1);
+}
+
+/* 3Dmol positions its canvas absolutely against this box. */
+.viewer-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-note {
+  position: absolute;
+  inset: auto 0 10px 0;
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
+.viewer-note.error {
+  color: var(--status-critical);
+}
+
+/* ---------- facts & table ---------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 2px 12px;
+  margin: 0;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.facts dt {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.results table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.results th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.results td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sequences and long identifiers are the only wide cells; let them
+   wrap rather than widening the whole table. */
+.results td:last-child {
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.results tbody tr[data-selectable] {
+  cursor: pointer;
+}
+
+.results tbody tr[data-selectable]:hover {
+  background: var(--surface-3);
+}
+
+.results tbody tr[data-selected] {
+  background: color-mix(in srgb, var(--port-ligand) 18%, transparent);
+}

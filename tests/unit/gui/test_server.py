@@ -193,6 +193,59 @@ class TestRuns:
         assert run_id in {r["id"] for r in client.get("/api/runs").json()["runs"]}
 
 
+class TestStructures:
+    """Structures are served as files rather than embedded in the run
+    payload: a 600ms poll carrying a megabyte of coordinates would make
+    watching a run cost more than running it."""
+
+    def test_a_structure_a_run_produced_is_served_as_pdb(
+        self, client: TestClient, fake_engines: None
+    ) -> None:
+        run_id = client.post("/api/runs", json=_fold_graph()).json()["id"]
+        _await_run(client, run_id)
+
+        # The fake engine returns a string, so there is no structure to
+        # fetch — what matters is that the route resolves the run and
+        # reports a missing artifact as missing, not as a crash.
+        response = client.get(f"/api/runs/{run_id}/steps/1/structure/structure")
+        assert response.status_code == 404
+        assert "no stored structure" in response.json()["detail"]["error"]
+
+    def test_an_unknown_run_is_404(self, client: TestClient) -> None:
+        assert client.get("/api/runs/nope/steps/1/structure/structure").status_code == 404
+
+    @pytest.mark.parametrize("key", ["..", "..%2Fetc%2Fpasswd"])
+    def test_a_key_that_escapes_the_run_directory_is_refused(
+        self, client: TestClient, fake_engines: None, key: str
+    ) -> None:
+        """Keys come off the URL. Joined unchecked, one with a separator
+        addresses any file the server process can read."""
+        run_id = client.post("/api/runs", json=_fold_graph()).json()["id"]
+        _await_run(client, run_id)
+        response = client.get(f"/api/runs/{run_id}/steps/1/structure/{key}")
+        assert response.status_code in (400, 404)
+        assert "passwd" not in response.text
+
+
+class TestRunPayload:
+    def test_a_finished_step_carries_its_result_view(
+        self, client: TestClient, fake_engines: None
+    ) -> None:
+        run_id = client.post("/api/runs", json=_fold_graph()).json()["id"]
+        body = _await_run(client, run_id)
+        result = body["steps"][0]["result"]
+        assert result is not None
+        assert set(result) >= {"kind", "summary", "structures", "rows", "columns"}
+
+    def test_the_payload_carries_no_coordinates(
+        self, client: TestClient, fake_engines: None
+    ) -> None:
+        """Structures are referenced, not inlined."""
+        run_id = client.post("/api/runs", json=_fold_graph()).json()["id"]
+        body = _await_run(client, run_id)
+        assert "ATOM  " not in str(body)
+
+
 class TestPage:
     def test_a_missing_frontend_explains_itself(self, tmp_path: Any) -> None:
         """A source checkout has no built assets until someone builds them,

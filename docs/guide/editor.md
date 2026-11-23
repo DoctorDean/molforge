@@ -100,6 +100,37 @@ Three things worth knowing:
   every core; the server refuses a second rather than letting a
   double-clicked button start one.
 
+## Results
+
+Click a finished block to open its results over the canvas: the structure
+in 3D on the left, the numbers beside it.
+
+What you get depends on what the step produced:
+
+| Step produced | You see |
+|---|---|
+| A structure | the fold, cartoon-coloured along the chain |
+| An ensemble | each model, one per row |
+| A docking result | the receptor, plus every pose — select a row to show that pose and dim the others |
+| Pockets | the protein they were found in, with each centre marked |
+| Designed sequences | a table of sequences with scores and recovery |
+| An alignment | its depth, width, and the hits it found |
+
+Outputs are written to disk, under `editor-runs/` in molforge's cache
+directory (`$MOLFORGE_CACHE_DIR`). Two consequences worth knowing:
+
+- **The structure you are looking at is a file you can keep.** The run
+  directory is a real place; nothing is trapped in the browser.
+- **Old runs are deleted.** The most recent few dozen are kept and the
+  rest are pruned when a new run starts, so an editor left open for a
+  month doesn't quietly fill a disk. The `pipeline.yaml` is the durable
+  artifact — replay it to get the outputs back.
+
+Large results are capped rather than paged: an ensemble shows its first
+few models, a table its first couple of hundred rows, and the panel says
+when it has truncated. A screen of thousands is a job for pandas, not a
+panel.
+
 ## Drawing for another machine
 
 A pipeline built on a laptop for a GPU cluster is a valid thing to build.

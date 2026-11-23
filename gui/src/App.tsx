@@ -27,6 +27,7 @@ import { BlockNode } from "./components/BlockNode";
 import type { BlockNodeData } from "./components/BlockNode";
 import { Inspector } from "./components/Inspector";
 import { Palette } from "./components/Palette";
+import { ResultsPanel } from "./components/ResultsPanel";
 import { portColor } from "./ports";
 
 const NODE_TYPES = { block: BlockNode };
@@ -52,6 +53,7 @@ function Editor() {
   const [selected, setSelected] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle", message: "" });
   const [run, setRun] = useState<RunRecord | null>(null);
+  const [showing, setShowing] = useState<string | null>(null);
   const counter = useRef(0);
 
   useEffect(() => {
@@ -277,6 +279,7 @@ function Editor() {
   const start = useCallback(async () => {
     clearProblems(setNodes);
     try {
+      setShowing(null);
       setRun(await api.startRun(payload()));
       setStatus({ kind: "ok", message: "Running…" });
     } catch (e) {
@@ -318,6 +321,9 @@ function Editor() {
 
   const selectedNode = nodes.find((n) => n.id === selected);
   const running = run?.state === "running";
+  const shown = showing
+    ? run?.steps.find((s) => s.node_id === showing && s.result)
+    : undefined;
 
   if (loadError) {
     return (
@@ -348,6 +354,7 @@ function Editor() {
             setNodes([]);
             setEdges([]);
             setRun(null);
+            setShowing(null);
             setStatus({ kind: "idle", message: "" });
           }}
         />
@@ -361,7 +368,14 @@ function Editor() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             isValidConnection={isValidConnection}
-            onNodeClick={(_, node) => setSelected(node.id)}
+            onNodeClick={(_, node) => {
+              setSelected(node.id);
+              // A finished block's results are the thing you clicked it
+              // for; an unrun one has nothing to show, so don't open an
+              // empty drawer over the canvas.
+              const step = run?.steps.find((s) => s.node_id === node.id);
+              if (step?.result) setShowing(node.id);
+            }}
             onPaneClick={() => setSelected(null)}
             fitView
             // Without a cap, two nodes fill the viewport at 4x and the
@@ -375,6 +389,14 @@ function Editor() {
             <Controls />
             <MiniMap pannable zoomable nodeColor={minimapColor} />
           </ReactFlow>
+
+          {shown && run && (
+            <ResultsPanel
+              runId={run.id}
+              step={shown}
+              onClose={() => setShowing(null)}
+            />
+          )}
 
           {nodes.length === 0 && (
             <div className="hint">

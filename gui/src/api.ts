@@ -95,6 +95,34 @@ export type RunState =
   | "failed"
   | "cancelled";
 
+export interface StructureRef {
+  key: string;
+  label: string;
+  /** "receptor" | "ligand" | "structure" — decides the representation. */
+  role: string;
+  format: string;
+}
+
+/** A step's output, written down: structures on disk, plus a table. */
+export interface ResultView {
+  kind:
+    | "structure"
+    | "ensemble"
+    | "poses"
+    | "pockets"
+    | "designs"
+    | "alignment"
+    | "value"
+    | "none";
+  summary: string;
+  structures: StructureRef[];
+  columns: string[];
+  rows: unknown[][];
+  truncated: boolean;
+  detail: Record<string, unknown>;
+  error: string;
+}
+
 export interface StepRun {
   node_id: string;
   step: number;
@@ -105,6 +133,7 @@ export interface StepRun {
   error: string;
   traceback: string;
   output: string;
+  result: ResultView | null;
 }
 
 export interface RunRecord {
