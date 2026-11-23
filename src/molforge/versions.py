@@ -81,9 +81,10 @@ class BackendVersion:
             field a wrapper writes into :class:`Provenance` (``"Boltz"``,
             ``"fpocket"``, ``"GROMACS"``).
         category: Which part of molforge drives it — ``"folding"``,
-            ``"docking"``, ``"pockets"``, ``"md"``, ``"freeenergy"``,
-            ``"generative"``, or ``"runtime"`` for the shared numeric and
-            chemistry libraries whose version changes results everywhere.
+            ``"docking"``, ``"pockets"``, ``"msa"``, ``"md"``,
+            ``"freeenergy"``, ``"generative"``, or ``"runtime"`` for the
+            shared numeric and chemistry libraries whose version changes
+            results everywhere.
         kind: ``"python"``, ``"executable"``, or ``"repo"``. See the module
             docstring — these are three different reasons a version can be
             missing.
@@ -159,7 +160,7 @@ class _Backend:
 _REGISTRY: tuple[_Backend, ...] = (
     # ---- folding -----------------------------------------------------
     _Backend("Boltz", "folding", "python", ("boltz",)),
-    _Backend("Chai1", "folding", "python", ("chai_lab",)),
+    _Backend("Chai-1", "folding", "python", ("chai_lab",)),
     _Backend("ESMFold", "folding", "python", ("transformers",)),
     _Backend("AlphaFold", "folding", "python", ("colabfold",)),
     _Backend(
@@ -193,6 +194,8 @@ _REGISTRY: tuple[_Backend, ...] = (
         ("prank",),
         no_version_reason="the prank launcher exposes no version flag",
     ),
+    # ---- homology search ---------------------------------------------
+    _Backend("MMseqs2", "msa", "executable", ("mmseqs",), version_argv=("version",)),
     # ---- molecular dynamics ------------------------------------------
     _Backend("OpenMM", "md", "python", ("openmm",)),
     _Backend(
@@ -282,8 +285,8 @@ def engine_versions(
 
     Args:
         category: Return only this category (``"folding"``, ``"docking"``,
-            ``"pockets"``, ``"md"``, ``"freeenergy"``, ``"generative"``,
-            ``"runtime"``). ``None`` returns all of them.
+            ``"pockets"``, ``"msa"``, ``"md"``, ``"freeenergy"``,
+            ``"generative"``, ``"runtime"``). ``None`` returns all of them.
         probe_executables: Run each installed native binary's version flag.
             ``False`` skips every subprocess: executables are still
             reported as available or not via ``$PATH``, but with an empty
