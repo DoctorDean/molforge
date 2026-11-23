@@ -208,9 +208,7 @@ class TestWriting:
         assert store.step_dir(0) != store.step_dir(1)
         assert store.read(1, "structure")
 
-    def test_poses_and_receptor_are_written_separately(
-        self, store: RunArtifacts, protein
-    ) -> None:
+    def test_poses_and_receptor_are_written_separately(self, store: RunArtifacts, protein) -> None:
         """Separate files because the viewer styles them differently —
         cartoon for the receptor, sticks for the ligand."""
         result = FakeDocking(receptor=protein, poses=[FakePose(ligand=protein, score=-8.0)])
