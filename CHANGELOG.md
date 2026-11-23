@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] 2026-11-23
+
+A visual editor for molforge pipelines, and the replay fixes it uncovered.
+Everything is additive and backwards compatible with 0.10.0: the editor is
+an opt-in extra, and the pipeline manifests it reads and writes are the
+format 0.10.0 already used.
+
 ### Added
 - **A visual pipeline editor — `pip install "molforge[gui]"`, then
   `molforge-gui`.** Blocks for the engines, arrows for what feeds what.

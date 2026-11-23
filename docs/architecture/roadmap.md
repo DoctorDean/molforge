@@ -38,23 +38,27 @@ a matrix.
 The **Trust** (§1) and **Identity** (§2) chapters are both complete, and the
 depth items that had concrete consumers — `molforge.scoring`,
 `validate.report()`, P2Rank, Boltz-2 affinity, and the `pipeline.yaml`
-*replay* layer — have all shipped.
+*replay* layer — have all shipped. 0.11.0 added a visual editor over that
+replay layer rather than beside it: the canvas reads and writes the same
+manifests, so it is a view of the library rather than a second way to
+describe a pipeline.
 
 - **Now — the FEP endeavour.** *Running* (not just ingesting) an FEP/TI
   calculation is the one large, high-value piece left in §4 — the
   orchestration that would make molforge genuinely all-encompassing. A real
   undertaking, and the only thing of that size still outstanding.
-- **Next — nothing is queued.** Both items that sat here are done: the
-  replay surface (every operation a wrapper records is now recorded *and*
-  replayable, §3) and the local MSA path (§5), which shipped in 0.10.0 as
-  `molforge.sequence.MultipleSequenceAlignment`, the `MMseqs2` wrapper, and
-  `Entity.msa` honoured by both AF3-class engines.
+- **Next — branching pipelines.** The 0.11.0 editor made the limit
+  concrete: `replay()` threads one step's output into the next, so a
+  manifest is a *chain*. One fold feeding three docking runs is an
+  ordinary thing to want and not something the format can express, and
+  the editor refuses to draw it. Lifting that means a manifest whose
+  steps form a DAG, which changes the `pipeline.yaml` schema and every
+  reader of it — worth doing deliberately rather than as a patch.
 
-  The obvious continuations, none of them started: `hmmer` / `jackhmmer`
-  alongside MMseqs2 (needs a Stockholm reader), paired multi-chain MSAs
-  built from the `pairing_key` the type already carries, and `DesignLoop`'s
-  round-0 `generator` slot (§2). Each is demand-driven rather than
-  scheduled.
+  Also unstarted, and demand-driven rather than scheduled: `hmmer` /
+  `jackhmmer` alongside MMseqs2 (needs a Stockholm reader), paired
+  multi-chain MSAs built from the `pairing_key` the type already carries,
+  and `DesignLoop`'s round-0 `generator` slot (§2).
 - **Later — opportunistic breadth.** More engines, ML/data layers, enhanced
   sampling, performance work, the error taxonomy (§6) — pulled forward by
   demand, not by the matrix.
