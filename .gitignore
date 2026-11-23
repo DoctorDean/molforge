@@ -22,7 +22,7 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Virtual environments
-.venv/
+.venv*/
 venv/
 env/
 ENV/
@@ -77,3 +77,6 @@ data/*
 # Project-specific
 *.log
 *.tmp
+
+# Built frontend — compiled from gui/ into the package at release time.
+src/molforge/gui/static/

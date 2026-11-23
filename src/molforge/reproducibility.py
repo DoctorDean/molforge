@@ -144,6 +144,7 @@ __all__ = [
     "pipeline_manifest",
     "register_replay_handler",
     "replay",
+    "replay_steps",
 ]
 
 #: On-disk schema version, emitted as the ``molforge_pipeline`` key. Bump
@@ -1051,10 +1052,21 @@ def register_replay_handler(
     return decorator
 
 
-def replay(
+def replay_steps(
     source: PipelineManifest | Provenance | object, *, context: dict[str, Any] | None = None
-) -> Any:
-    """Re-execute a pipeline's chain, returning the terminal output.
+) -> Iterator[tuple[PipelineStep, Any]]:
+    """Re-execute a pipeline, yielding each step and its output as it lands.
+
+    :func:`replay` returns only the terminal output, which is the right
+    answer for a script and the wrong one for anything watching: a fold
+    followed by a deep homology search is an hour in which a caller can
+    report nothing. Consuming the steps as they complete gives progress,
+    per-step timing, and the partial results of a pipeline that fails
+    halfway — the last of which is otherwise simply lost.
+
+    The steps run lazily, one per iteration, so a caller that stops
+    iterating stops the pipeline. Nothing is validated until the first
+    ``next()``, including the empty-manifest check.
 
     Args:
         source: A :class:`PipelineManifest` (e.g. from :func:`load_pipeline`),
@@ -1065,8 +1077,8 @@ def replay(
             primary input is threaded from the previous step automatically;
             ``context`` covers the rest.
 
-    Returns:
-        The output of the final step.
+    Yields:
+        ``(step, output)`` per step, oldest first.
 
     Raises:
         ReplayError: If a step has no recorded operation, its engine can't be
@@ -1095,6 +1107,38 @@ def replay(
             )
         factory = _resolve_engine(step.engine)
         output = handler(factory, step, output, ctx)
+        yield step, output
+
+
+def replay(
+    source: PipelineManifest | Provenance | object, *, context: dict[str, Any] | None = None
+) -> Any:
+    """Re-execute a pipeline's chain, returning the terminal output.
+
+    Args:
+        source: A :class:`PipelineManifest` (e.g. from :func:`load_pipeline`),
+            a :class:`~molforge.core.provenance.Provenance`, or any output
+            carrying one.
+        context: Objects to resolve recorded inputs that aren't literals —
+            keyed by the input name (``{"ligand": "aspirin.sdf"}``). A step's
+            primary input is threaded from the previous step automatically;
+            ``context`` covers the rest.
+
+    Returns:
+        The output of the final step.
+
+    Raises:
+        ReplayError: If a step has no recorded operation, its engine can't be
+            resolved, no handler is registered for its operation, or a
+            required input can't be resolved.
+
+    See Also:
+        :func:`replay_steps`, which yields each step's output as it lands,
+        for callers that need progress rather than only the answer.
+    """
+    output: Any = None
+    for _step, step_output in replay_steps(source, context=context):
+        output = step_output
     return output
 
 
