@@ -7,7 +7,16 @@ server mounts, so a wheel ships the editor and a user never installs Node.
 npm install
 npm run build     # type-check, then build into the package
 npm run dev       # dev server, proxying /api to molforge-gui on :8765
+npm test          # end-to-end tests in a real browser
 ```
+
+`npm test` starts a real `molforge-gui` and drives Chromium against it.
+Point it at a server you already have with `MOLFORGE_GUI_URL`, or choose
+the interpreter it launches with `MOLFORGE_PYTHON` (a virtualenv's
+`python`, say). It runs in CI, and it is the only place several things
+are checked at all: that a mismatched wire is refused, that the 3D canvas
+actually draws, that a saved pipeline reopens as the same graph. The two
+worst bugs this editor has had were invisible to both pytest and `tsc`.
 
 The build output is **not committed** — it's generated at release time. A
 source checkout therefore has no editor until you run the build, and the
